@@ -1,0 +1,33 @@
+[package]
+name = "sql_ast_benchmark"
+version = "0.1.0"
+edition = "2021"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+cast_possible_truncation = { level = "allow", priority = 1 }
+cast_precision_loss = { level = "allow", priority = 1 }
+cast_sign_loss = { level = "allow", priority = 1 }
+
+[dependencies]
+sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
+pg_query = { git = "https://github.com/pganalyze/pg_query.rs" }
+pg_parse = { git = "https://github.com/paupino/pg_parse" }
+sql-parse = { git = "https://github.com/antialize/sql-parse" }
+plotters = "0.3"
+
+[dev-dependencies]
+criterion = { version = "0.8.2", features = ["html_reports"] }
+
+[[bench]]
+name = "parsing"
+harness = false
+
+[[bin]]
+name = "plot"
+path = "src/bin/plot.rs"
