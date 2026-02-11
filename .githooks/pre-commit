@@ -11,4 +11,28 @@ cargo fmt --check
 echo "Running clippy..."
 cargo clippy --all-targets -- -D warnings
 
+# Validate SVG files
+echo "Validating SVG files..."
+if command -v xmllint >/dev/null 2>&1; then
+    svg_count=0
+    for svg in *.svg; do
+        [ -e "$svg" ] || continue
+        echo "  Checking $svg"
+        xmllint --noout "$svg"
+        svg_count=$((svg_count + 1))
+    done
+    if [ $svg_count -eq 0 ]; then
+        echo "  No SVG files found"
+    else
+        echo "  All $svg_count SVG file(s) valid"
+    fi
+else
+    echo "  Warning: xmllint not found, skipping SVG validation"
+    echo "  Install with: sudo apt install libxml2-utils (Ubuntu) or brew install libxml2 (macOS)"
+fi
+
+# Benchmark dry run (runs each benchmark once without timing)
+echo "Running benchmark dry run..."
+cargo bench --quiet -- --test
+
 echo "Pre-commit checks passed!"
