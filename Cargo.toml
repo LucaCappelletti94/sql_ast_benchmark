@@ -3,7 +3,7 @@ name = "sql_ast_benchmark"
 version = "0.1.0"
 edition = "2021"
 description = "Benchmarking Rust SQL parsers using real-world PostgreSQL statements"
-repository = "https://github.com/lucavallin/sql_ast_benchmark"
+repository = "https://github.com/LucaCappelletti94/sql_ast_benchmark"
 license = "MIT"
 authors = ["Luca Cappelletti"]
 keywords = ["sql", "parser", "benchmark", "postgresql"]
@@ -21,10 +21,17 @@ cast_possible_truncation = { level = "allow", priority = 1 }
 cast_precision_loss = { level = "allow", priority = 1 }
 cast_sign_loss = { level = "allow", priority = 1 }
 
+[features]
+default = ["pg_query_parser"]
+# Use pg_query.rs for FFI parsing (cannot be combined with pg_parse_parser)
+pg_query_parser = ["pg_query"]
+# Use pg_parse for FFI parsing (cannot be combined with pg_query_parser)
+pg_parse_parser = ["pg_parse"]
+
 [dependencies]
 sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
-pg_query = { git = "https://github.com/pganalyze/pg_query.rs" }
-pg_parse = { git = "https://github.com/paupino/pg_parse" }
+pg_query = { git = "https://github.com/pganalyze/pg_query.rs", optional = true }
+pg_parse = { git = "https://github.com/paupino/pg_parse", optional = true }
 sql-parse = { git = "https://github.com/antialize/sql-parse" }
 plotters = "0.3"
 
@@ -38,3 +45,7 @@ harness = false
 [[bin]]
 name = "plot"
 path = "src/bin/plot.rs"
+
+[[bin]]
+name = "check_compat"
+path = "src/bin/check_compat.rs"

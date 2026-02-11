@@ -1,7 +1,13 @@
 use sql_ast_benchmark::{
-    is_valid_pg_parse, is_valid_sql_parse, load_delete_statements, load_insert_statements,
-    load_select_statements, load_update_statements,
+    is_valid_sql_parse, load_delete_statements, load_insert_statements, load_select_statements,
+    load_update_statements,
 };
+
+#[cfg(feature = "pg_query_parser")]
+use sql_ast_benchmark::is_valid_pg_query;
+
+#[cfg(feature = "pg_parse_parser")]
+use sql_ast_benchmark::is_valid_pg_parse;
 
 fn main() {
     let select = load_select_statements();
@@ -15,11 +21,23 @@ fn main() {
     check_compat("UPDATE", &update, is_valid_sql_parse);
     check_compat("DELETE", &delete, is_valid_sql_parse);
 
-    println!("\npg_parse compatibility:");
-    check_compat("SELECT", &select, is_valid_pg_parse);
-    check_compat("INSERT", &insert, is_valid_pg_parse);
-    check_compat("UPDATE", &update, is_valid_pg_parse);
-    check_compat("DELETE", &delete, is_valid_pg_parse);
+    #[cfg(feature = "pg_query_parser")]
+    {
+        println!("\npg_query compatibility:");
+        check_compat("SELECT", &select, is_valid_pg_query);
+        check_compat("INSERT", &insert, is_valid_pg_query);
+        check_compat("UPDATE", &update, is_valid_pg_query);
+        check_compat("DELETE", &delete, is_valid_pg_query);
+    }
+
+    #[cfg(feature = "pg_parse_parser")]
+    {
+        println!("\npg_parse compatibility:");
+        check_compat("SELECT", &select, is_valid_pg_parse);
+        check_compat("INSERT", &insert, is_valid_pg_parse);
+        check_compat("UPDATE", &update, is_valid_pg_parse);
+        check_compat("DELETE", &delete, is_valid_pg_parse);
+    }
 }
 
 fn check_compat(name: &str, stmts: &[String], checker: fn(&str) -> bool) {

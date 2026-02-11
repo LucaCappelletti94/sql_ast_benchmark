@@ -20,6 +20,7 @@ pub fn is_valid_sqlparser(sql: &str) -> bool {
     Parser::parse_sql(&dialect, sql).is_ok()
 }
 
+#[cfg(feature = "pg_query_parser")]
 #[must_use]
 pub fn is_valid_pg_query(sql: &str) -> bool {
     pg_query::parse(sql).is_ok()
@@ -32,14 +33,27 @@ pub fn is_valid_sql_parse(sql: &str) -> bool {
     !issues.get().iter().any(|i| i.level == Level::Error)
 }
 
+#[cfg(feature = "pg_parse_parser")]
 #[must_use]
 pub fn is_valid_pg_parse(sql: &str) -> bool {
     pg_parse::parse(sql).is_ok()
 }
 
+/// Check if valid for both sqlparser-rs and the active FFI parser
 #[must_use]
 pub fn is_valid_both(sql: &str) -> bool {
-    is_valid_sqlparser(sql) && is_valid_pg_query(sql)
+    #[cfg(feature = "pg_query_parser")]
+    {
+        is_valid_sqlparser(sql) && is_valid_pg_query(sql)
+    }
+    #[cfg(feature = "pg_parse_parser")]
+    {
+        is_valid_sqlparser(sql) && is_valid_pg_parse(sql)
+    }
+    #[cfg(not(any(feature = "pg_query_parser", feature = "pg_parse_parser")))]
+    {
+        is_valid_sqlparser(sql)
+    }
 }
 
 /// Load Spider SELECT statements (real-world text-to-SQL queries)
