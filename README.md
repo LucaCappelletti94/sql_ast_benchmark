@@ -1,6 +1,6 @@
 # SQL Parser Benchmark
 
-[![CI](https://github.com/lucavallin/sql_ast_benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/lucavallin/sql_ast_benchmark/actions/workflows/ci.yml)
+[![CI](https://github.com/LucaCappelletti94/sql_ast_benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/LucaCappelletti94/sql_ast_benchmark/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021_edition-orange.svg)](https://www.rust-lang.org)
 
