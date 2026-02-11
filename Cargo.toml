@@ -2,6 +2,13 @@
 name = "sql_ast_benchmark"
 version = "0.1.0"
 edition = "2021"
+description = "Benchmarking Rust SQL parsers using real-world PostgreSQL statements"
+repository = "https://github.com/lucavallin/sql_ast_benchmark"
+license = "MIT"
+authors = ["Luca Cappelletti"]
+keywords = ["sql", "parser", "benchmark", "postgresql"]
+categories = ["development-tools::profiling"]
+publish = false
 
 [lints.rust]
 unsafe_code = "forbid"

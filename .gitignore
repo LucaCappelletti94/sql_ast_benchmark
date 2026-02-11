@@ -1,2 +1,20 @@
+# Build artifacts
 /target
+
+# Cargo lock (not needed for binaries/benchmarks)
 Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Criterion benchmark data (regenerated on each run)
+# Uncomment if you don't want to track historical benchmark data
+# /target/criterion/
