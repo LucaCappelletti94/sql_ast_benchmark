@@ -1,0 +1,482 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 1320" width="1200" height="1320">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;display=swap');
+      .bg { fill: #ffffff; }
+      .header-bg { fill: #1e293b; }
+      .section-bg { fill: #f8fafc; }
+      .text-dark { fill: #1e293b; }
+      .text-gray { fill: #64748b; }
+      .text-white { fill: #ffffff; }
+      .border { stroke: #e2e8f0; stroke-width: 1; fill: none; }
+      .connector { stroke: #94a3b8; stroke-width: 2; fill: none; }
+      text { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+      .mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+    <symbol id="icon-star" viewBox="0 0 576 512"><path d="M316.9 18C311.6 7 300.4 0 288.1 0s-23.4 7-28.8 18L195 150.3 51.4 171.5c-12 1.8-22 10.2-25.7 21.7s-.7 24.2 7.9 32.7L137.8 329 113.2 474.7c-2 12 3 24.2 12.9 31.3s23 8 33.8 2.3l128.3-68.5 128.3 68.5c10.8 5.7 23.9 4.9 33.8-2.3s14.9-19.3 12.9-31.3L438.5 329 542.7 225.9c8.6-8.5 11.7-21.2 7.9-32.7s-13.7-19.9-25.7-21.7L381.2 150.3 316.9 18z"/></symbol>
+    <symbol id="icon-check-circle" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z"/></symbol>
+    <symbol id="icon-xmark-circle" viewBox="0 0 512 512"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM175 175c9.4-9.4 24.6-9.4 33.9 0l47 47 47-47c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-47 47 47 47c9.4 9.4 9.4 24.6 0 33.9s-24.6 9.4-33.9 0l-47-47-47 47c-9.4 9.4-24.6 9.4-33.9 0s-9.4-24.6 0-33.9l47-47-47-47c-9.4-9.4-9.4-24.6 0-33.9z"/></symbol>
+    <symbol id="icon-triangle-exclamation" viewBox="0 0 512 512"><path d="M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480H40c-14.3 0-27.6-7.7-34.7-20.1s-7-27.8 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24V296c0 13.3 10.7 24 24 24s24-10.7 24-24V184c0-13.3-10.7-24-24-24zm32 224a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"/></symbol>
+    <symbol id="icon-globe" viewBox="0 0 512 512"><path d="M352 256c0 22.2-1.2 43.6-3.3 64H163.3c-2.2-20.4-3.3-41.8-3.3-64s1.2-43.6 3.3-64H348.7c2.2 20.4 3.3 41.8 3.3 64zm28.8-64H503.9c5.3 20.5 8.1 41.9 8.1 64s-2.8 43.5-8.1 64H380.8c2.1-20.6 3.2-42 3.2-64s-1.1-43.4-3.2-64zm112.6-32H376.7c-10-63.9-29.8-117.4-55.3-151.6c78.3 20.7 142 77.5 171.9 151.6zm-149.1 0H167.7c6.1-36.4 15.5-68.6 27-94.7c10.5-23.6 22.2-40.7 33.5-51.5C239.4 3.2 248.7 0 256 0s16.6 3.2 27.8 13.8c11.3 10.8 23 27.9 33.5 51.5c11.6 26 20.9 58.2 27 94.7zm-209 0H18.6C48.6 85.9 112.2 29.1 190.6 8.4C165.1 42.6 145.3 96.1 135.3 160zM8.1 192H131.2c-2.1 20.6-3.2 42-3.2 64s1.1 43.4 3.2 64H8.1C2.8 299.5 0 278.1 0 256s2.8-43.5 8.1-64z"/></symbol>
+    <symbol id="icon-bolt" viewBox="0 0 448 512"><path d="M349.4 44.6c5.9-13.7 1.5-29.7-10.6-38.5s-28.6-8-39.9 1.8l-256 224c-10 8.8-13.6 22.9-8.9 35.3S50.7 288 64 288H175.5L98.6 467.4c-5.9 13.7-1.5 29.7 10.6 38.5s28.6 8 39.9-1.8l256-224c10-8.8 13.6-22.9 8.9-35.3s-16.6-20.7-30-20.7H272.5L349.4 44.6z"/></symbol>
+    <symbol id="icon-shield-check" viewBox="0 0 512 512"><path d="M269.4 2.9C265.2 1 260.7 0 256 0s-9.2 1-13.4 2.9L54.3 82.8c-22 9.3-38.4 31-38.3 57.2c.5 99.2 41.3 280.7 213.6 363.2c16.7 8 36.1 8 52.8 0C454.7 420.7 495.5 239.2 496 140c.1-26.2-16.3-47.9-38.3-57.2L269.4 2.9zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z"/></symbol>
+    <symbol id="icon-fingerprint" viewBox="0 0 512 512"><path d="M48 256C48 141.1 141.1 48 256 48c63.1 0 119.6 28.1 157.8 72.5c8.6 10.1 23.8 11.2 33.8 2.6s11.2-23.8 2.6-33.8C403.3 34.6 333.7 0 256 0C114.6 0 0 114.6 0 256v40c0 13.3 10.7 24 24 24s24-10.7 24-24V256z"/></symbol>
+    <symbol id="icon-database" viewBox="0 0 448 512"><path d="M448 80v48c0 44.2-100.3 80-224 80S0 172.2 0 128V80C0 35.8 100.3 0 224 0S448 35.8 448 80zM393.2 214.7c20.8-7.4 39.9-16.9 54.8-28.6V288c0 44.2-100.3 80-224 80S0 332.2 0 288V186.1c14.9 11.8 34 21.2 54.8 28.6C99.7 230.7 159.5 240 224 240s124.3-9.3 169.2-25.3zM0 346.1c14.9 11.8 34 21.2 54.8 28.6C99.7 390.7 159.5 400 224 400s124.3-9.3 169.2-25.3c20.8-7.4 39.9-16.9 54.8-28.6V432c0 44.2-100.3 80-224 80S0 476.2 0 432V346.1z"/></symbol>
+    <symbol id="icon-sitemap" viewBox="0 0 576 512"><path d="M208 80c0-26.5 21.5-48 48-48h64c26.5 0 48 21.5 48 48v64c0 26.5-21.5 48-48 48h-8v40H464c30.9 0 56 25.1 56 56v32h8c26.5 0 48 21.5 48 48v64c0 26.5-21.5 48-48 48H464c-26.5 0-48-21.5-48-48V368c0-26.5 21.5-48 48-48h8V288c0-4.4-3.6-8-8-8H312v40h8c26.5 0 48 21.5 48 48v64c0 26.5-21.5 48-48 48H256c-26.5 0-48-21.5-48-48V368c0-26.5 21.5-48 48-48h8V280H112c-4.4 0-8 3.6-8 8v32h8c26.5 0 48 21.5 48 48v64c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V368c0-26.5 21.5-48 48-48h8V288c0-30.9 25.1-56 56-56H264V192h-8c-26.5 0-48-21.5-48-48V80z"/></symbol>
+    <symbol id="icon-arrow-right" viewBox="0 0 448 512"><path d="M438.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-160-160c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L338.8 224 32 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l306.7 0L233.4 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l160-160z"/></symbol>
+    <symbol id="icon-stream" viewBox="0 0 512 512"><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM64 256c0-17.7 14.3-32 32-32H480c17.7 0 32 14.3 32 32s-14.3 32-32 32H96c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></symbol>
+    <symbol id="icon-filter" viewBox="0 0 512 512"><path d="M3.9 54.9C10.5 40.9 24.5 32 40 32H472c15.5 0 29.5 8.9 36.1 22.9s4.6 30.5-5.2 42.5L320 320.9V448c0 12.1-6.8 23.2-17.7 28.6s-23.8 4.3-33.5-3l-64-48c-8.1-6-12.8-15.5-12.8-25.6V320.9L9 97.3C-.7 85.4-2.8 68.8 3.9 54.9z"/></symbol>
+    <symbol id="icon-github" viewBox="0 0 496 512"><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8z"/></symbol>
+    <symbol id="icon-bug" viewBox="0 0 512 512"><path d="M256 0c53 0 96 43 96 96v3.6c0 15.7-12.7 28.4-28.4 28.4H188.4c-15.7 0-28.4-12.7-28.4-28.4V96c0-53 43-96 96-96zM41.4 105.4c12.5-12.5 32.8-12.5 45.3 0l64 64c.7 .7 1.3 1.4 1.9 2.1c14.2-7.3 30.4-11.4 47.5-11.4H312c17.1 0 33.2 4.1 47.5 11.4c.6-.7 1.2-1.4 1.9-2.1l64-64c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3l-64 64c-.7 .7-1.4 1.3-2.1 1.9c6.2 12 10.1 25.3 11.1 39.5H480c17.7 0 32 14.3 32 32s-14.3 32-32 32H416c0 24.6-5.5 47.8-15.4 68.6c2.2 1.3 4.2 2.9 6 4.8l64 64c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0l-63.1-63.1c-24.5 21.8-55.8 36.2-90.3 39.6V240c0-8.8-7.2-16-16-16s-16 7.2-16 16V479.2c-34.5-3.4-65.8-17.8-90.3-39.6L86.6 502.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l64-64c1.9-1.9 3.9-3.4 6-4.8C101.5 367.8 96 344.6 96 320H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H96.3c1.1-14.1 5-27.5 11.1-39.5c-.7-.6-1.4-1.2-2.1-1.9l-64-64c-12.5-12.5-12.5-32.8 0-45.3z"/></symbol>
+    <symbol id="icon-calendar" viewBox="0 0 448 512"><path d="M128 0c17.7 0 32 14.3 32 32V64H288V32c0-17.7 14.3-32 32-32s32 14.3 32 32V64h48c26.5 0 48 21.5 48 48v48H0V112C0 85.5 21.5 64 48 64H96V32c0-17.7 14.3-32 32-32z"/></symbol>
+    <symbol id="icon-user" viewBox="0 0 448 512"><path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z"/></symbol>
+    <symbol id="icon-binary" viewBox="0 0 576 512"><path d="M0 64C0 46.3 14.3 32 32 32H88c13.3 0 24 10.7 24 24s-10.7 24-24 24H64v96h24c13.3 0 24 10.7 24 24s-10.7 24-24 24H32c-17.7 0-32-14.3-32-32V64z"/></symbol>
+    <symbol id="icon-code" viewBox="0 0 640 512"><path d="M392.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm80.6 120.1c-12.5 12.5-12.5 32.8 0 45.3L562.7 256l-89.4 89.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l112-112c12.5-12.5 12.5-32.8 0-45.3l-112-112c-12.5-12.5-32.8-12.5-45.3 0zm-306.7 0c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3l112 112c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256l89.4-89.4c12.5-12.5 12.5-32.8 0-45.3z"/></symbol>
+    <symbol id="icon-copy" viewBox="0 0 448 512"><path d="M208 0H332.1c12.7 0 24.9 5.1 33.9 14.1l67.9 67.9c9 9 14.1 21.2 14.1 33.9V336c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V48c0-26.5 21.5-48 48-48zM48 128h80v64H64V448H256V416h64v48c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V176c0-26.5 21.5-48 48-48z"/></symbol>
+  </defs>
+
+  <rect class="bg" width="1200" height="1320"/>
+
+  <!-- Header -->
+  <rect class="header-bg" x="0" y="0" width="1200" height="75"/>
+  <text x="600" y="35" class="text-white" style="font-size: 24px; font-weight: 700; text-anchor: middle;">Rust SQL Parser Benchmark</text>
+  <text x="600" y="56" style="font-size: 12px; fill: #94a3b8; text-anchor: middle;">Comparing performance and compatibility for PostgreSQL workloads</text>
+
+  <!-- Section 1: What is an AST? -->
+  <rect class="section-bg" x="20" y="88" width="570" height="255" rx="8"/>
+  <rect class="border" x="20" y="88" width="570" height="255" rx="8"/>
+  <g transform="translate(35, 100)">
+    <use href="#icon-sitemap" fill="#3b82f6" width="18" height="18"/>
+  </g>
+  <text x="60" y="114" class="text-dark" style="font-size: 14px; font-weight: 600;">What is an Abstract Syntax Tree?</text>
+
+  <g transform="translate(35, 130)">
+    <rect x="0" y="0" width="540" height="36" rx="4" fill="#1e293b"/>
+    <text x="12" y="23" class="mono" style="font-size: 11px; fill: #94a3b8;">SQL:</text>
+    <text x="45" y="23" class="mono" style="font-size: 11px; fill: #22d3ee;">SELECT</text>
+    <text x="100" y="23" class="mono" style="font-size: 11px; fill: #f8fafc;"> name </text>
+    <text x="148" y="23" class="mono" style="font-size: 11px; fill: #22d3ee;">FROM</text>
+    <text x="188" y="23" class="mono" style="font-size: 11px; fill: #f8fafc;"> users </text>
+    <text x="238" y="23" class="mono" style="font-size: 11px; fill: #22d3ee;">WHERE</text>
+    <text x="292" y="23" class="mono" style="font-size: 11px; fill: #f8fafc;"> id = </text>
+    <text x="328" y="23" class="mono" style="font-size: 11px; fill: #fbbf24;">1</text>
+
+    <g transform="translate(252, 42)"><use href="#icon-arrow-right" fill="#64748b" width="16" height="16" transform="rotate(90, 8, 8)"/></g>
+    <text x="278" y="54" style="font-size: 9px; fill: #64748b;">Parser</text>
+
+    <g transform="translate(0, 62)">
+      <rect x="225" y="0" width="90" height="26" rx="4" fill="#8b5cf6"/>
+      <text x="270" y="17" style="font-size: 11px; font-weight: 500; fill: #fff; text-anchor: middle;">SELECT</text>
+      <path d="M250 26 L250 40 L135 40 L135 50" class="connector"/>
+      <path d="M270 26 L270 50" class="connector"/>
+      <path d="M290 26 L290 40 L405 40 L405 50" class="connector"/>
+
+      <rect x="85" y="50" width="100" height="24" rx="4" fill="#3b82f6"/>
+      <text x="135" y="66" style="font-size: 10px; font-weight: 500; fill: #fff; text-anchor: middle;">columns</text>
+      <rect x="220" y="50" width="100" height="24" rx="4" fill="#10b981"/>
+      <text x="270" y="66" style="font-size: 10px; font-weight: 500; fill: #fff; text-anchor: middle;">from</text>
+      <rect x="355" y="50" width="100" height="24" rx="4" fill="#f59e0b"/>
+      <text x="405" y="66" style="font-size: 10px; font-weight: 500; fill: #fff; text-anchor: middle;">where</text>
+
+      <path d="M135 74 L135 88" class="connector"/>
+      <path d="M270 74 L270 88" class="connector"/>
+      <path d="M405 74 L405 88" class="connector"/>
+
+      <rect x="95" y="88" width="80" height="22" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+      <text x="135" y="103" class="mono" style="font-size: 10px; fill: #1e40af; text-anchor: middle;">name</text>
+      <rect x="230" y="88" width="80" height="22" rx="3" fill="#dcfce7" stroke="#10b981"/>
+      <text x="270" y="103" class="mono" style="font-size: 10px; fill: #166534; text-anchor: middle;">users</text>
+      <rect x="365" y="88" width="80" height="22" rx="3" fill="#fef3c7" stroke="#f59e0b"/>
+      <text x="405" y="103" class="mono" style="font-size: 10px; fill: #92400e; text-anchor: middle;">id = 1</text>
+    </g>
+  </g>
+  <foreignObject x="35" y="310" width="540" height="28">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif; font-size: 10px; color: #475569; line-height: 1.4;">An AST represents SQL as a tree structure, enabling programs to analyze, transform, validate, or rewrite queries programmatically.</div>
+  </foreignObject>
+
+  <!-- Section 2: Replication Streams Use Case -->
+  <rect class="section-bg" x="610" y="88" width="570" height="255" rx="8"/>
+  <rect class="border" x="610" y="88" width="570" height="255" rx="8"/>
+  <g transform="translate(625, 100)"><use href="#icon-stream" fill="#3b82f6" width="18" height="18"/></g>
+  <text x="650" y="114" class="text-dark" style="font-size: 14px; font-weight: 600;">Use Case: Replication Streams</text>
+
+  <g transform="translate(625, 128)">
+    <text x="0" y="0" style="font-size: 9px; fill: #64748b; font-weight: 600;">1. User defines subscription query</text>
+    <g transform="translate(10, 12)">
+      <rect x="0" y="0" width="44" height="42" rx="4" fill="#eff6ff" stroke="#bfdbfe"/>
+      <use href="#icon-user" fill="#3b82f6" width="18" height="18" x="13" y="12"/>
+    </g>
+    <g transform="translate(62, 12)">
+      <rect x="0" y="0" width="130" height="42" rx="4" fill="#1e293b"/>
+      <text x="10" y="18" class="mono" style="font-size: 8px; fill: #22d3ee;">SELECT * FROM orders</text>
+      <text x="10" y="30" class="mono" style="font-size: 8px; fill: #22d3ee;">WHERE region = 'EU'</text>
+    </g>
+    <path d="M198 33 L218 33" stroke="#3b82f6" stroke-width="1.5" fill="none"/>
+    <g transform="translate(224, 12)">
+      <rect x="0" y="0" width="52" height="42" rx="4" fill="#8b5cf6"/>
+      <use href="#icon-code" fill="#fff" width="16" height="16" x="18" y="5"/>
+      <text x="26" y="35" style="font-size: 8px; fill: #fff; text-anchor: middle;">Parser</text>
+    </g>
+    <path d="M282 33 L302 33" stroke="#8b5cf6" stroke-width="1.5" fill="none"/>
+    <g transform="translate(308, 8)">
+      <rect x="0" y="0" width="65" height="50" rx="4" fill="#f8fafc" stroke="#8b5cf6" stroke-width="1.5"/>
+      <use href="#icon-sitemap" fill="#8b5cf6" width="18" height="18" x="23" y="6"/>
+      <text x="32" y="42" style="font-size: 9px; fill: #8b5cf6; text-anchor: middle; font-weight: 500;">AST</text>
+    </g>
+    <path d="M378 33 L398 33" stroke="#3b82f6" stroke-width="1.5" fill="none"/>
+    <g transform="translate(404, 4)">
+      <rect x="0" y="0" width="120" height="58" rx="4" fill="#3b82f6"/>
+      <use href="#icon-filter" fill="#fff" width="16" height="16" x="52" y="6"/>
+      <text x="60" y="36" style="font-size: 9px; fill: #fff; text-anchor: middle; font-weight: 500;">Subscription</text>
+      <text x="60" y="48" style="font-size: 8px; fill: #dbeafe; text-anchor: middle;">Rule Tree</text>
+    </g>
+
+    <text x="0" y="78" style="font-size: 9px; fill: #64748b; font-weight: 600;">2. PostgreSQL produces binary WAL stream</text>
+    <g transform="translate(10, 90)">
+      <rect x="0" y="0" width="85" height="48" rx="4" fill="#336791"/>
+      <use href="#icon-database" fill="#fff" width="18" height="18" x="33" y="6"/>
+      <text x="42" y="38" style="font-size: 9px; fill: #fff; text-anchor: middle; font-weight: 500;">PostgreSQL</text>
+    </g>
+    <path d="M100 114 L140 114" stroke="#64748b" stroke-width="1.5" stroke-dasharray="3,2" fill="none"/>
+    <g transform="translate(146, 90)">
+      <rect x="0" y="0" width="95" height="48" rx="4" fill="#1e293b"/>
+      <use href="#icon-binary" fill="#94a3b8" width="14" height="14" x="8" y="6"/>
+      <text x="26" y="18" class="mono" style="font-size: 9px; fill: #94a3b8;">Binary WAL</text>
+      <text x="10" y="36" class="mono" style="font-size: 8px; fill: #64748b;">0x01 INSERT...</text>
+    </g>
+    <path d="M246 114 L280 114" stroke="#64748b" stroke-width="1.5" fill="none"/>
+    <g transform="translate(286, 90)">
+      <rect x="0" y="0" width="52" height="48" rx="4" fill="#f8fafc" stroke="#3b82f6" stroke-width="1.5"/>
+      <use href="#icon-filter" fill="#3b82f6" width="20" height="20" x="16" y="14"/>
+    </g>
+    <path d="M312 90 L312 72 L464 72 L464 62" stroke="#3b82f6" stroke-width="1" stroke-dasharray="2,2" fill="none"/>
+    <path d="M343 114 L378 114" stroke="#10b981" stroke-width="1.5" fill="none"/>
+    <g transform="translate(384, 88)">
+      <rect x="0" y="0" width="135" height="26" rx="3" fill="#dcfce7" stroke="#86efac"/>
+      <use href="#icon-check-circle" fill="#16a34a" width="11" height="11" x="8" y="7"/>
+      <text x="26" y="17" style="font-size: 9px; fill: #166534;">Replicate to subscriber</text>
+      <rect x="0" y="30" width="135" height="22" rx="3" fill="#fee2e2" stroke="#fecaca"/>
+      <use href="#icon-xmark-circle" fill="#dc2626" width="10" height="10" x="8" y="36"/>
+      <text x="24" y="45" style="font-size: 8px; fill: #991b1b;">Skip (no match)</text>
+    </g>
+
+    <g transform="translate(10, 162)">
+      <rect x="0" y="0" width="530" height="32" rx="4" fill="#eff6ff" stroke="#bfdbfe"/>
+      <use href="#icon-bolt" fill="#3b82f6" width="14" height="14" x="12" y="9"/>
+      <text x="34" y="20" style="font-size: 9px; fill: #1e40af;">Parser speed affects rule compilation. Faster parsing = faster subscription setup and rule updates.</text>
+    </g>
+  </g>
+
+  <!-- Section 3: Why Speed and Correctness Matter -->
+  <text x="600" y="368" class="text-dark" style="font-size: 14px; font-weight: 700; text-anchor: middle;">Why Speed and Correctness Matter</text>
+  <g transform="translate(20, 380)">
+    <rect x="0" y="0" width="570" height="50" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+    <use href="#icon-bolt" fill="#3b82f6" width="20" height="20" x="12" y="15"/>
+    <foreignObject x="42" y="10" width="515" height="34">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="font-size: 11px; font-weight: 600; color: #1e293b;">Speed</div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.3;">Parsing overhead accumulates. A 2x slower parser means 2x more latency and CPU cost at scale.</div>
+      </div>
+    </foreignObject>
+  </g>
+  <g transform="translate(610, 380)">
+    <rect x="0" y="0" width="570" height="50" rx="6" fill="#f0fdf4" stroke="#bbf7d0"/>
+    <use href="#icon-shield-check" fill="#10b981" width="20" height="20" x="12" y="15"/>
+    <foreignObject x="42" y="10" width="515" height="34">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="font-size: 11px; font-weight: 600; color: #1e293b;">Correctness</div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.3;">A parser that fails on valid SQL breaks the pipeline. 100% compatibility is required for production.</div>
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- Section 4: Parsers Compared -->
+  <text x="600" y="460" class="text-dark" style="font-size: 14px; font-weight: 700; text-anchor: middle;">Parsers Compared</text>
+
+  <!-- sqlparser-rs -->
+  <g transform="translate(20, 472)">
+    <rect x="0" y="0" width="570" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+    <rect x="0" y="0" width="5" height="100" rx="2" fill="#3b82f6"/>
+    <foreignObject x="16" y="8" width="540" height="86">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 13px; font-weight: 600; color: #1e293b;">sqlparser-rs</span>
+          <span style="font-size: 9px; color: #fff; background: #3b82f6; padding: 2px 8px; border-radius: 8px;">Pure Rust</span>
+        </div>
+        <div style="font-size: 10px; color: #475569; line-height: 1.35; margin-bottom: 6px;">Apache DataFusion project. Most adopted Rust SQL parser (50M+ downloads). Multi-dialect. Fuzz tested.</div>
+        <div style="display: flex; gap: 10px; font-size: 9px; color: #64748b; margin-bottom: 6px;">
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 576 512" width="9" height="9"><use href="#icon-star" fill="#f59e0b"/></svg>3.3K</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 512 512" width="9" height="9"><use href="#icon-check-circle" fill="#10b981"/></svg>100%</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 512 512" width="9" height="9"><use href="#icon-bug" fill="#8b5cf6"/></svg>Fuzz</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 448 512" width="9" height="9"><use href="#icon-calendar" fill="#64748b"/></svg>2018</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 512 512" width="9" height="9"><use href="#icon-globe" fill="#3b82f6"/></svg>WASM</span>
+        </div>
+        <div style="display: flex; gap: 4px; font-size: 8px;">
+          <span style="background: #336791; color: white; padding: 1px 5px; border-radius: 3px;">PostgreSQL</span>
+          <span style="background: #00758f; color: white; padding: 1px 5px; border-radius: 3px;">MySQL</span>
+          <span style="background: #003b57; color: white; padding: 1px 5px; border-radius: 3px;">SQLite</span>
+          <span style="background: #e97627; color: white; padding: 1px 5px; border-radius: 3px;">Hive</span>
+          <span style="background: #64748b; color: white; padding: 1px 5px; border-radius: 3px;">+10 more</span>
+        </div>
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- pg_query.rs -->
+  <g transform="translate(610, 472)">
+    <rect x="0" y="0" width="570" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+    <rect x="0" y="0" width="5" height="100" rx="2" fill="#f59e0b"/>
+    <foreignObject x="16" y="8" width="540" height="86">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 13px; font-weight: 600; color: #1e293b;">pg_query.rs</span>
+          <span style="font-size: 9px; color: #fff; background: #f59e0b; padding: 2px 8px; border-radius: 8px;">FFI (libpg_query)</span>
+        </div>
+        <div style="font-size: 10px; color: #475569; line-height: 1.35; margin-bottom: 6px;">Uses PostgreSQL's actual parser via C FFI. Guaranteed syntax compatibility. Query fingerprinting. pganalyze.</div>
+        <div style="display: flex; gap: 10px; font-size: 9px; color: #64748b; margin-bottom: 6px;">
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 576 512" width="9" height="9"><use href="#icon-star" fill="#f59e0b"/></svg>226</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 512 512" width="9" height="9"><use href="#icon-check-circle" fill="#10b981"/></svg>100%</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 512 512" width="9" height="9"><use href="#icon-fingerprint" fill="#8b5cf6"/></svg>Fingerprint</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 448 512" width="9" height="9"><use href="#icon-calendar" fill="#64748b"/></svg>2022</span>
+        </div>
+        <div style="display: flex; gap: 4px; font-size: 8px;">
+          <span style="background: #336791; color: white; padding: 1px 5px; border-radius: 3px;">PostgreSQL only</span>
+        </div>
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- pg_parse -->
+  <g transform="translate(20, 580)">
+    <rect x="0" y="0" width="570" height="100" rx="6" fill="#fff" stroke="#e2e8f0"/>
+    <rect x="0" y="0" width="5" height="100" rx="2" fill="#f59e0b"/>
+    <foreignObject x="16" y="8" width="540" height="86">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 13px; font-weight: 600; color: #1e293b;">pg_parse</span>
+          <span style="font-size: 9px; color: #fff; background: #f59e0b; padding: 2px 8px; border-radius: 8px;">FFI (libpg_query)</span>
+        </div>
+        <div style="font-size: 10px; color: #475569; line-height: 1.35; margin-bottom: 6px;">Alternative libpg_query binding with optimized FFI bridge. Full PostgreSQL compatibility. Faster than pg_query.rs.</div>
+        <div style="display: flex; gap: 10px; font-size: 9px; color: #64748b; margin-bottom: 6px;">
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 576 512" width="9" height="9"><use href="#icon-star" fill="#f59e0b"/></svg>88</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 512 512" width="9" height="9"><use href="#icon-check-circle" fill="#10b981"/></svg>100%</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 448 512" width="9" height="9"><use href="#icon-bolt" fill="#3b82f6"/></svg>Fast FFI</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 448 512" width="9" height="9"><use href="#icon-calendar" fill="#64748b"/></svg>2021</span>
+        </div>
+        <div style="display: flex; gap: 4px; font-size: 8px;">
+          <span style="background: #336791; color: white; padding: 1px 5px; border-radius: 3px;">PostgreSQL only</span>
+        </div>
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- sql-parse -->
+  <g transform="translate(610, 580)">
+    <rect x="0" y="0" width="570" height="100" rx="6" fill="#fefce8" stroke="#fef08a"/>
+    <rect x="0" y="0" width="5" height="100" rx="2" fill="#eab308"/>
+    <foreignObject x="16" y="8" width="540" height="86">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 13px; font-weight: 600; color: #1e293b;">sql-parse</span>
+          <span style="font-size: 9px; color: #78350f; background: #fef08a; padding: 2px 8px; border-radius: 8px;">MySQL-focused</span>
+        </div>
+        <div style="font-size: 10px; color: #713f12; line-height: 1.35; margin-bottom: 6px;">Zero-copy parser for MySQL/MariaDB. PostgreSQL support is experimental. Only parses ~30% of PG SELECT queries.</div>
+        <div style="display: flex; gap: 10px; font-size: 9px; color: #a16207; margin-bottom: 6px;">
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 576 512" width="9" height="9"><use href="#icon-star" fill="#f59e0b"/></svg>25</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 512 512" width="9" height="9"><use href="#icon-triangle-exclamation" fill="#d97706"/></svg>30% SELECT</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 448 512" width="9" height="9"><use href="#icon-copy" fill="#a16207"/></svg>Zero-copy</span>
+          <span style="display: flex; align-items: center; gap: 2px;"><svg viewBox="0 0 448 512" width="9" height="9"><use href="#icon-calendar" fill="#a16207"/></svg>2022</span>
+        </div>
+        <div style="display: flex; gap: 4px; font-size: 8px;">
+          <span style="background: #00758f; color: white; padding: 1px 5px; border-radius: 3px;">MySQL</span>
+          <span style="background: #c0392b; color: white; padding: 1px 5px; border-radius: 3px;">MariaDB</span>
+          <span style="background: #fef08a; color: #78350f; padding: 1px 5px; border-radius: 3px; border: 1px solid #eab308;">PostgreSQL (exp)</span>
+        </div>
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- Section 5: Benchmark Results -->
+  <text x="600" y="710" class="text-dark" style="font-size: 14px; font-weight: 700; text-anchor: middle;">Benchmark Results</text>
+  <text x="600" y="724" style="font-size: 10px; fill: #64748b; text-anchor: middle;">Time to parse 500 SQL statements concatenated into a single string (lower is better)</text>
+
+  <!-- SELECT -->
+  <g transform="translate(20, 735)">
+    <rect x="0" y="0" width="570" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="12" y="18" class="text-dark" style="font-size: 12px; font-weight: 600;">SELECT Statements</text>
+    <text x="12" y="30" style="font-size: 8px; fill: #64748b;">4,505 queries from Spider (Yale) + Gretel AI</text>
+    <g transform="translate(12, 38)">
+      <text x="0" y="10" style="font-size: 9px; fill: #475569;">sqlparser-rs</text>
+      <rect x="75" y="2" width="270" height="12" rx="2" fill="#3b82f6"/>
+      <text x="350" y="11" style="font-size: 9px; fill: #64748b;">5.68 ms</text>
+      <text x="0" y="26" style="font-size: 9px; fill: #475569;">pg_query.rs</text>
+      <rect x="75" y="18" width="420" height="12" rx="2" fill="#f59e0b"/>
+      <text x="500" y="27" style="font-size: 9px; fill: #64748b;">10.0 ms</text>
+      <text x="0" y="42" style="font-size: 9px; fill: #475569;">pg_parse</text>
+      <rect x="75" y="34" width="283" height="12" rx="2" fill="#f59e0b"/>
+      <text x="363" y="43" style="font-size: 9px; fill: #64748b;">6.73 ms</text>
+      <text x="0" y="58" style="font-size: 9px; fill: #a16207;">sql-parse*</text>
+      <rect x="75" y="50" width="148" height="12" rx="2" fill="#fef08a" stroke="#eab308"/>
+      <text x="228" y="59" style="font-size: 9px; fill: #a16207;">3.53 ms</text>
+    </g>
+    <text x="12" y="108" style="font-size: 8px; fill: #64748b;">*sql-parse only parses 30% of queries (complex PG syntax unsupported). Zero-copy reduces allocations.</text>
+  </g>
+
+  <!-- INSERT -->
+  <g transform="translate(610, 735)">
+    <rect x="0" y="0" width="570" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="12" y="18" class="text-dark" style="font-size: 12px; font-weight: 600;">INSERT Statements</text>
+    <text x="12" y="30" style="font-size: 8px; fill: #64748b;">992 queries from Gretel AI synthetic dataset</text>
+    <g transform="translate(12, 38)">
+      <text x="0" y="10" style="font-size: 9px; fill: #475569;">sqlparser-rs</text>
+      <rect x="75" y="2" width="231" height="12" rx="2" fill="#3b82f6"/>
+      <text x="311" y="11" style="font-size: 9px; fill: #64748b;">4.90 ms</text>
+      <text x="0" y="26" style="font-size: 9px; fill: #475569;">pg_query.rs</text>
+      <rect x="75" y="18" width="420" height="12" rx="2" fill="#f59e0b"/>
+      <text x="500" y="27" style="font-size: 9px; fill: #64748b;">8.90 ms</text>
+      <text x="0" y="42" style="font-size: 9px; fill: #475569;">pg_parse</text>
+      <rect x="75" y="34" width="318" height="12" rx="2" fill="#f59e0b"/>
+      <text x="398" y="43" style="font-size: 9px; fill: #64748b;">6.74 ms</text>
+      <text x="0" y="58" style="font-size: 9px; fill: #475569;">sql-parse</text>
+      <rect x="75" y="50" width="150" height="12" rx="2" fill="#fef08a" stroke="#eab308"/>
+      <text x="230" y="59" style="font-size: 9px; fill: #a16207;">3.18 ms</text>
+    </g>
+    <text x="12" y="108" style="font-size: 8px; fill: #64748b;">sql-parse achieves 98% compatibility on INSERT (simpler syntax), making comparison more meaningful.</text>
+  </g>
+
+  <!-- UPDATE -->
+  <g transform="translate(20, 865)">
+    <rect x="0" y="0" width="570" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="12" y="18" class="text-dark" style="font-size: 12px; font-weight: 600;">UPDATE Statements</text>
+    <text x="12" y="30" style="font-size: 8px; fill: #64748b;">983 queries from Gretel AI synthetic dataset</text>
+    <g transform="translate(12, 38)">
+      <text x="0" y="10" style="font-size: 9px; fill: #475569;">sqlparser-rs</text>
+      <rect x="75" y="2" width="208" height="12" rx="2" fill="#3b82f6"/>
+      <text x="288" y="11" style="font-size: 9px; fill: #64748b;">3.20 ms</text>
+      <text x="0" y="26" style="font-size: 9px; fill: #475569;">pg_query.rs</text>
+      <rect x="75" y="18" width="420" height="12" rx="2" fill="#f59e0b"/>
+      <text x="500" y="27" style="font-size: 9px; fill: #64748b;">6.46 ms</text>
+      <text x="0" y="42" style="font-size: 9px; fill: #475569;">pg_parse</text>
+      <rect x="75" y="34" width="288" height="12" rx="2" fill="#f59e0b"/>
+      <text x="368" y="43" style="font-size: 9px; fill: #64748b;">4.44 ms</text>
+      <text x="0" y="58" style="font-size: 9px; fill: #475569;">sql-parse</text>
+      <rect x="75" y="50" width="175" height="12" rx="2" fill="#fef08a" stroke="#eab308"/>
+      <text x="255" y="59" style="font-size: 9px; fill: #a16207;">2.70 ms</text>
+    </g>
+    <text x="12" y="108" style="font-size: 8px; fill: #64748b;">pg_parse is ~1.45x faster than pg_query.rs despite both using libpg_query—FFI bridge efficiency matters.</text>
+  </g>
+
+  <!-- DELETE -->
+  <g transform="translate(610, 865)">
+    <rect x="0" y="0" width="570" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="12" y="18" class="text-dark" style="font-size: 12px; font-weight: 600;">DELETE Statements</text>
+    <text x="12" y="30" style="font-size: 8px; fill: #64748b;">933 queries from Gretel AI synthetic dataset</text>
+    <g transform="translate(12, 38)">
+      <text x="0" y="10" style="font-size: 9px; fill: #475569;">sqlparser-rs</text>
+      <rect x="75" y="2" width="217" height="12" rx="2" fill="#3b82f6"/>
+      <text x="297" y="11" style="font-size: 9px; fill: #64748b;">2.93 ms</text>
+      <text x="0" y="26" style="font-size: 9px; fill: #475569;">pg_query.rs</text>
+      <rect x="75" y="18" width="420" height="12" rx="2" fill="#f59e0b"/>
+      <text x="500" y="27" style="font-size: 9px; fill: #64748b;">5.66 ms</text>
+      <text x="0" y="42" style="font-size: 9px; fill: #475569;">pg_parse</text>
+      <rect x="75" y="34" width="293" height="12" rx="2" fill="#f59e0b"/>
+      <text x="373" y="43" style="font-size: 9px; fill: #64748b;">3.95 ms</text>
+      <text x="0" y="58" style="font-size: 9px; fill: #475569;">sql-parse</text>
+      <rect x="75" y="50" width="157" height="12" rx="2" fill="#fef08a" stroke="#eab308"/>
+      <text x="237" y="59" style="font-size: 9px; fill: #a16207;">2.12 ms</text>
+    </g>
+    <text x="12" y="108" style="font-size: 8px; fill: #64748b;">DELETE is simplest. FFI overhead proportionally larger for simple statements—pure Rust shows biggest advantage.</text>
+  </g>
+
+  <!-- Key Findings -->
+  <text x="600" y="1015" class="text-dark" style="font-size: 14px; font-weight: 700; text-anchor: middle;">Key Findings</text>
+  <g transform="translate(20, 1028)">
+    <rect x="0" y="0" width="380" height="70" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <foreignObject x="12" y="10" width="356" height="54">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <svg viewBox="0 0 448 512" width="14" height="14"><use href="#icon-bolt" fill="#3b82f6"/></svg>
+          <span style="font-size: 12px; font-weight: 600; color: #1e293b;">sqlparser-rs: Best Balance</span>
+        </div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.35;">1.5-2x faster than FFI parsers. 100% PostgreSQL compatibility. No C dependencies. Fuzz tested.</div>
+      </div>
+    </foreignObject>
+  </g>
+  <g transform="translate(410, 1028)">
+    <rect x="0" y="0" width="380" height="70" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <foreignObject x="12" y="10" width="356" height="54">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <svg viewBox="0 0 512 512" width="14" height="14"><use href="#icon-shield-check" fill="#10b981"/></svg>
+          <span style="font-size: 12px; font-weight: 600; color: #1e293b;">pg_query.rs: Guaranteed Compatibility</span>
+        </div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.35;">Uses PostgreSQL's actual parser. Accepts anything PostgreSQL accepts. Query fingerprinting.</div>
+      </div>
+    </foreignObject>
+  </g>
+  <g transform="translate(800, 1028)">
+    <rect x="0" y="0" width="380" height="70" rx="6" fill="#fefce8" stroke="#fef08a"/>
+    <foreignObject x="12" y="10" width="356" height="54">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <svg viewBox="0 0 512 512" width="14" height="14"><use href="#icon-triangle-exclamation" fill="#d97706"/></svg>
+          <span style="font-size: 12px; font-weight: 600; color: #1e293b;">sql-parse: MySQL Focus</span>
+        </div>
+        <div style="font-size: 9px; color: #713f12; line-height: 1.35;">Fastest due to zero-copy + skipping complex queries. MySQL/MariaDB primary; PG experimental.</div>
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- Recommendations -->
+  <text x="600" y="1128" class="text-dark" style="font-size: 14px; font-weight: 700; text-anchor: middle;">Recommendations</text>
+  <g transform="translate(20, 1140)">
+    <rect x="0" y="0" width="380" height="55" rx="5" fill="#eff6ff" stroke="#bfdbfe"/>
+    <foreignObject x="12" y="8" width="356" height="42">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="font-size: 11px; font-weight: 600; color: #1e293b; margin-bottom: 2px;">General Use</div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.3;"><strong style="color: #3b82f6;">sqlparser-rs</strong> — Best speed/compatibility/multi-dialect balance.</div>
+      </div>
+    </foreignObject>
+  </g>
+  <g transform="translate(410, 1140)">
+    <rect x="0" y="0" width="380" height="55" rx="5" fill="#fef3c7" stroke="#fde68a"/>
+    <foreignObject x="12" y="8" width="356" height="42">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="font-size: 11px; font-weight: 600; color: #1e293b; margin-bottom: 2px;">PostgreSQL Tooling</div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.3;"><strong style="color: #d97706;">pg_query.rs</strong> — Guaranteed syntax compatibility + fingerprinting.</div>
+      </div>
+    </foreignObject>
+  </g>
+  <g transform="translate(800, 1140)">
+    <rect x="0" y="0" width="380" height="55" rx="5" fill="#f0fdf4" stroke="#bbf7d0"/>
+    <foreignObject x="12" y="8" width="356" height="42">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, sans-serif;">
+        <div style="font-size: 11px; font-weight: 600; color: #1e293b; margin-bottom: 2px;">WASM / Embedded</div>
+        <div style="font-size: 9px; color: #475569; line-height: 1.3;"><strong style="color: #16a34a;">sqlparser-rs</strong> — Pure Rust, no C dependencies. Works everywhere.</div>
+      </div>
+    </foreignObject>
+  </g>
+
+  <!-- Environment -->
+  <g transform="translate(20, 1210)">
+    <rect x="0" y="0" width="1160" height="24" rx="4" fill="#f1f5f9"/>
+    <text x="580" y="16" style="font-size: 9px; fill: #64748b; text-anchor: middle;">AMD Ryzen Threadripper PRO 5975WX (32 cores) · Ubuntu 24.04 · Rust 2021 edition · Criterion.rs v0.8</text>
+  </g>
+
+  <!-- Footer -->
+  <rect fill="#1e293b" x="0" y="1250" width="1200" height="70"/>
+  <g transform="translate(20, 1278)">
+    <use href="#icon-github" fill="#fff" width="14" height="14" x="0" y="0"/>
+    <text x="20" y="11" style="font-size: 10px; fill: #fff; font-weight: 500;">Full Benchmark:</text>
+    <text x="105" y="11" style="font-size: 10px; fill: #60a5fa;">github.com/LucaCappelletti94/sql_ast_benchmark</text>
+    <text x="360" y="11" style="font-size: 10px; fill: #475569;">·</text>
+    <text x="372" y="11" style="font-size: 9px; fill: #94a3b8;">MIT License</text>
+    <text x="432" y="11" style="font-size: 9px; fill: #475569;">·</text>
+    <text x="444" y="11" style="font-size: 9px; fill: #94a3b8;">February 2026</text>
+    <text x="525" y="11" style="font-size: 9px; fill: #475569;">·</text>
+    <text x="537" y="11" style="font-size: 9px; fill: #94a3b8;">Data: Spider (Yale) + Gretel AI</text>
+    <text x="700" y="11" style="font-size: 9px; fill: #475569;">·</text>
+    <text x="712" y="11" style="font-size: 9px; fill: #94a3b8;">Parsers: sqlparser-rs · pg_query.rs · pg_parse · sql-parse</text>
+  </g>
+</svg>
