@@ -21,6 +21,8 @@ Benchmarking Rust SQL parsers using real-world PostgreSQL statements.
 
 - **pg_query.rs**: Rust bindings to libpg_query, which embeds PostgreSQL's actual parser extracted from the PostgreSQL source code. Provides 100% compatibility with PostgreSQL syntax.
 
+- **pg_query.rs (summary)**: The `pg_query::summary()` function extracts metadata (tables, functions, filter columns, statement types) without deserializing the full AST over protobuf. According to pg_query documentation, this can provide up to an order of magnitude performance improvement over full parsing.
+
 - **pg_parse**: Another Rust binding to libpg_query, similar to pg_query.rs but with a different API design.
 
 - **sql-parse**: A zero-copy parser using borrowed tokens for minimal allocations. Primarily focused on MySQL/MariaDB with experimental PostgreSQL support.
@@ -57,12 +59,13 @@ All parsers are configured for PostgreSQL dialect in this benchmark.
 
 Not all parsers can parse all statements in our dataset. Compatibility was tested against our PostgreSQL statement corpus:
 
-| Parser       | SELECT    | INSERT | UPDATE | DELETE |
-| ------------ | --------: | -----: | -----: | -----: |
-| sqlparser-rs |      100% |   100% |   100% |   100% |
-| pg_query.rs  |      100% |   100% |   100% |   100% |
-| pg_parse     |      100% |   100% |   100% |   100% |
-| sql-parse    | **30.1%** |  97.8% |  95.8% |  95.7% |
+| Parser                | SELECT    | INSERT | UPDATE | DELETE |
+| --------------------- | --------: | -----: | -----: | -----: |
+| sqlparser-rs          |      100% |   100% |   100% |   100% |
+| pg_query.rs           |      100% |   100% |   100% |   100% |
+| pg_query.rs (summary) |      100% |   100% |   100% |   100% |
+| pg_parse              |      100% |   100% |   100% |   100% |
+| sql-parse             | **30.1%** |  97.8% |  95.8% |  95.7% |
 
 **⚠️ sql-parse limitation**: sql-parse's PostgreSQL dialect support is incomplete. It fails to parse ~70% of SELECT statements in our corpus (primarily those using PostgreSQL-specific syntax like `DISTINCT ON`, complex subqueries, or certain join patterns). Results for sql-parse should be interpreted with this caveat—it may appear faster on SELECT benchmarks because it's parsing a simpler subset of statements that happen to succeed.
 
@@ -103,57 +106,57 @@ All SQL statements are validated to parse successfully with sqlparser-rs and pg_
 
 ### SELECT Statements
 
-| Statements | sqlparser-rs    | pg_query.rs     | pg_parse        | sql-parse |
-| ---------: | --------------: | --------------: | --------------: | --------: |
-|          1 |            7 µs |           11 µs |            8 µs |      3 µs |
-|         10 |          131 µs |          206 µs |          146 µs |     75 µs |
-|         50 |          463 µs |          856 µs |          605 µs |    279 µs |
-|        100 |          875 µs |         1.57 ms |         1.07 ms |    529 µs |
-|        500 |         5.68 ms |         10.0 ms |         6.73 ms |   3.53 ms |
-|       1000 |  18.5 ms ± 27%  |  29.2 ms ± 36%  |  16.4 ms ± 24%  |   6.65 ms |
+| Statements | sqlparser-rs    | pg_query.rs     | pg_query (sum)  | pg_parse        | sql-parse |
+| ---------: | --------------: | --------------: | --------------: | --------------: | --------: |
+|          1 |            7 µs |           13 µs |            3 µs |            8 µs |      3 µs |
+|         10 |          137 µs |          233 µs |           32 µs |          146 µs |     80 µs |
+|         50 |          475 µs |          917 µs |          128 µs |          605 µs |    294 µs |
+|        100 |          905 µs |         1.74 ms |          310 µs |         1.07 ms |    574 µs |
+|        500 |         8.14 ms |         16.0 ms |         1.53 ms |         6.73 ms |   3.88 ms |
+|       1000 |  48.9 ms ± 24%  |  41.5 ms ± 23%  |         2.79 ms |  16.4 ms ± 24%  |   6.97 ms |
 
-*Note: The 1000-statement SELECT benchmark shows high variance (±24-36%) that persists across multiple runs. This likely reflects the heterogeneous complexity of the Spider/Gretel query corpus—some queries are simple while others contain deeply nested subqueries, CTEs, and complex expressions. The sql-parse results show lower variance because it fails on the most complex queries, effectively benchmarking a simpler subset.*
+*Note: The 1000-statement SELECT benchmark shows high variance (±23-24%) that persists across multiple runs. This likely reflects the heterogeneous complexity of the Spider/Gretel query corpus—some queries are simple while others contain deeply nested subqueries, CTEs, and complex expressions. The pg_query (summary) function shows dramatically lower times because it extracts metadata without deserializing the full AST.*
 
 ### INSERT Statements
 
-| Statements | sqlparser-rs |  pg_query.rs | pg_parse | sql-parse |
-| ---------: | -----------: | -----------: | -------: | --------: |
-|          1 |         6 µs |        11 µs |     8 µs |      3 µs |
-|         10 |        88 µs |       171 µs |   124 µs |     60 µs |
-|         50 |       422 µs |       763 µs |   635 µs |    278 µs |
-|        100 |       896 µs |      1.58 ms |  1.31 ms |    631 µs |
-|        500 |      4.90 ms |      8.90 ms |  6.74 ms |   3.18 ms |
+| Statements | sqlparser-rs |  pg_query.rs | pg_query (sum) | pg_parse | sql-parse |
+| ---------: | -----------: | -----------: | -------------: | -------: | --------: |
+|          1 |         5 µs |        12 µs |           2 µs |     8 µs |      3 µs |
+|         10 |        97 µs |       190 µs |          26 µs |   124 µs |     62 µs |
+|         50 |       437 µs |       882 µs |         126 µs |   635 µs |    289 µs |
+|        100 |       908 µs |      1.77 ms |         269 µs |  1.31 ms |    630 µs |
+|        500 |      5.88 ms |     12.31 ms |        1.33 ms |  6.74 ms |   3.22 ms |
 
 ### UPDATE Statements
 
-| Statements | sqlparser-rs | pg_query.rs | pg_parse | sql-parse |
-| ---------: | -----------: | ----------: | -------: | --------: |
-|          1 |         7 µs |       16 µs |    11 µs |      5 µs |
-|         10 |        59 µs |      108 µs |    73 µs |     45 µs |
-|         50 |       325 µs |      606 µs |   430 µs |    248 µs |
-|        100 |       692 µs |     1.32 ms |  1.01 ms |    555 µs |
-|        500 |      3.20 ms |     6.46 ms |  4.44 ms |   2.70 ms |
+| Statements | sqlparser-rs | pg_query.rs | pg_query (sum) | pg_parse | sql-parse |
+| ---------: | -----------: | ----------: | -------------: | -------: | --------: |
+|          1 |         7 µs |       18 µs |           2 µs |    11 µs |      5 µs |
+|         10 |        56 µs |      120 µs |          15 µs |    73 µs |     46 µs |
+|         50 |       325 µs |      688 µs |          82 µs |   430 µs |    250 µs |
+|        100 |       662 µs |     1.44 ms |         176 µs |  1.01 ms |    550 µs |
+|        500 |      3.27 ms |     7.38 ms |         925 µs |  4.44 ms |   2.75 ms |
 
 ### DELETE Statements
 
-| Statements | sqlparser-rs | pg_query.rs | pg_parse | sql-parse |
-| ---------: | -----------: | ----------: | -------: | --------: |
-|          1 |         3 µs |        7 µs |     4 µs |      2 µs |
-|         10 |        72 µs |      147 µs |   108 µs |     47 µs |
-|         50 |       290 µs |      558 µs |   398 µs |    187 µs |
-|        100 |       607 µs |     1.13 ms |   790 µs |    415 µs |
-|        500 |      2.93 ms |     5.66 ms |  3.95 ms |   2.12 ms |
+| Statements | sqlparser-rs | pg_query.rs | pg_query (sum) | pg_parse | sql-parse |
+| ---------: | -----------: | ----------: | -------------: | -------: | --------: |
+|          1 |         3 µs |        8 µs |           2 µs |     4 µs |      2 µs |
+|         10 |        74 µs |      158 µs |          19 µs |   108 µs |     44 µs |
+|         50 |       282 µs |      611 µs |          81 µs |   398 µs |    191 µs |
+|        100 |       591 µs |     1.19 ms |         159 µs |   790 µs |    392 µs |
+|        500 |      2.78 ms |     6.41 ms |         883 µs |  3.95 ms |   2.12 ms |
 
 ### Mixed DML Statements
 
-| Statements | sqlparser-rs | pg_query.rs | pg_parse | sql-parse |
-| ---------: | -----------: | ----------: | -------: | --------: |
-|          1 |         7 µs |       12 µs |     8 µs |      3 µs |
-|         10 |       134 µs |      208 µs |   144 µs |     77 µs |
-|         50 |       459 µs |      822 µs |   605 µs |    281 µs |
-|        100 |       856 µs |     1.52 ms |  1.10 ms |    541 µs |
-|        500 |      5.94 ms |     10.9 ms |  6.67 ms |   3.65 ms |
-|       1000 |      14.7 ms |     22.5 ms |  14.3 ms |   6.70 ms |
+| Statements | sqlparser-rs | pg_query.rs | pg_query (sum) | pg_parse | sql-parse |
+| ---------: | -----------: | ----------: | -------------: | -------: | --------: |
+|          1 |         7 µs |       13 µs |           3 µs |     8 µs |      3 µs |
+|         10 |       142 µs |      238 µs |          31 µs |   144 µs |     81 µs |
+|         50 |       497 µs |      942 µs |         128 µs |   605 µs |    291 µs |
+|        100 |       906 µs |     1.79 ms |         242 µs |  1.10 ms |    571 µs |
+|        500 |      8.15 ms |     15.8 ms |        1.54 ms |  6.67 ms |   3.84 ms |
+|       1000 |      50.1 ms |     46.9 ms |        2.75 ms |  14.3 ms |   7.17 ms |
 
 ## Interpretation
 
@@ -161,22 +164,27 @@ All SQL statements are validated to parse successfully with sqlparser-rs and pg_
 
 Across all statement types and batch sizes, the parsers consistently rank:
 
-1. **sql-parse** (fastest) — 1.5-2x faster than sqlparser-rs
-2. **sqlparser-rs** — 1.3-1.5x faster than pg_parse
-3. **pg_parse** — 1.5-1.7x faster than pg_query.rs
-4. **pg_query.rs** (slowest)
+1. **pg_query.rs (summary)** (fastest for metadata) — 5-8x faster than full pg_query.rs parsing
+2. **sql-parse** — 1.5-2x faster than sqlparser-rs (but limited PostgreSQL support)
+3. **sqlparser-rs** — 1.3-1.5x faster than pg_parse
+4. **pg_parse** — 1.5-1.7x faster than pg_query.rs
+5. **pg_query.rs** (full AST parsing)
 
 ### Key Findings
 
-#### 1. sql-parse is the fastest parser, but with major caveats
+#### 1. pg_query (summary) is dramatically faster for metadata extraction
+
+The `pg_query::summary()` function is **5-8x faster** than full `pg_query::parse()` because it extracts metadata (tables, functions, filter columns, statement types) directly in C without deserializing the full AST over protobuf. For 500 SELECT statements: 1.53ms (summary) vs 16.0ms (full parse). Use this when you need query metadata but not the complete AST.
+
+#### 2. sql-parse is fast for full parsing, but with major caveats
 
 sql-parse achieves its speed through zero-copy parsing with borrowed tokens, minimizing allocations. However, it only successfully parses ~30% of SELECT statements in our corpus due to incomplete PostgreSQL dialect support. Its benchmark numbers reflect parsing a simpler subset of SQL, making direct comparisons misleading.
 
-#### 2. sqlparser-rs offers the best speed/compatibility balance
+#### 3. sqlparser-rs offers the best speed/compatibility balance
 
 At roughly 1.7-2x faster than pg_query.rs while maintaining 100% compatibility with our test corpus, sqlparser-rs is the practical choice for most applications. It handles the full range of PostgreSQL syntax without external dependencies.
 
-#### 3. FFI overhead is measurable but not dramatic
+#### 4. FFI overhead is measurable but not dramatic
 
 pg_query.rs and pg_parse (both wrapping libpg_query via FFI) are 1.5-2x slower than pure Rust parsers. This overhead comes from:
 
@@ -184,36 +192,38 @@ pg_query.rs and pg_parse (both wrapping libpg_query via FFI) are 1.5-2x slower t
 - Converting C data structures (protobuf) to Rust types
 - The PostgreSQL parser's design for correctness over speed
 
-#### 4. pg_parse consistently outperforms pg_query.rs
+#### 5. pg_parse consistently outperforms pg_query.rs
 
 Despite both using libpg_query, pg_parse is ~1.5x faster than pg_query.rs. This likely reflects differences in how each library handles the FFI bridge and deserializes the parse tree.
 
-#### 5. All parsers scale linearly
+#### 6. All parsers scale linearly
 
 Parsing time grows linearly with statement count, as expected. No parser shows degradation at scale—parsing 1000 statements takes approximately 1000x the time of parsing 1 statement.
 
-#### 6. Statement complexity affects relative performance
+#### 7. Statement complexity affects relative performance
 
 DELETE statements (simplest) show the largest relative gaps between parsers, while complex SELECT statements narrow the gap slightly. This suggests FFI overhead is more significant relative to parse time for simple statements.
 
-#### 7. High variance at large batch sizes reflects query heterogeneity
+#### 8. High variance at large batch sizes reflects query heterogeneity
 
 The 1000-statement SELECT benchmark shows persistent high variance (±24-36% standard deviation) that does not decrease with repeated runs. This is not measurement noise—it reflects the diverse complexity of real-world SQL in the Spider/Gretel corpus. Individual benchmark iterations sample different subsets of queries, and batches containing more complex queries (nested subqueries, CTEs, window functions) take measurably longer than batches of simpler queries. Interestingly, sql-parse shows much lower variance because it fails to parse the most complex queries, effectively self-selecting a more homogeneous (simpler) subset.
 
 ### Trade-offs
 
-| Consideration                | sqlparser-rs                    | pg_query.rs / pg_parse      | sql-parse                 |
-| ---------------------------- | ------------------------------- | --------------------------- | ------------------------- |
-| **Speed**                    | Fast                            | Slower (FFI overhead)       | Fastest (zero-copy)       |
-| **PostgreSQL compatibility** | Good (may differ on edge cases) | Perfect (actual PG parser)  | Limited (~30% SELECT)     |
-| **Memory allocation**        | Standard                        | Standard                    | Minimal (borrowed tokens) |
-| **Dependencies**             | None                            | C library (libpg_query)     | None                      |
-| **Multi-dialect support**    | Yes (MySQL, SQLite, etc.)       | PostgreSQL only             | MySQL/MariaDB focus       |
-| **Query fingerprinting**     | No                              | Yes                         | No                        |
+| Consideration                | sqlparser-rs                    | pg_query.rs (full)          | pg_query.rs (summary)        | sql-parse                 |
+| ---------------------------- | ------------------------------- | --------------------------- | ---------------------------- | ------------------------- |
+| **Speed**                    | Fast                            | Slower (FFI + protobuf)     | Fastest FFI (no protobuf)    | Fastest (zero-copy)       |
+| **Output**                   | Full AST                        | Full AST                    | Metadata only                | Full AST                  |
+| **PostgreSQL compatibility** | Good (may differ on edge cases) | Perfect (actual PG parser)  | Perfect (actual PG parser)   | Limited (~30% SELECT)     |
+| **Memory allocation**        | Standard                        | Standard                    | Minimal                      | Minimal (borrowed tokens) |
+| **Dependencies**             | None                            | C library (libpg_query)     | C library (libpg_query)      | None                      |
+| **Multi-dialect support**    | Yes (MySQL, SQLite, etc.)       | PostgreSQL only             | PostgreSQL only              | MySQL/MariaDB focus       |
+| **Query fingerprinting**     | No                              | Yes                         | No                           | No                        |
 
 ### Recommendations
 
 - **General use**: **sqlparser-rs** — best balance of speed, compatibility, and multi-dialect support
+- **Metadata extraction** (tables, functions, columns): **pg_query.rs (summary)** — 5-8x faster than full parsing, perfect PostgreSQL compatibility
 - **PostgreSQL tooling** (query analysis, rewriting): **pg_query.rs** — guaranteed syntax compatibility with PostgreSQL, plus fingerprinting support
 - **High-throughput ingestion** of simple/known SQL: **sql-parse** — if your SQL subset is supported and you need minimal allocations
 - **Embedded/WASM targets**: **sqlparser-rs** or **sql-parse** — no C dependencies
@@ -252,7 +262,7 @@ Results are saved to `target/criterion/` with HTML reports.
 cargo run --release --bin plot
 ```
 
-Creates `benchmark_results.svg` with line charts comparing all four parsers.
+Creates `benchmark_results.svg` with log-log scale line charts comparing all five parser configurations (sqlparser-rs, pg_query.rs, pg_query.rs summary, pg_parse, sql-parse).
 
 ## Reproducibility
 

@@ -17,13 +17,19 @@ const EXPECTED_SIZES: [usize; 9] = [1, 10, 50, 100, 500, 933, 983, 992, 1000];
 // Pantone-inspired colors
 const PANTONE_CLASSIC_BLUE: RGBColor = RGBColor(15, 76, 129); // Pantone 19-4052
 const PANTONE_LIVING_CORAL: RGBColor = RGBColor(255, 111, 97); // Pantone 16-1546
+const PANTONE_ROSE_QUARTZ: RGBColor = RGBColor(247, 202, 201); // Pantone 13-1520
 const PANTONE_GREENERY: RGBColor = RGBColor(136, 176, 75); // Pantone 15-0343
 const PANTONE_ULTRA_VIOLET: RGBColor = RGBColor(95, 75, 139); // Pantone 18-3838
 
 // Parser configuration
-const PARSERS: [(&str, &str, RGBColor); 4] = [
+const PARSERS: [(&str, &str, RGBColor); 5] = [
     ("sqlparser", "sqlparser-rs", PANTONE_CLASSIC_BLUE),
     ("pg_query", "pg_query.rs", PANTONE_LIVING_CORAL),
+    (
+        "pg_query_summary",
+        "pg_query.rs (summary)",
+        PANTONE_ROSE_QUARTZ,
+    ),
     ("pg_parse", "pg_parse", PANTONE_GREENERY),
     ("sql_parse", "sql-parse", PANTONE_ULTRA_VIOLET),
 ];
@@ -205,14 +211,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         title_style.pos(Pos::new(HPos::Center, VPos::Center)),
     ))?;
 
-    // Calculate global max time across all groups for consistent y-axis
+    // Calculate global min/max time across all groups for consistent y-axis (log scale)
+    let global_min_time = all_results
+        .values()
+        .flat_map(|group| group.values())
+        .flat_map(|parser| parser.values())
+        .map(|r| (r.mean_ns - r.std_dev_ns).max(r.mean_ns * 0.5) / 1_000_000.0)
+        .fold(f64::MAX, f64::min)
+        * 0.5;
+
     let global_max_time = all_results
         .values()
         .flat_map(|group| group.values())
         .flat_map(|parser| parser.values())
         .map(|r| (r.mean_ns + r.std_dev_ns) / 1_000_000.0)
         .fold(0.0_f64, f64::max)
-        * 1.15;
+        * 1.5;
 
     // Use fixed x-axis range (1 to 1000) for all plots
     let global_max_size = 1000.0_f64;
@@ -250,7 +264,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .margin(10)
                 .x_label_area_size(35)
                 .y_label_area_size(55)
-                .build_cartesian_2d((1f64..global_max_size).log_scale(), 0f64..global_max_time)?;
+                .build_cartesian_2d(
+                    (1f64..global_max_size).log_scale(),
+                    (global_min_time..global_max_time).log_scale(),
+                )?;
 
             chart
                 .configure_mesh()

@@ -19,6 +19,11 @@ fn bench_pg_query(sql: &str) {
     let _ = black_box(pg_query::parse(sql));
 }
 
+#[cfg(feature = "pg_query_parser")]
+fn bench_pg_query_summary(sql: &str) {
+    let _ = black_box(pg_query::summary(sql, -1));
+}
+
 #[cfg(feature = "pg_parse_parser")]
 fn bench_pg_parse(sql: &str) {
     let _ = black_box(pg_parse::parse(sql));
@@ -73,6 +78,13 @@ fn run_benchmark_group(c: &mut Criterion, group_name: &str, statements: &[String
             BenchmarkId::new("pg_query", size),
             &concatenated,
             |b, sql| b.iter(|| bench_pg_query(sql)),
+        );
+
+        #[cfg(feature = "pg_query_parser")]
+        group.bench_with_input(
+            BenchmarkId::new("pg_query_summary", size),
+            &concatenated,
+            |b, sql| b.iter(|| bench_pg_query_summary(sql)),
         );
 
         #[cfg(feature = "pg_parse_parser")]

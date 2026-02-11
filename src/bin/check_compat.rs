@@ -4,7 +4,7 @@ use sql_ast_benchmark::{
 };
 
 #[cfg(feature = "pg_query_parser")]
-use sql_ast_benchmark::is_valid_pg_query;
+use sql_ast_benchmark::{is_valid_pg_query, is_valid_pg_query_summary};
 
 #[cfg(feature = "pg_parse_parser")]
 use sql_ast_benchmark::is_valid_pg_parse;
@@ -28,6 +28,12 @@ fn main() {
         check_compat("INSERT", &insert, is_valid_pg_query);
         check_compat("UPDATE", &update, is_valid_pg_query);
         check_compat("DELETE", &delete, is_valid_pg_query);
+
+        println!("\npg_query_summary compatibility:");
+        check_compat("SELECT", &select, is_valid_pg_query_summary);
+        check_compat("INSERT", &insert, is_valid_pg_query_summary);
+        check_compat("UPDATE", &update, is_valid_pg_query_summary);
+        check_compat("DELETE", &delete, is_valid_pg_query_summary);
     }
 
     #[cfg(feature = "pg_parse_parser")]
