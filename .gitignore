@@ -18,3 +18,8 @@ Thumbs.db
 # Criterion benchmark data (regenerated on each run)
 # Uncomment if you don't want to track historical benchmark data
 # /target/criterion/
+
+# Generated test corpus files (produced by `cargo run --bin scrape_tests`)
+sqlparser_test_common.txt
+sqlparser_test_postgres.txt
+sqlparser_test_regression.txt

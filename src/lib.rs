@@ -1,3 +1,7 @@
+use databend_common_ast::parser::{
+    parse_sql as databend_parse, tokenize_sql as databend_tokenize, Dialect as DatabendDialect,
+};
+use polyglot_sql::{parse as polyglot_parse, DialectType, Generator as PolyglotGenerator};
 use sql_parse::{parse_statements, Issues, Level, ParseOptions, SQLDialect};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
@@ -33,10 +37,21 @@ pub fn is_valid_pg_query_summary(sql: &str) -> bool {
 }
 
 #[must_use]
+pub fn is_valid_polyglot(sql: &str) -> bool {
+    std::panic::catch_unwind(|| polyglot_parse(sql, DialectType::PostgreSQL).is_ok())
+        .unwrap_or(false)
+}
+
+#[must_use]
 pub fn is_valid_sql_parse(sql: &str) -> bool {
-    let mut issues = Issues::new(sql);
-    let _ = parse_statements(sql, &mut issues, &sql_parse_options());
-    !issues.get().iter().any(|i| i.level == Level::Error)
+    // sql-parse uses todo!() in some unimplemented paths (e.g. hex literals);
+    // catch_unwind treats those as parse failures.
+    std::panic::catch_unwind(|| {
+        let mut issues = Issues::new(sql);
+        let _ = parse_statements(sql, &mut issues, &sql_parse_options());
+        !issues.get().iter().any(|i| i.level == Level::Error)
+    })
+    .unwrap_or(false)
 }
 
 #[cfg(feature = "pg_parse_parser")]
@@ -45,22 +60,194 @@ pub fn is_valid_pg_parse(sql: &str) -> bool {
     pg_parse::parse(sql).is_ok()
 }
 
-/// Check if valid for both sqlparser-rs and the active FFI parser(s)
 #[must_use]
-pub fn is_valid_both(sql: &str) -> bool {
-    let mut valid = is_valid_sqlparser(sql);
+pub fn is_valid_databend(sql: &str) -> bool {
+    // databend-common-ast can panic on certain inputs instead of returning Err;
+    // catch_unwind treats those as parse failures.
+    std::panic::catch_unwind(|| {
+        databend_tokenize(sql)
+            .ok()
+            .and_then(|tokens| databend_parse(&tokens, DatabendDialect::PostgreSQL).ok())
+            .is_some()
+    })
+    .unwrap_or(false)
+}
 
-    #[cfg(feature = "pg_query_parser")]
-    {
-        valid = valid && is_valid_pg_query(sql);
+// ── Fidelity checks ───────────────────────────────────────────────────────────
+// Each function checks whether a parser's output is semantically equivalent to
+// the input, using pg_query's canonical deparse as the reference:
+//   pg_query_deparse(pg_query_parse(parser_output(sql)))
+//     == pg_query_deparse(pg_query_parse(sql))
+// Returns false if either parse or deparse fails, or if the canonical forms differ.
+
+#[cfg(feature = "pg_query_parser")]
+fn pg_query_canonical(sql: &str) -> Option<String> {
+    pg_query::parse(sql).ok()?.deparse().ok()
+}
+
+/// sqlparser-rs fidelity: does its pretty-printed output have the same
+/// `pg_query` canonical form as the original SQL?
+#[cfg(feature = "pg_query_parser")]
+#[must_use]
+pub fn sqlparser_fidelity(sql: &str) -> bool {
+    let dialect = PostgreSqlDialect {};
+    let Ok(stmts) = Parser::parse_sql(&dialect, sql) else {
+        return false;
+    };
+    if stmts.is_empty() {
+        return false;
     }
-
-    #[cfg(feature = "pg_parse_parser")]
-    {
-        valid = valid && is_valid_pg_parse(sql);
+    let printed = stmts
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ");
+    match (pg_query_canonical(sql), pg_query_canonical(&printed)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
     }
+}
 
-    valid
+/// polyglot-sql fidelity: does its generated output have the same
+/// `pg_query` canonical form as the original SQL?
+#[cfg(feature = "pg_query_parser")]
+#[must_use]
+pub fn polyglot_fidelity(sql: &str) -> bool {
+    std::panic::catch_unwind(|| {
+        let Ok(exprs) = polyglot_parse(sql, DialectType::PostgreSQL) else {
+            return false;
+        };
+        if exprs.is_empty() {
+            return false;
+        }
+        let Ok(generated) = PolyglotGenerator::new().generate(&exprs[0]) else {
+            return false;
+        };
+        match (pg_query_canonical(sql), pg_query_canonical(&generated)) {
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
+    })
+    .unwrap_or(false)
+}
+
+/// databend fidelity: does its pretty-printed output have the same
+/// `pg_query` canonical form as the original SQL?
+#[cfg(feature = "pg_query_parser")]
+#[must_use]
+pub fn databend_fidelity(sql: &str) -> bool {
+    std::panic::catch_unwind(|| {
+        let Ok(tokens) = databend_tokenize(sql) else {
+            return false;
+        };
+        let Ok((stmt, _)) = databend_parse(&tokens, DatabendDialect::PostgreSQL) else {
+            return false;
+        };
+        let printed = stmt.to_string();
+        match (pg_query_canonical(sql), pg_query_canonical(&printed)) {
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
+    })
+    .unwrap_or(false)
+}
+
+// ── Round-trip stability checks ───────────────────────────────────────────────
+// Each function: parse → pretty-print → re-parse → re-print, check stability.
+// Returns false if the parser rejects the input or if the output is unstable.
+
+/// sqlparser-rs: parse → `to_string` → re-parse → `to_string`, check stability
+#[must_use]
+pub fn sqlparser_roundtrip(sql: &str) -> bool {
+    let dialect = PostgreSqlDialect {};
+    let Ok(stmts) = Parser::parse_sql(&dialect, sql) else {
+        return false;
+    };
+    if stmts.is_empty() {
+        return false;
+    }
+    let printed = stmts
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ");
+    let Ok(stmts2) = Parser::parse_sql(&dialect, &printed) else {
+        return false;
+    };
+    let reprinted = stmts2
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ");
+    printed == reprinted
+}
+
+#[cfg(feature = "pg_query_parser")]
+/// `pg_query`: parse → deparse → re-parse → deparse, check stability
+#[must_use]
+pub fn pg_query_roundtrip(sql: &str) -> bool {
+    let Ok(parsed) = pg_query::parse(sql) else {
+        return false;
+    };
+    let Ok(deparsed) = parsed.deparse() else {
+        return false;
+    };
+    let Ok(parsed2) = pg_query::parse(&deparsed) else {
+        return false;
+    };
+    let Ok(deparsed2) = parsed2.deparse() else {
+        return false;
+    };
+    deparsed == deparsed2
+}
+
+/// polyglot-sql: parse → generate → re-parse → generate, check stability
+#[must_use]
+pub fn polyglot_roundtrip(sql: &str) -> bool {
+    std::panic::catch_unwind(|| {
+        let Ok(exprs) = polyglot_parse(sql, DialectType::PostgreSQL) else {
+            return false;
+        };
+        if exprs.is_empty() {
+            return false;
+        }
+        let Ok(generated) = PolyglotGenerator::new().generate(&exprs[0]) else {
+            return false;
+        };
+        let Ok(exprs2) = polyglot_parse(&generated, DialectType::PostgreSQL) else {
+            return false;
+        };
+        if exprs2.is_empty() {
+            return false;
+        }
+        let Ok(generated2) = PolyglotGenerator::new().generate(&exprs2[0]) else {
+            return false;
+        };
+        generated == generated2
+    })
+    .unwrap_or(false)
+}
+
+/// databend-common-ast: parse → `to_string` → re-parse → `to_string`, check stability
+#[must_use]
+pub fn databend_roundtrip(sql: &str) -> bool {
+    std::panic::catch_unwind(|| {
+        let Ok(tokens) = databend_tokenize(sql) else {
+            return false;
+        };
+        let Ok((stmt, _)) = databend_parse(&tokens, DatabendDialect::PostgreSQL) else {
+            return false;
+        };
+        let printed = stmt.to_string();
+        let Ok(tokens2) = databend_tokenize(&printed) else {
+            return false;
+        };
+        let Ok((stmt2, _)) = databend_parse(&tokens2, DatabendDialect::PostgreSQL) else {
+            return false;
+        };
+        printed == stmt2.to_string()
+    })
+    .unwrap_or(false)
 }
 
 /// Load Spider SELECT statements (real-world text-to-SQL queries)

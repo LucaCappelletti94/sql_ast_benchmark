@@ -1,4 +1,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode};
+use databend_common_ast::parser::{
+    parse_sql as databend_parse, tokenize_sql as databend_tokenize, Dialect as DatabendDialect,
+};
+use polyglot_sql::{parse as polyglot_parse, DialectType};
 use sql_ast_benchmark::{
     concatenate_statements, load_delete_statements, load_dml_statements, load_insert_statements,
     load_select_statements, load_update_statements,
@@ -29,10 +33,26 @@ fn bench_pg_parse(sql: &str) {
     let _ = black_box(pg_parse::parse(sql));
 }
 
+fn bench_polyglot(sql: &str) {
+    let _ = black_box(polyglot_parse(sql, DialectType::PostgreSQL));
+}
+
 fn bench_sql_parse(sql: &str) {
     let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL);
     let mut issues = Issues::new(sql);
     let _ = black_box(parse_statements(sql, &mut issues, &options));
+}
+
+fn bench_databend(sql: &str) {
+    for stmt in sql.split(';') {
+        let stmt = stmt.trim();
+        if stmt.is_empty() {
+            continue;
+        }
+        if let Ok(tokens) = databend_tokenize(stmt) {
+            let _ = black_box(databend_parse(&tokens, DatabendDialect::PostgreSQL));
+        }
+    }
 }
 
 fn run_benchmark_group(c: &mut Criterion, group_name: &str, statements: &[String]) {
@@ -73,6 +93,12 @@ fn run_benchmark_group(c: &mut Criterion, group_name: &str, statements: &[String
             |b, sql| b.iter(|| bench_sqlparser(sql)),
         );
 
+        group.bench_with_input(
+            BenchmarkId::new("polyglot", size),
+            &concatenated,
+            |b, sql| b.iter(|| bench_polyglot(sql)),
+        );
+
         #[cfg(feature = "pg_query_parser")]
         group.bench_with_input(
             BenchmarkId::new("pg_query", size),
@@ -98,6 +124,12 @@ fn run_benchmark_group(c: &mut Criterion, group_name: &str, statements: &[String
             BenchmarkId::new("sql_parse", size),
             &concatenated,
             |b, sql| b.iter(|| bench_sql_parse(sql)),
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("databend", size),
+            &concatenated,
+            |b, sql| b.iter(|| bench_databend(sql)),
         );
     }
 

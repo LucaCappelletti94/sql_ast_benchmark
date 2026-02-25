@@ -1,6 +1,6 @@
 use sql_ast_benchmark::{
-    is_valid_sql_parse, load_delete_statements, load_insert_statements, load_select_statements,
-    load_update_statements,
+    is_valid_databend, is_valid_polyglot, is_valid_sql_parse, load_delete_statements,
+    load_insert_statements, load_select_statements, load_update_statements,
 };
 
 #[cfg(feature = "pg_query_parser")]
@@ -15,11 +15,23 @@ fn main() {
     let update = load_update_statements();
     let delete = load_delete_statements();
 
-    println!("sql-parse compatibility:");
+    println!("polyglot-sql compatibility:");
+    check_compat("SELECT", &select, is_valid_polyglot);
+    check_compat("INSERT", &insert, is_valid_polyglot);
+    check_compat("UPDATE", &update, is_valid_polyglot);
+    check_compat("DELETE", &delete, is_valid_polyglot);
+
+    println!("\nsql-parse compatibility:");
     check_compat("SELECT", &select, is_valid_sql_parse);
     check_compat("INSERT", &insert, is_valid_sql_parse);
     check_compat("UPDATE", &update, is_valid_sql_parse);
     check_compat("DELETE", &delete, is_valid_sql_parse);
+
+    println!("\ndatabend compatibility:");
+    check_compat("SELECT", &select, is_valid_databend);
+    check_compat("INSERT", &insert, is_valid_databend);
+    check_compat("UPDATE", &update, is_valid_databend);
+    check_compat("DELETE", &delete, is_valid_databend);
 
     #[cfg(feature = "pg_query_parser")]
     {

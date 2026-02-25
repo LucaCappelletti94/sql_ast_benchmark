@@ -33,7 +33,10 @@ sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
 pg_query = { git = "https://github.com/pganalyze/pg_query.rs", optional = true }
 pg_parse = { git = "https://github.com/paupino/pg_parse", optional = true }
 sql-parse = { git = "https://github.com/antialize/sql-parse" }
+polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
+databend-common-ast = "0.2.4"
 plotters = "0.3"
+regex = "1"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }
@@ -49,3 +52,20 @@ path = "src/bin/plot.rs"
 [[bin]]
 name = "check_compat"
 path = "src/bin/check_compat.rs"
+
+[[bin]]
+name = "scrape_tests"
+path = "src/bin/scrape_tests.rs"
+
+[[bin]]
+name = "correctness"
+path = "src/bin/correctness.rs"
+
+[[bin]]
+name = "divergence"
+path = "src/bin/divergence.rs"
+
+[[bin]]
+name = "check_deparse"
+path = "src/bin/check_deparse.rs"
+

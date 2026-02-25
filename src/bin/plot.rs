@@ -12,26 +12,28 @@ use std::path::Path;
 const BENCHMARK_BASE_DIR: &str = "target/criterion";
 const OUTPUT_FILE: &str = "benchmark_results.svg";
 // Standard sizes plus max corpus sizes for INSERT/UPDATE/DELETE
-const EXPECTED_SIZES: [usize; 9] = [1, 10, 50, 100, 500, 933, 983, 992, 1000];
+const EXPECTED_SIZES: [usize; 9] = [1, 10, 50, 100, 500, 934, 984, 993, 1000];
 
 // Pantone-inspired colors
 const PANTONE_CLASSIC_BLUE: RGBColor = RGBColor(15, 76, 129); // Pantone 19-4052
 const PANTONE_LIVING_CORAL: RGBColor = RGBColor(255, 111, 97); // Pantone 16-1546
 const PANTONE_ROSE_QUARTZ: RGBColor = RGBColor(247, 202, 201); // Pantone 13-1520
-const PANTONE_GREENERY: RGBColor = RGBColor(136, 176, 75); // Pantone 15-0343
 const PANTONE_ULTRA_VIOLET: RGBColor = RGBColor(95, 75, 139); // Pantone 18-3838
+const PANTONE_ILLUMINATING: RGBColor = RGBColor(245, 223, 77); // Pantone 13-0858
+const PANTONE_EMERALD: RGBColor = RGBColor(0, 155, 119); // Pantone 17-5641
 
 // Parser configuration
-const PARSERS: [(&str, &str, RGBColor); 5] = [
+const PARSERS: [(&str, &str, RGBColor); 6] = [
     ("sqlparser", "sqlparser-rs", PANTONE_CLASSIC_BLUE),
+    ("polyglot", "polyglot-sql", PANTONE_ILLUMINATING),
     ("pg_query", "pg_query.rs", PANTONE_LIVING_CORAL),
     (
         "pg_query_summary",
         "pg_query.rs (summary)",
         PANTONE_ROSE_QUARTZ,
     ),
-    ("pg_parse", "pg_parse", PANTONE_GREENERY),
     ("sql_parse", "sql-parse", PANTONE_ULTRA_VIOLET),
+    ("databend", "databend-common-ast", PANTONE_EMERALD),
 ];
 
 #[derive(Debug, Clone)]
@@ -336,7 +338,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let center_y = height as i32 / 2;
 
         let num_parsers = PARSERS.len() as i32;
-        let line_height = 30;
+        let line_height = 25;
         let start_y = center_y - (num_parsers * line_height) / 2;
 
         for (i, (_, parser_name, color)) in PARSERS.iter().enumerate() {
