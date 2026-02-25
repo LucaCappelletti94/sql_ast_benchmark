@@ -10,7 +10,7 @@ Benchmarking Rust SQL parsers using real-world PostgreSQL statements.
 
 | Parser                                                                           | Version | Commit                                                                                                      | Implementation                    |
 | -------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| **[sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)**                 | 0.61.0  | [`d9b53a0`](https://github.com/sqlparser-rs/sqlparser-rs/commit/d9b53a0cdb369124d9b6ce6237959e66bad859af)   | Pure Rust                         |
+| **[sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)**                 | 0.61.0  | [`d9b53a0`](https://github.com/sqlparser-rs/sqlparser-rs/commit/d9b53a0cdb369124d9b6ce6237959e66bad859af)   | Pure Rust (multi-dialect)         |
 | **[polyglot-sql](https://github.com/tobilg/polyglot)**                           | 0.1.8   | [`b5e23ec`](https://github.com/tobilg/polyglot/commit/b5e23ec24a053e6a19f4219a82693c8937c50ca8)             | Pure Rust (multi-dialect)         |
 | **[pg_query.rs](https://github.com/pganalyze/pg_query.rs)**                      | 6.1.1   | [`35b8783`](https://github.com/pganalyze/pg_query.rs/commit/35b8783fda79636dd29d787765ca4a0978788f96)       | Rust FFI to C (libpg_query)       |
 | **[sql-parse](https://github.com/antialize/sql-parse)**                          | 0.28.0  | [`ac352f9`](https://github.com/antialize/sql-parse/commit/ac352f97f7ef13ebc44af9295a08095d89882319)         | Pure Rust (zero-copy)             |
