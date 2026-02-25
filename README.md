@@ -20,7 +20,7 @@ Benchmarking Rust SQL parsers using real-world PostgreSQL statements.
 
 - **sqlparser-rs**: A handwritten recursive descent parser supporting multiple SQL dialects (PostgreSQL, MySQL, SQLite, etc.). No external C dependencies. The most widely adopted Rust SQL parser.
 
-- **polyglot-sql**: A SQL parsing, formatting, and dialect-transpilation library. Pure Rust, WASM-compatible. **The library is still very early-stage** (first release Feb 2026): correctness testing reveals a ~52–61% false-positive rate (it accepts large amounts of SQL that PostgreSQL itself rejects), and real-world translation testing shows widespread silent pass-through failures — 22+ PostgreSQL functions and constructs are emitted verbatim rather than translated (e.g. `LEAST`, `GREATEST`, `DATE_TRUNC`, `JSON_AGG`, `EXTRACT`, `AT TIME ZONE`), DDL types such as `TIMESTAMPTZ` and `TSVECTOR` are not mapped, and `GRANT`/`REVOKE`/`CREATE ROLE` are emitted as-is. A semantic correctness bug misidentifies `<=>` as `IS NOT DISTINCT FROM`. Evaluate carefully before production use.
+- **polyglot-sql**: A SQL parsing, formatting, and dialect-transpilation library. Pure Rust, WASM-compatible. **The library is still very early-stage** (first release Feb 2026): correctness testing reveals a ~52–61% false-positive rate (it accepts large amounts of SQL that PostgreSQL itself rejects), and real-world translation testing shows widespread silent pass-through failures - 22+ PostgreSQL functions and constructs are emitted verbatim rather than translated (e.g. `LEAST`, `GREATEST`, `DATE_TRUNC`, `JSON_AGG`, `EXTRACT`, `AT TIME ZONE`), DDL types such as `TIMESTAMPTZ` and `TSVECTOR` are not mapped, and `GRANT`/`REVOKE`/`CREATE ROLE` are emitted as-is. A semantic correctness bug misidentifies `<=>` as `IS NOT DISTINCT FROM`. Evaluate carefully before production use.
 
 - **pg_query.rs**: Rust bindings to libpg_query, which embeds PostgreSQL's actual parser extracted from the PostgreSQL source code. Provides 100% compatibility with PostgreSQL syntax.
 
@@ -57,7 +57,7 @@ All parsers are configured for PostgreSQL dialect in this benchmark.
 
 ### Correctness Benchmark
 
-Parser correctness is evaluated against SQL statements scraped from the sqlparser-rs test suite and filtered/scored using **pg_query.rs (libpg_query) as ground truth** — the actual PostgreSQL parser. Four metrics are reported:
+Parser correctness is evaluated against SQL statements scraped from the sqlparser-rs test suite and filtered/scored using **pg_query.rs (libpg_query) as ground truth** - the actual PostgreSQL parser. Four metrics are reported:
 
 - **Recall**: of SQL that pg_query accepts as valid PostgreSQL, how many does this parser also accept? ↑ higher is better
 - **False-positive rate**: of SQL that pg_query rejects as invalid PostgreSQL, how many does this parser wrongly accept? ↓ lower is better
@@ -106,12 +106,12 @@ cargo run --bin correctness    # score all parsers
 
 **Key correctness findings:**
 
-- **sqlparser-rs** has excellent recall (98–100%) but a significant false-positive problem: it accepts ~29–30% of SQL that PostgreSQL itself rejects. Its "PostgreSQL dialect" is looser than actual PostgreSQL. Round-trip is perfect. Fidelity is excellent: 98.7% on PG-specific, 100% on common and TPC-H — what it parses is almost always semantically correct.
+- **sqlparser-rs** has excellent recall (98–100%) but a significant false-positive problem: it accepts ~29–30% of SQL that PostgreSQL itself rejects. Its "PostgreSQL dialect" is looser than actual PostgreSQL. Round-trip is perfect. Fidelity is excellent: 98.7% on PG-specific, 100% on common and TPC-H - what it parses is almost always semantically correct.
 - **polyglot-sql** has lower recall (81–89%) and the highest false-positive rate (51–61%), accepting more than half of invalid-PostgreSQL SQL. Near-perfect round-trip (97–99%) but noticeably lower fidelity (78–89%): even when it accepts valid SQL and reprints it stably, the output does not always preserve the original semantics.
-- **databend-common-ast** has low recall on PG-specific tests (13% — it doesn't handle DDL/PG extensions) but decent recall on standard SQL (55% common, 95% TPC-H). Very low false-positive rate (2–8%). Perfect round-trip for what it accepts, but fidelity is lower (77–95%): it parses common SQL and TPC-H accurately but makes more semantic errors on PG-specific constructs.
+- **databend-common-ast** has low recall on PG-specific tests (13% - it doesn't handle DDL/PG extensions) but decent recall on standard SQL (55% common, 95% TPC-H). Very low false-positive rate (2–8%). Perfect round-trip for what it accepts, but fidelity is lower (77–95%): it parses common SQL and TPC-H accurately but makes more semantic errors on PG-specific constructs.
 - **sql-parse** is effectively not a PostgreSQL parser. It accepts almost nothing from PG-specific or TPC-H tests, and has near-zero false positives only because it rejects almost everything.
 - **pg_query (summary)** matches full pg_query exactly on accept/reject decisions, confirming it uses the same underlying parse logic.
-- **pg_query.rs round-trip**: 100% on common and TPC-H. On PostgreSQL-specific tests it scores 310/312 (99.4%) — two statements are accepted and deparsed but the deparsed form does not re-parse identically, indicating a minor fidelity gap in the libpg_query deparser. Note: 4 statements were removed from the corpus before this run after being found to trigger a C-level `abort()` in the libpg_query deparser (non-PostgreSQL constructs: `ENUM8`/`ENUM16` and `struct<a,b>` syntax); a bug report has been [filed upstream](https://github.com/pganalyze/libpg_query/issues).
+- **pg_query.rs round-trip**: 100% on common and TPC-H. On PostgreSQL-specific tests it scores 310/312 (99.4%) - two statements are accepted and deparsed but the deparsed form does not re-parse identically, indicating a minor fidelity gap in the libpg_query deparser. Note: 4 statements were removed from the corpus before this run after being found to trigger a C-level `abort()` in the libpg_query deparser (non-PostgreSQL constructs: `ENUM8`/`ENUM16` and `struct<a,b>` syntax); a bug report has been [filed upstream](https://github.com/pganalyze/libpg_query/issues).
 
 ### Benchmark Dataset Coverage
 
@@ -126,7 +126,7 @@ Not all parsers successfully parse all statements in the performance benchmark c
 | databend-common-ast   |   **99.2%**| **94.3%**| **98.2%**| **97.3%**|
 | sql-parse             | **30.1%** |  97.8% |  95.8% |  95.7% |
 
-**⚠️ sql-parse**: Only ~30% of SELECT statements parse successfully — it is primarily a MySQL/MariaDB parser. Speed results for sql-parse SELECT benchmarks reflect only the simpler subset of statements it can handle.
+**⚠️ sql-parse**: Only ~30% of SELECT statements parse successfully - it is primarily a MySQL/MariaDB parser. Speed results for sql-parse SELECT benchmarks reflect only the simpler subset of statements it can handle.
 
 **⚠️ databend-common-ast**: Fails on some PostgreSQL-specific constructs (`RETURNING`, certain type casts, PG-specific syntax). The ~1–6% failure rate is small but reflects its Databend/ClickHouse dialect focus.
 
@@ -236,12 +236,12 @@ All statement types combined (SELECT + INSERT + UPDATE + DELETE), reflecting a r
 
 Across all statement types and batch sizes, the parsers consistently rank from fastest to slowest:
 
-1. **sql-parse** — fastest for full AST parsing (~4x faster than sqlparser-rs), but only parses ~30% of SELECT statements
-2. **pg_query.rs (summary)** — fastest for metadata extraction; no full AST deserialization
-3. **polyglot-sql** — 1.3–2.5x faster than sqlparser-rs at scale; notable high per-call overhead
-4. **sqlparser-rs** — solid all-rounder; fastest at single-statement latency among full AST parsers
-5. **databend-common-ast** — comparable to sqlparser-rs (within 10–20%), slightly slower
-6. **pg_query.rs** — full PostgreSQL AST with 100% PG compatibility; slowest due to FFI + protobuf
+1. **sql-parse** - fastest for full AST parsing (~4x faster than sqlparser-rs), but only parses ~30% of SELECT statements
+2. **pg_query.rs (summary)** - fastest for metadata extraction; no full AST deserialization
+3. **polyglot-sql** - 1.3–2.5x faster than sqlparser-rs at scale; notable high per-call overhead
+4. **sqlparser-rs** - solid all-rounder; fastest at single-statement latency among full AST parsers
+5. **databend-common-ast** - comparable to sqlparser-rs (within 10–20%), slightly slower
+6. **pg_query.rs** - full PostgreSQL AST with 100% PG compatibility; slowest due to FFI + protobuf
 
 ### Key Findings
 
@@ -255,7 +255,7 @@ The `pg_query::summary()` function is **4–8x faster** than full `pg_query::par
 
 #### 3. databend-common-ast is competitive with sqlparser-rs in performance
 
-databend was built to be faster than sqlparser-rs, yet in this benchmark it performs comparably — within 10–20% on most workloads and occasionally slower (especially for INSERT at larger batch sizes). Its main advantage over sqlparser-rs is architectural (zero-copy, Pratt parsing) and may show more in parsing very long or complex individual statements. Dataset coverage is good (99.2% SELECT, 94.3–98.2% INSERT/UPDATE/DELETE), though correctness testing shows limited recall on PG-specific syntax (13% on PG-specific tests, 55% on common SQL, 95% on TPC-H) with a near-zero false-positive rate.
+databend was built to be faster than sqlparser-rs, yet in this benchmark it performs comparably - within 10–20% on most workloads and occasionally slower (especially for INSERT at larger batch sizes). Its main advantage over sqlparser-rs is architectural (zero-copy, Pratt parsing) and may show more in parsing very long or complex individual statements. Dataset coverage is good (99.2% SELECT, 94.3–98.2% INSERT/UPDATE/DELETE), though correctness testing shows limited recall on PG-specific syntax (13% on PG-specific tests, 55% on common SQL, 95% on TPC-H) with a near-zero false-positive rate.
 
 #### 4. sql-parse is the fastest full AST parser, but with major caveats
 
@@ -280,7 +280,7 @@ Parsing time grows linearly with statement count, as expected. No parser shows d
 | **Speed (single stmt)**      | Fast                            | Slow (high overhead)            | Slower (FFI + protobuf)     | Fastest FFI (no protobuf)    | Fastest (zero-copy)       | Fast (comparable to sqlparser) |
 | **Speed (bulk)**             | Good                            | Fastest (amortizes well)        | Slow                        | Very fast                    | Fastest                   | Good                           |
 | **Output**                   | Full AST                        | Full AST + transpile            | Full AST                    | Metadata only                | Full AST                  | Full AST                       |
-| **PostgreSQL compatibility** | Good recall (99%) but ~29% FP rate — accepts non-PG SQL | Moderate recall (81–89%), high FP rate (~52–61%) | Perfect (actual PG parser)  | Perfect (actual PG parser)   | Minimal — MySQL-only in practice | Moderate recall (55% common, 95% TPC-H), low FP rate (~8%) |
+| **PostgreSQL compatibility** | Good recall (99%) but ~29% FP rate - accepts non-PG SQL | Moderate recall (81–89%), high FP rate (~52–61%) | Perfect (actual PG parser)  | Perfect (actual PG parser)   | Minimal - MySQL-only in practice | Moderate recall (55% common, 95% TPC-H), low FP rate (~8%) |
 | **Memory allocation**        | Standard                        | Standard                        | Standard                    | Minimal                      | Minimal (borrowed tokens) | Minimal (zero-copy)            |
 | **Dependencies**             | None                            | None                            | C library (libpg_query)     | C library (libpg_query)      | None                      | None                           |
 | **Multi-dialect support**    | Yes (MySQL, SQLite, etc.)       | Claims 32 (early-stage; widespread translation failures) | PostgreSQL only             | PostgreSQL only              | MySQL/MariaDB focus       | Yes (PG, MySQL, Hive, PRQL)    |
@@ -288,12 +288,12 @@ Parsing time grows linearly with statement count, as expected. No parser shows d
 
 ### Recommendations
 
-- **General use**: **sqlparser-rs** — best balance of speed, recall, and multi-dialect support; lowest single-statement latency; perfect round-trip. Caveat: ~29% false-positive rate on non-PostgreSQL SQL.
-- **Strict PostgreSQL validation**: **pg_query.rs** — the only parser with zero false positives; accepts exactly what PostgreSQL accepts. Use when correctness matters more than speed.
-- **Metadata extraction** (tables, functions, columns): **pg_query.rs (summary)** — 4–8x faster than full parsing, perfect PostgreSQL correctness.
+- **General use**: **sqlparser-rs** - best balance of speed, recall, and multi-dialect support; lowest single-statement latency; perfect round-trip. Caveat: ~29% false-positive rate on non-PostgreSQL SQL.
+- **Strict PostgreSQL validation**: **pg_query.rs** - the only parser with zero false positives; accepts exactly what PostgreSQL accepts. Use when correctness matters more than speed.
+- **Metadata extraction** (tables, functions, columns): **pg_query.rs (summary)** - 4–8x faster than full parsing, perfect PostgreSQL correctness.
 - **Bulk parsing pipelines** (many statements, no strict dialect validation needed): **polyglot-sql** may offer the fastest throughput at scale, but is still very early-stage (Feb 2026). Expect silent translation failures, semantic bugs, and a ~52–61% false-positive rate. Not recommended for production without thorough evaluation.
-- **Embedded/WASM targets**: **sqlparser-rs**, **polyglot-sql**, or **sql-parse** — no C dependencies.
-- **Custom PostgreSQL-compatible parsing with performance focus**: **databend-common-ast** — purpose-built for speed; low false-positive rate but limited recall on PG-specific syntax.
+- **Embedded/WASM targets**: **sqlparser-rs**, **polyglot-sql**, or **sql-parse** - no C dependencies.
+- **Custom PostgreSQL-compatible parsing with performance focus**: **databend-common-ast** - purpose-built for speed; low false-positive rate but limited recall on PG-specific syntax.
 
 ## Environment
 
