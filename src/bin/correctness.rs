@@ -1,9 +1,4 @@
-#![allow(
-    clippy::doc_markdown,
-    clippy::manual_checked_ops,
-    clippy::print_literal,
-    clippy::redundant_closure
-)]
+#![allow(clippy::doc_markdown, clippy::print_literal, clippy::redundant_closure)]
 
 /// Correctness benchmark: tests each SQL parser against SQL statements
 /// extracted from the sqlparser-rs test suite (produced by `scrape_tests`).
@@ -180,11 +175,7 @@ fn pct(n: usize, base: usize) -> f64 {
 
 #[cfg(feature = "pg_query_parser")]
 fn bar(n: usize, base: usize, width: usize) -> String {
-    let filled = if base == 0 {
-        0
-    } else {
-        (n * width / base).min(width)
-    };
+    let filled = (n * width).checked_div(base).unwrap_or(0).min(width);
     format!("[{}{}]", "█".repeat(filled), "░".repeat(width - filled))
 }
 
