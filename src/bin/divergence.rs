@@ -18,10 +18,14 @@
 ///
 /// Run scrape_tests first:
 ///   cargo run --bin scrape_tests
+#[cfg(feature = "pg_query_parser")]
 use sql_ast_benchmark::{is_valid_pg_query, is_valid_sqlparser};
+#[cfg(feature = "pg_query_parser")]
 use std::fs;
+#[cfg(feature = "pg_query_parser")]
 use std::path::Path;
 
+#[cfg(feature = "pg_query_parser")]
 fn analyze_file(path: &Path, label: &str) {
     let Ok(content) = fs::read_to_string(path) else {
         eprintln!(
@@ -88,23 +92,33 @@ fn analyze_file(path: &Path, label: &str) {
 }
 
 fn main() {
-    std::panic::set_hook(Box::new(|_| {}));
+    #[cfg(not(feature = "pg_query_parser"))]
+    {
+        eprintln!("ERROR: pg_query_parser feature is required for the divergence report.");
+        eprintln!("Run: cargo run --bin divergence   (pg_query_parser is enabled by default)");
+        std::process::exit(1);
+    }
 
-    println!("sqlparser-rs  ↔  pg_query.rs (libpg_query) divergence report");
-    println!("Source: sqlparser-rs test suite (run scrape_tests to refresh)\n");
+    #[cfg(feature = "pg_query_parser")]
+    {
+        std::panic::set_hook(Box::new(|_| {}));
 
-    let files: &[(&str, &str)] = &[
-        ("sqlparser_test_postgres.txt", "PostgreSQL-specific tests"),
-        ("sqlparser_test_common.txt", "Common (all-dialect) tests"),
-        ("sqlparser_test_regression.txt", "Regression / TPC-H tests"),
-        ("spider_select.txt", "Spider dataset (real-world SELECT)"),
-        ("gretel_select.txt", "Gretel dataset (synthetic SELECT)"),
-        ("gretel_insert.txt", "Gretel dataset (INSERT)"),
-        ("gretel_update.txt", "Gretel dataset (UPDATE)"),
-        ("gretel_delete.txt", "Gretel dataset (DELETE)"),
-    ];
+        println!("sqlparser-rs  ↔  pg_query.rs (libpg_query) divergence report");
+        println!("Source: sqlparser-rs test suite (run scrape_tests to refresh)\n");
 
-    for (file, label) in files {
-        analyze_file(Path::new(file), label);
+        let files: &[(&str, &str)] = &[
+            ("sqlparser_test_postgres.txt", "PostgreSQL-specific tests"),
+            ("sqlparser_test_common.txt", "Common (all-dialect) tests"),
+            ("sqlparser_test_regression.txt", "Regression / TPC-H tests"),
+            ("spider_select.txt", "Spider dataset (real-world SELECT)"),
+            ("gretel_select.txt", "Gretel dataset (synthetic SELECT)"),
+            ("gretel_insert.txt", "Gretel dataset (INSERT)"),
+            ("gretel_update.txt", "Gretel dataset (UPDATE)"),
+            ("gretel_delete.txt", "Gretel dataset (DELETE)"),
+        ];
+
+        for (file, label) in files {
+            analyze_file(Path::new(file), label);
+        }
     }
 }

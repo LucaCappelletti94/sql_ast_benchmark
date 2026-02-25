@@ -21,10 +21,12 @@
 ///
 /// Requires: run `cargo run --bin scrape_tests` first.
 use std::env;
+#[cfg(feature = "pg_query_parser")]
 use std::io::{self, Read, Write};
+#[cfg(feature = "pg_query_parser")]
 use std::process::{Command, Stdio};
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "pg_query_parser"))]
 use std::os::unix::process::ExitStatusExt;
 
 // ── Subprocess worker mode ────────────────────────────────────────────────────

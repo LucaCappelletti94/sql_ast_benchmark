@@ -32,11 +32,14 @@
 ///
 /// Run scrape_tests first:
 ///   cargo run --bin scrape_tests
+#[cfg(feature = "pg_query_parser")]
 use sql_ast_benchmark::{
     databend_roundtrip, is_valid_databend, is_valid_polyglot, is_valid_sql_parse,
     is_valid_sqlparser, polyglot_roundtrip, sqlparser_roundtrip,
 };
+#[cfg(feature = "pg_query_parser")]
 use std::fs;
+#[cfg(feature = "pg_query_parser")]
 use std::path::Path;
 
 #[cfg(feature = "pg_query_parser")]
@@ -47,6 +50,7 @@ use sql_ast_benchmark::{
 
 // ── Per-parser counts ─────────────────────────────────────────────────────────
 
+#[cfg(feature = "pg_query_parser")]
 struct ParserCounts {
     /// Correctly accepted (true positives): parser accepts pg_query-valid SQL
     accepted: usize,
@@ -59,6 +63,7 @@ struct ParserCounts {
     fidelity: Option<usize>,
 }
 
+#[cfg(feature = "pg_query_parser")]
 struct Counts {
     extracted: usize,
     /// Accepted by pg_query.rs — the PostgreSQL ground truth
@@ -77,6 +82,7 @@ struct Counts {
     pg_query_summary: ParserCounts,
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn count_for(accept: impl Fn(&str) -> bool, valid: &[&str], invalid: &[&str]) -> ParserCounts {
     ParserCounts {
         accepted: valid.iter().filter(|s| accept(s)).count(),
@@ -86,11 +92,13 @@ fn count_for(accept: impl Fn(&str) -> bool, valid: &[&str], invalid: &[&str]) ->
     }
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn with_roundtrip(mut pc: ParserCounts, rt: impl Fn(&str) -> bool, valid: &[&str]) -> ParserCounts {
     pc.roundtrip = Some(valid.iter().filter(|s| rt(s)).count());
     pc
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn with_fidelity(mut pc: ParserCounts, fi: impl Fn(&str) -> bool, valid: &[&str]) -> ParserCounts {
     pc.fidelity = Some(valid.iter().filter(|s| fi(s)).count());
     pc
@@ -161,6 +169,7 @@ fn check_file(path: &Path) -> Option<Counts> {
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 
+#[cfg(feature = "pg_query_parser")]
 fn pct(n: usize, base: usize) -> f64 {
     if base == 0 {
         0.0
@@ -169,6 +178,7 @@ fn pct(n: usize, base: usize) -> f64 {
     }
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn bar(n: usize, base: usize, width: usize) -> String {
     let filled = if base == 0 {
         0
@@ -178,6 +188,7 @@ fn bar(n: usize, base: usize, width: usize) -> String {
     format!("[{}{}]", "█".repeat(filled), "░".repeat(width - filled))
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn print_recall_row(label: &str, accepted: usize, base: usize) {
     println!(
         "│  {:<24} {:>6}/{:<6}  {:>6.1}%  {}",
@@ -189,6 +200,7 @@ fn print_recall_row(label: &str, accepted: usize, base: usize) {
     );
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn print_fp_row(label: &str, pc: &ParserCounts, base: usize) {
     println!(
         "│  {:<24} {:>6}/{:<6}  {:>6.1}%  {}",
@@ -200,6 +212,7 @@ fn print_fp_row(label: &str, pc: &ParserCounts, base: usize) {
     );
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn print_rt_row(label: &str, pc: &ParserCounts) {
     match pc.roundtrip {
         Some(rt) => println!(
@@ -214,6 +227,7 @@ fn print_rt_row(label: &str, pc: &ParserCounts) {
     }
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn print_fidelity_row(label: &str, pc: &ParserCounts) {
     match pc.fidelity {
         Some(fi) => println!(
@@ -228,6 +242,7 @@ fn print_fidelity_row(label: &str, pc: &ParserCounts) {
     }
 }
 
+#[cfg(feature = "pg_query_parser")]
 fn print_table_header(col2: &str) {
     println!(
         "│  {:<24} {:>13}  {:>7}  {}",
