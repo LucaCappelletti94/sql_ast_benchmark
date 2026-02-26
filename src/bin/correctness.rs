@@ -29,7 +29,7 @@
 ///   cargo run --bin scrape_tests
 #[cfg(feature = "pg_query_parser")]
 use sql_ast_benchmark::{
-    databend_roundtrip, is_valid_databend, is_valid_polyglot, is_valid_sql_parse,
+    databend_roundtrip, is_valid_databend, is_valid_orql, is_valid_polyglot, is_valid_sql_parse,
     is_valid_sqlparser, polyglot_roundtrip, sqlparser_roundtrip,
 };
 #[cfg(feature = "pg_query_parser")]
@@ -73,6 +73,7 @@ struct Counts {
     polyglot: ParserCounts,
     databend: ParserCounts,
     sql_parse: ParserCounts,
+    orql: ParserCounts,
     #[cfg(feature = "pg_query_parser")]
     pg_query_summary: ParserCounts,
 }
@@ -158,6 +159,7 @@ fn check_file(path: &Path) -> Option<Counts> {
             &valid,
         ),
         sql_parse: count_for(|s| is_valid_sql_parse(s), &valid, &invalid),
+        orql: count_for(|s| is_valid_orql(s), &valid, &invalid),
         pg_query_summary: count_for(|s| is_valid_pg_query_summary(s), &valid, &invalid),
     })
 }
@@ -270,6 +272,7 @@ fn print_section(label: &str, c: &Counts) {
     print_recall_row("polyglot-sql", c.polyglot.accepted, c.valid_total);
     print_recall_row("databend-common-ast", c.databend.accepted, c.valid_total);
     print_recall_row("sql-parse", c.sql_parse.accepted, c.valid_total);
+    print_recall_row("orql", c.orql.accepted, c.valid_total);
 
     // ── False positives ───────────────────────────────────────────────────────
     if c.invalid_total > 0 {
@@ -285,6 +288,7 @@ fn print_section(label: &str, c: &Counts) {
         print_fp_row("polyglot-sql", &c.polyglot, c.invalid_total);
         print_fp_row("databend-common-ast", &c.databend, c.invalid_total);
         print_fp_row("sql-parse", &c.sql_parse, c.invalid_total);
+        print_fp_row("orql", &c.orql, c.invalid_total);
     }
 
     // ── Round-trip ────────────────────────────────────────────────────────────
@@ -309,6 +313,7 @@ fn print_section(label: &str, c: &Counts) {
     print_rt_row("polyglot-sql", &c.polyglot);
     print_rt_row("databend-common-ast", &c.databend);
     println!("│  {:<24}  {:>38}", "sql-parse", "N/A (no pretty-printer)");
+    println!("│  {:<24}  {:>38}", "orql", "N/A (no pretty-printer)");
 
     // ── Fidelity ──────────────────────────────────────────────────────────────
     println!("│");
@@ -326,6 +331,10 @@ fn print_section(label: &str, c: &Counts) {
     print_fidelity_row("polyglot-sql", &c.polyglot);
     print_fidelity_row("databend-common-ast", &c.databend);
     println!("│  {:<24}  {:>38}", "sql-parse", "N/A (no pretty-printer)");
+    println!(
+        "│  {:<24}  {:>38}",
+        "orql", "N/A (Oracle dialect, no deparse)"
+    );
 
     println!("└─");
 }

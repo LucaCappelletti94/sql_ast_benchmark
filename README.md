@@ -15,6 +15,7 @@ Benchmarking Rust SQL parsers using real-world PostgreSQL statements.
 | **[pg_query.rs](https://github.com/pganalyze/pg_query.rs)**                      | 6.1.1   | [`35b8783`](https://github.com/pganalyze/pg_query.rs/commit/35b8783fda79636dd29d787765ca4a0978788f96)       | Rust FFI to C (libpg_query)       |
 | **[sql-parse](https://github.com/antialize/sql-parse)**                          | 0.28.0  | [`ac352f9`](https://github.com/antialize/sql-parse/commit/ac352f97f7ef13ebc44af9295a08095d89882319)         | Pure Rust (zero-copy)             |
 | **[databend-common-ast](https://github.com/datafuselabs/databend)**              | 0.2.4   | (crates.io release)                                                                                         | Pure Rust (zero-copy, custom)     |
+| **[orql](https://codeberg.org/xitep/orql)**                                      | 0.1.0   | [`c9101ff`](https://codeberg.org/xitep/orql/commit/c9101ffe0efb14ea4c58b761dece532fa62ba9eb)                | Pure Rust (Oracle dialect, early-stage) |
 
 ### Parser Descriptions
 
@@ -30,22 +31,24 @@ Benchmarking Rust SQL parsers using real-world PostgreSQL statements.
 
 - **databend-common-ast**: A custom SQL parser built from scratch by the Databend cloud data warehouse team after sqlparser-rs became a performance bottleneck. Uses zero-copy parsing with Pratt expression parsing and logos-based lexing. Supports multiple SQL dialects including a PostgreSQL-compatible mode.
 
+- **orql**: A self-described "toy" parser targeting a subset of the Oracle SQL dialect, written by [@xitep](https://github.com/xitep) who [requested its inclusion here](https://github.com/LucaCappelletti94/sql_ast_benchmark/issues/1). Currently supports **SELECT statements only**. Designed to preserve token locations and comments for faithful source reconstruction. No pretty-printer is exposed, so round-trip and fidelity checks are N/A. It is an early-stage, single-author project hosted on [Codeberg](https://codeberg.org/xitep/orql).
+
 All parsers are configured for PostgreSQL dialect in this benchmark.
 
 ### Project Health & Metrics
 
-| Metric                      | sqlparser-rs        | polyglot-sql    | pg_query.rs     | sql-parse  | databend-common-ast |
-| --------------------------- | ------------------: | --------------: | --------------: | ---------: | ------------------: |
-| **GitHub Stars**            |               3,323 |             615 |             229 |         25 |            9,163    |
-| **Total Downloads**         |               50.8M |            <1K  |            1.0M |        53K |                 21K |
-| **Recent Downloads** (90d)  |                9.9M |            <1K  |            129K |      1.7K  |               2.6K  |
-| **Last Commit**             |            Feb 2026 |        Feb 2026 |        Dec 2025 |   Oct 2025 |            Jan 2026 |
-| **First Release**           |            Feb 2018 |        Feb 2026 |        Jan 2022 |   Jan 2022 |            Jun 2024 |
-| **License**                 |          Apache-2.0 |     Apache-2.0  |             MIT | Apache-2.0 |          Apache-2.0 |
-| **Dependencies**            |            0 (core) |        0 (core) | C (libpg_query) |          0 |             0 (core)|
-| **WASM Support**            |                 Yes |             Yes |              No |        Yes |                  No |
-| **Multi-dialect support**   |                 Yes |  Claims 32 (early-stage; see description) |      PG only    |    MySQL+  |         Yes (4+)    |
-| **Maintainer**              | Apache (DataFusion) |      Individual |       pganalyze | Individual |    Databend Labs    |
+| Metric                      | sqlparser-rs        | polyglot-sql    | pg_query.rs     | sql-parse  | databend-common-ast | orql          |
+| --------------------------- | ------------------: | --------------: | --------------: | ---------: | ------------------: | ------------: |
+| **GitHub Stars**            |               3,323 |             615 |             229 |         25 |            9,163    | N/A (Codeberg)|
+| **Total Downloads**         |               50.8M |            <1K  |            1.0M |        53K |                 21K |           <1K |
+| **Recent Downloads** (90d)  |                9.9M |            <1K  |            129K |      1.7K  |               2.6K  |           <1K |
+| **Last Commit**             |            Feb 2026 |        Feb 2026 |        Dec 2025 |   Oct 2025 |            Jan 2026 |      Feb 2026 |
+| **First Release**           |            Feb 2018 |        Feb 2026 |        Jan 2022 |   Jan 2022 |            Jun 2024 |      Feb 2026 |
+| **License**                 |          Apache-2.0 |     Apache-2.0  |             MIT | Apache-2.0 |          Apache-2.0 |          0BSD |
+| **Dependencies**            |            0 (core) |        0 (core) | C (libpg_query) |          0 |             0 (core)|             0 |
+| **WASM Support**            |                 Yes |             Yes |              No |        Yes |                  No |       Unknown |
+| **Multi-dialect support**   |                 Yes |  Claims 32 (early-stage; see description) |      PG only    |    MySQL+  |         Yes (4+)    | Oracle only   |
+| **Maintainer**              | Apache (DataFusion) |      Individual |       pganalyze | Individual |    Databend Labs    |    Individual |
 
 **Key observations:**
 
@@ -81,6 +84,7 @@ cargo run --bin correctness    # score all parsers
 | polyglot-sql          | 254/312   81% | 79/129 **61.2%**     | 247/254   97.2%    | 200/254   78.7%    |
 | databend-common-ast   |  40/312   13% |  2/129   1.6%        |  40/40   100%      |  31/40    77.5%    |
 | sql-parse             |   3/312    1% |  0/129   0.0%        | N/A                | N/A                |
+| orql                  |   2/312    1% |  0/129   0.0%        | N/A                | N/A (Oracle, no deparse) |
 
 #### Common (all-dialect) tests (323 pg_query-valid / 469 pg_query-invalid out of 792 scraped)
 
@@ -92,6 +96,7 @@ cargo run --bin correctness    # score all parsers
 | polyglot-sql          | 286/323   89% | 241/469 **51.4%**    | 282/286   98.6%    | 254/286   88.8%    |
 | databend-common-ast   | 177/323   55% |  36/469   7.7%       | 177/177  100%      | 150/177   84.7%    |
 | sql-parse             |   1/323    0% |   1/469   0.2%       | N/A                | N/A                |
+| orql                  |  71/323   22% |   3/469   0.6%       | N/A                | N/A (Oracle, no deparse) |
 
 #### TPC-H / Regression tests (21 pg_query-valid / 1 pg_query-invalid out of 22 scraped)
 
@@ -103,6 +108,7 @@ cargo run --bin correctness    # score all parsers
 | polyglot-sql          | 21/21   100%  | 1/1 **100%**         | 21/21   100%       | 17/21    81.0%     |
 | databend-common-ast   | 20/21    95%  | 0/1   0%             | 20/20   100%       | 19/20    95.0%     |
 | sql-parse             |  0/21     0%  | 0/1   0%             | N/A                | N/A                |
+| orql                  | 15/21    71%  | 1/1 **100%**         | N/A                | N/A (Oracle, no deparse) |
 
 **Key correctness findings:**
 
@@ -112,6 +118,7 @@ cargo run --bin correctness    # score all parsers
 - **sql-parse** is effectively not a PostgreSQL parser. It accepts almost nothing from PG-specific or TPC-H tests, and has near-zero false positives only because it rejects almost everything.
 - **pg_query (summary)** matches full pg_query exactly on accept/reject decisions, confirming it uses the same underlying parse logic.
 - **pg_query.rs round-trip**: 100% on common and TPC-H. On PostgreSQL-specific tests it scores 310/312 (99.4%) - two statements are accepted and deparsed but the deparsed form does not re-parse identically, indicating a minor fidelity gap in the libpg_query deparser. Note: 4 statements were removed from the corpus before this run after being found to trigger a C-level `abort()` in the libpg_query deparser (non-PostgreSQL constructs: `ENUM8`/`ENUM16` and `struct<a,b>` syntax); a bug report has been [filed upstream](https://github.com/pganalyze/libpg_query/issues).
+- **orql** is an Oracle SQL parser and is included at the [request of its author](https://github.com/LucaCappelletti94/sql_ast_benchmark/issues/1). It currently supports SELECT statements only. On PG-specific tests (recall 1%) and common SQL (recall 22%) it is limited by Oracle/PostgreSQL syntax divergence. On TPC-H—which uses straightforward standard SQL SELECTs—it reaches 71% recall, demonstrating reasonable core SELECT coverage. Its false-positive rate is near-zero (0–0.6%), meaning it rarely accepts SQL that PostgreSQL rejects. Round-trip and fidelity are N/A as no pretty-printer is exposed. The TPC-H FP case (1/1) is the same non-standard statement that sqlparser-rs and polyglot-sql also misaccept.
 
 ### Benchmark Dataset Coverage
 
@@ -125,10 +132,13 @@ Not all parsers successfully parse all statements in the performance benchmark c
 | pg_query.rs (summary) |      100% |   100% |   100% |   100% |
 | databend-common-ast   |   **99.2%**| **94.3%**| **98.2%**| **97.3%**|
 | sql-parse             | **30.1%** |  97.8% |  95.8% |  95.7% |
+| orql                  | **62.3%** |   0.0% |   0.0% |   0.0% |
 
 **⚠️ sql-parse**: Only ~30% of SELECT statements parse successfully - it is primarily a MySQL/MariaDB parser. Speed results for sql-parse SELECT benchmarks reflect only the simpler subset of statements it can handle.
 
 **⚠️ databend-common-ast**: Fails on some PostgreSQL-specific constructs (`RETURNING`, certain type casts, PG-specific syntax). The ~1–6% failure rate is small but reflects its Databend/ClickHouse dialect focus.
+
+**⚠️ orql**: Oracle SQL dialect parser. Only SELECT statements are supported (0% for INSERT/UPDATE/DELETE). Parses 62.3% of real-world PostgreSQL SELECT statements — the remaining 37.7% use PG-specific syntax not present in Oracle SQL. Performance is benchmarked for SELECT only using the `orql::parser::iter` API, which skips unparsable statements and processes all parseable ones.
 
 ## Benchmark Methodology
 
@@ -175,47 +185,49 @@ Performance charts (log-log scale):
 
 ### SELECT Statements
 
-| Statements | sqlparser-rs | polyglot-sql | pg_query.rs  | pg_query (sum) | sql-parse | databend |
-| ---------: | -----------: | -----------: | -----------: | -------------: | --------: | -------: |
-|          1 |       6.6 µs |      29.8 µs |      11.0 µs |         2.5 µs |    1.1 µs |  11.2 µs |
-|         10 |     124.9 µs |     120.6 µs |     198.5 µs |        30.0 µs |   19.2 µs | 184.7 µs |
-|         50 |     449.0 µs |     370.0 µs |     792.7 µs |       122.7 µs |   79.1 µs | 725.8 µs |
-|        100 |     800.6 µs |     715.5 µs |      1.44 ms |       226.4 µs |  152.4 µs |  1.37 ms |
-|        500 |      5.39 ms |      3.93 ms |      9.33 ms |        1.41 ms |  959.7 µs |  8.59 ms |
-|       1000 |     10.09 ms |      7.79 ms |     17.67 ms |        2.55 ms |   1.81 ms | 16.16 ms |
+| Statements | sqlparser-rs | polyglot-sql | pg_query.rs  | pg_query (sum) | sql-parse | databend |   orql ⚠️ |
+| ---------: | -----------: | -----------: | -----------: | -------------: | --------: | -------: | --------: |
+|          1 |       6.1 µs |      32.0 µs |      11.6 µs |         2.6 µs |    1.2 µs |  11.7 µs |    1.0 µs |
+|         10 |     105.9 µs |     119.2 µs |     209.2 µs |        31.9 µs |   19.3 µs | 191.2 µs |   12.9 µs |
+|         50 |     410.2 µs |     378.5 µs |     839.6 µs |       127.7 µs |   83.1 µs | 753.9 µs |   54.6 µs |
+|        100 |     742.0 µs |     712.8 µs |      1.54 ms |       238.6 µs |  159.9 µs |  2.59 ms |  112.4 µs |
+|        500 |      4.83 ms |      3.93 ms |      9.68 ms |        1.49 ms |   1.00 ms |  8.66 ms |  631.6 µs |
+|       1000 |      9.55 ms |      8.59 ms |     18.38 ms |        2.68 ms |   1.85 ms | 16.93 ms |   1.24 ms |
+
+**⚠️ orql SELECT**: uses `parser::iter`, skipping the 37.7% of statements not supported by the Oracle dialect. Only ~62% of each batch is fully parsed; the rest is skipped at low cost. Times are therefore not directly comparable with parsers that process 100% of the corpus.
 
 ### INSERT Statements
 
 | Statements | sqlparser-rs | polyglot-sql | pg_query.rs  | pg_query (sum) | sql-parse | databend |
 | ---------: | -----------: | -----------: | -----------: | -------------: | --------: | -------: |
-|          1 |       5.0 µs |      27.3 µs |      10.4 µs |         2.3 µs |   0.98 µs |   4.7 µs |
-|         10 |      83.7 µs |     103.4 µs |     157.6 µs |        24.3 µs |   16.1 µs | 157.7 µs |
-|         50 |     395.7 µs |     395.8 µs |     731.0 µs |       115.1 µs |   76.2 µs | 494.4 µs |
-|        100 |     842.1 µs |     794.7 µs |      1.49 ms |       248.3 µs |  166.5 µs | 989.2 µs |
-|        500 |      4.27 ms |      3.93 ms |      7.78 ms |        1.26 ms |  960.2 µs |  4.94 ms |
-|        993 |      8.37 ms |      7.22 ms |     15.72 ms |        2.34 ms |   1.80 ms |  9.07 ms |
+|          1 |       4.8 µs |      29.2 µs |      11.0 µs |         2.4 µs |   0.99 µs |   4.8 µs |
+|         10 |      78.7 µs |     109.4 µs |     165.7 µs |        26.0 µs |   16.8 µs | 167.1 µs |
+|         50 |     390.7 µs |     408.6 µs |     758.4 µs |       122.3 µs |   78.3 µs | 501.4 µs |
+|        100 |     771.7 µs |     808.3 µs |      1.55 ms |       252.3 µs |  173.7 µs | 997.3 µs |
+|        500 |      4.22 ms |      4.37 ms |      8.34 ms |        1.32 ms |  997.7 µs |  5.07 ms |
+|        993 |      9.20 ms |      7.87 ms |     17.04 ms |        2.48 ms |   1.89 ms |  9.45 ms |
 
 ### UPDATE Statements
 
 | Statements | sqlparser-rs | polyglot-sql | pg_query.rs  | pg_query (sum) | sql-parse | databend |
 | ---------: | -----------: | -----------: | -----------: | -------------: | --------: | -------: |
-|          1 |       6.2 µs |      28.0 µs |      15.3 µs |         2.3 µs |    1.2 µs |   5.2 µs |
-|         10 |      52.3 µs |      67.7 µs |     104.5 µs |        14.8 µs |   11.4 µs |  42.4 µs |
-|         50 |     303.4 µs |     285.0 µs |     582.4 µs |        77.6 µs |   63.6 µs | 337.5 µs |
-|        100 |     664.1 µs |     587.6 µs |      1.28 ms |       177.9 µs |  144.6 µs | 713.5 µs |
-|        500 |      3.04 ms |      1.51 ms |      6.12 ms |       858.0 µs |  753.5 µs |  3.26 ms |
-|        984 |      6.23 ms |      2.44 ms |     12.81 ms |        1.73 ms |   1.55 ms |  6.65 ms |
+|          1 |       5.6 µs |      30.8 µs |      15.8 µs |         2.5 µs |    1.4 µs |   5.4 µs |
+|         10 |      47.6 µs |      72.4 µs |     110.6 µs |        15.6 µs |   12.3 µs |  45.6 µs |
+|         50 |     288.8 µs |     285.8 µs |     612.4 µs |        82.6 µs |   68.7 µs | 356.4 µs |
+|        100 |     610.0 µs |     596.4 µs |      1.35 ms |       184.1 µs |  157.7 µs | 733.2 µs |
+|        500 |      2.83 ms |      1.56 ms |      6.92 ms |       909.4 µs |  796.2 µs |  3.35 ms |
+|        984 |      5.98 ms |      2.50 ms |     13.72 ms |        1.83 ms |   1.64 ms |  7.05 ms |
 
 ### DELETE Statements
 
 | Statements | sqlparser-rs | polyglot-sql | pg_query.rs  | pg_query (sum) | sql-parse | databend |
 | ---------: | -----------: | -----------: | -----------: | -------------: | --------: | -------: |
-|          1 |       3.3 µs |      25.3 µs |       7.1 µs |         1.7 µs |   0.64 µs |   2.6 µs |
-|         10 |      68.6 µs |      87.2 µs |     144.4 µs |        19.1 µs |   12.9 µs |  74.6 µs |
-|         50 |     275.0 µs |     262.2 µs |     536.0 µs |        79.1 µs |   54.1 µs | 252.8 µs |
-|        100 |     559.3 µs |     499.7 µs |      1.07 ms |       163.5 µs |  118.5 µs | 551.1 µs |
-|        500 |      2.73 ms |      2.33 ms |      5.34 ms |       842.6 µs |  654.5 µs |  3.25 ms |
-|        934 |      5.53 ms |      4.35 ms |     10.41 ms |        1.53 ms |   1.25 ms |  6.09 ms |
+|          1 |       3.0 µs |      27.0 µs |       7.6 µs |         1.8 µs |   0.66 µs |   2.6 µs |
+|         10 |      65.7 µs |      85.1 µs |     142.1 µs |        20.2 µs |   12.8 µs |  81.2 µs |
+|         50 |     256.5 µs |     264.3 µs |     559.5 µs |        82.7 µs |   54.6 µs | 262.9 µs |
+|        100 |     512.8 µs |     510.1 µs |      1.13 ms |       164.9 µs |  125.4 µs | 561.9 µs |
+|        500 |      2.49 ms |      2.27 ms |      5.62 ms |       889.1 µs |  683.8 µs |  3.36 ms |
+|        934 |      4.77 ms |      4.46 ms |     10.72 ms |        1.55 ms |   1.26 ms |  6.33 ms |
 
 ### Mixed DML Statements
 
@@ -223,25 +235,27 @@ All statement types combined (SELECT + INSERT + UPDATE + DELETE), reflecting a r
 
 | Statements | sqlparser-rs | polyglot-sql | pg_query.rs  | pg_query (sum) | sql-parse | databend |
 | ---------: | -----------: | -----------: | -----------: | -------------: | --------: | -------: |
-|          1 |       6.6 µs |      29.3 µs |      11.1 µs |         2.5 µs |    1.1 µs |  11.5 µs |
-|         10 |     126.1 µs |     114.7 µs |     196.3 µs |        30.0 µs |   19.4 µs | 183.9 µs |
-|         50 |     444.0 µs |     363.2 µs |     798.9 µs |       120.7 µs |   78.4 µs | 729.8 µs |
-|        100 |     820.4 µs |     705.5 µs |      1.46 ms |       227.1 µs |  153.8 µs |  1.37 ms |
-|        500 |      5.28 ms |      3.92 ms |      9.22 ms |        1.41 ms |  968.0 µs |  8.71 ms |
-|       1000 |     10.19 ms |      7.78 ms |     18.03 ms |        2.53 ms |   1.84 ms | 16.26 ms |
+|          1 |       6.0 µs |      30.3 µs |      11.7 µs |         2.7 µs |    1.1 µs |  11.8 µs |
+|         10 |     108.4 µs |     119.0 µs |     211.0 µs |        31.5 µs |   19.8 µs | 195.7 µs |
+|         50 |     395.8 µs |     373.1 µs |     816.3 µs |       127.0 µs |   80.2 µs | 760.8 µs |
+|        100 |     736.7 µs |     708.2 µs |      1.48 ms |       226.1 µs |  151.4 µs |  1.46 ms |
+|        500 |      4.79 ms |      3.91 ms |     10.00 ms |        1.48 ms |  995.5 µs |  9.08 ms |
+|       1000 |      9.87 ms |      8.15 ms |     18.54 ms |        2.67 ms |   1.89 ms | 16.95 ms |
 
 ## Interpretation
 
 ### Performance Ranking
 
-Across all statement types and batch sizes, the parsers consistently rank from fastest to slowest:
+Across all statement types and batch sizes, the parsers consistently rank from fastest to slowest for statements they fully support:
 
-1. **sql-parse** - fastest for full AST parsing (~4x faster than sqlparser-rs), but only parses ~30% of SELECT statements
+1. **sql-parse** - fastest full AST parsing (~4x faster than sqlparser-rs), but only ~30% SELECT coverage
 2. **pg_query.rs (summary)** - fastest for metadata extraction; no full AST deserialization
 3. **polyglot-sql** - 1.3–2.5x faster than sqlparser-rs at scale; notable high per-call overhead
 4. **sqlparser-rs** - solid all-rounder; fastest at single-statement latency among full AST parsers
 5. **databend-common-ast** - comparable to sqlparser-rs (within 10–20%), slightly slower
 6. **pg_query.rs** - full PostgreSQL AST with 100% PG compatibility; slowest due to FFI + protobuf
+
+**orql** is a SELECT-only Oracle dialect parser included for reference. For SELECT it reaches 62.3% corpus coverage with fast parse times (1.0 µs single, 1.24 ms for 1000 statements via `parser::iter`). It does not appear in INSERT/UPDATE/DELETE tables as it has no support for those statement types.
 
 ### Key Findings
 
@@ -275,16 +289,16 @@ Parsing time grows linearly with statement count, as expected. No parser shows d
 
 ### Trade-offs
 
-| Consideration                | sqlparser-rs                    | polyglot-sql                    | pg_query.rs (full)          | pg_query.rs (summary)        | sql-parse                 | databend-common-ast            |
-| ---------------------------- | ------------------------------- | ------------------------------- | --------------------------- | ---------------------------- | ------------------------- | ------------------------------ |
-| **Speed (single stmt)**      | Fast                            | Slow (high overhead)            | Slower (FFI + protobuf)     | Fastest FFI (no protobuf)    | Fastest (zero-copy)       | Fast (comparable to sqlparser) |
-| **Speed (bulk)**             | Good                            | Fastest (amortizes well)        | Slow                        | Very fast                    | Fastest                   | Good                           |
-| **Output**                   | Full AST                        | Full AST + transpile            | Full AST                    | Metadata only                | Full AST                  | Full AST                       |
-| **PostgreSQL compatibility** | Good recall (99%) but ~29% FP rate - accepts non-PG SQL | Moderate recall (81–89%), high FP rate (~52–61%) | Perfect (actual PG parser)  | Perfect (actual PG parser)   | Minimal - MySQL-only in practice | Moderate recall (55% common, 95% TPC-H), low FP rate (~8%) |
-| **Memory allocation**        | Standard                        | Standard                        | Standard                    | Minimal                      | Minimal (borrowed tokens) | Minimal (zero-copy)            |
-| **Dependencies**             | None                            | None                            | C library (libpg_query)     | C library (libpg_query)      | None                      | None                           |
-| **Multi-dialect support**    | Yes (MySQL, SQLite, etc.)       | Claims 32 (early-stage; widespread translation failures) | PostgreSQL only             | PostgreSQL only              | MySQL/MariaDB focus       | Yes (PG, MySQL, Hive, PRQL)    |
-| **WASM Support**             | Yes                             | Yes                             | No                          | No                           | Yes                       | No                             |
+| Consideration                | sqlparser-rs                    | polyglot-sql                    | pg_query.rs (full)          | pg_query.rs (summary)        | sql-parse                 | databend-common-ast            | orql                           |
+| ---------------------------- | ------------------------------- | ------------------------------- | --------------------------- | ---------------------------- | ------------------------- | ------------------------------ | ------------------------------ |
+| **Speed (single stmt)**      | Fast                            | Slow (high overhead)            | Slower (FFI + protobuf)     | Fastest FFI (no protobuf)    | Fastest (zero-copy)       | Fast (comparable to sqlparser) | Fast (see below)               |
+| **Speed (bulk)**             | Good                            | Fastest (amortizes well)        | Slow                        | Very fast                    | Fastest                   | Good                           | Fast for parseable SQL; N/A otherwise |
+| **Output**                   | Full AST                        | Full AST + transpile            | Full AST                    | Metadata only                | Full AST                  | Full AST                       | Full AST (no deparse)          |
+| **PostgreSQL compatibility** | Good recall (99%) but ~29% FP rate - accepts non-PG SQL | Moderate recall (81–89%), high FP rate (~52–61%) | Perfect (actual PG parser)  | Perfect (actual PG parser)   | Minimal - MySQL-only in practice | Moderate recall (55% common, 95% TPC-H), low FP rate (~8%) | SELECT-only; 62% real-world PG SELECT; 0% INSERT/UPDATE/DELETE |
+| **Memory allocation**        | Standard                        | Standard                        | Standard                    | Minimal                      | Minimal (borrowed tokens) | Minimal (zero-copy)            | Minimal (borrows from source)  |
+| **Dependencies**             | None                            | None                            | C library (libpg_query)     | C library (libpg_query)      | None                      | None                           | None                           |
+| **Multi-dialect support**    | Yes (MySQL, SQLite, etc.)       | Claims 32 (early-stage; widespread translation failures) | PostgreSQL only             | PostgreSQL only              | MySQL/MariaDB focus       | Yes (PG, MySQL, Hive, PRQL)    | Oracle only                    |
+| **WASM Support**             | Yes                             | Yes                             | No                          | No                           | Yes                       | No                             | Likely (pure Rust)             |
 
 ### Recommendations
 
@@ -294,6 +308,7 @@ Parsing time grows linearly with statement count, as expected. No parser shows d
 - **Bulk parsing pipelines** (many statements, no strict dialect validation needed): **polyglot-sql** may offer the fastest throughput at scale, but is still very early-stage (Feb 2026). Expect silent translation failures, semantic bugs, and a ~52–61% false-positive rate. Not recommended for production without thorough evaluation.
 - **Embedded/WASM targets**: **sqlparser-rs**, **polyglot-sql**, or **sql-parse** - no C dependencies.
 - **Custom PostgreSQL-compatible parsing with performance focus**: **databend-common-ast** - purpose-built for speed; low false-positive rate but limited recall on PG-specific syntax.
+- **Oracle SQL parsing**: **orql** - the only Oracle-dialect parser in this benchmark. Included at the [author's request](https://github.com/LucaCappelletti94/sql_ast_benchmark/issues/1). Not suitable for PostgreSQL workloads (SELECT-only, 62% PG SELECT coverage, 0% DML). Its main strengths are source-location and comment preservation; it is still early-stage and a work in progress.
 
 ## Environment
 

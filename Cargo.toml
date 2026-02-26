@@ -35,6 +35,7 @@ pg_parse = { git = "https://github.com/paupino/pg_parse", optional = true }
 sql-parse = { git = "https://github.com/antialize/sql-parse" }
 polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
 databend-common-ast = "0.2.4"
+orql = { git = "https://codeberg.org/xitep/orql" }
 plotters = "0.3"
 regex = "1"
 

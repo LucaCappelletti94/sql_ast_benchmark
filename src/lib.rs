@@ -1,6 +1,7 @@
 use databend_common_ast::parser::{
     parse_sql as databend_parse, tokenize_sql as databend_tokenize, Dialect as DatabendDialect,
 };
+use orql::parser as orql_parser;
 use polyglot_sql::{parse as polyglot_parse, DialectType, Generator as PolyglotGenerator};
 use sql_parse::{parse_statements, Issues, Level, ParseOptions, SQLDialect};
 use sqlparser::dialect::PostgreSqlDialect;
@@ -226,6 +227,11 @@ pub fn polyglot_roundtrip(sql: &str) -> bool {
         generated == generated2
     })
     .unwrap_or(false)
+}
+
+#[must_use]
+pub fn is_valid_orql(sql: &str) -> bool {
+    std::panic::catch_unwind(|| orql_parser::parse(sql).is_ok()).unwrap_or(false)
 }
 
 /// databend-common-ast: parse → `to_string` → re-parse → `to_string`, check stability
