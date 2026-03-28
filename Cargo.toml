@@ -32,7 +32,7 @@ pg_parse_parser = ["pg_parse"]
 sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
 pg_query = { git = "https://github.com/pganalyze/pg_query.rs", optional = true }
 pg_parse = { git = "https://github.com/paupino/pg_parse", optional = true }
-sql-parse = { git = "https://github.com/antialize/sql-parse" }
+qusql-parse = "0.3.0"
 polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
 databend-common-ast = "0.2.4"
 orql = { git = "https://codeberg.org/xitep/orql" }

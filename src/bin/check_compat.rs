@@ -1,5 +1,5 @@
 use sql_ast_benchmark::{
-    is_valid_databend, is_valid_orql, is_valid_polyglot, is_valid_sql_parse,
+    is_valid_databend, is_valid_orql, is_valid_polyglot, is_valid_qusql_parse,
     load_delete_statements, load_insert_statements, load_select_statements, load_update_statements,
 };
 
@@ -21,11 +21,11 @@ fn main() {
     check_compat("UPDATE", &update, is_valid_polyglot);
     check_compat("DELETE", &delete, is_valid_polyglot);
 
-    println!("\nsql-parse compatibility:");
-    check_compat("SELECT", &select, is_valid_sql_parse);
-    check_compat("INSERT", &insert, is_valid_sql_parse);
-    check_compat("UPDATE", &update, is_valid_sql_parse);
-    check_compat("DELETE", &delete, is_valid_sql_parse);
+    println!("\nqusql-parse compatibility:");
+    check_compat("SELECT", &select, is_valid_qusql_parse);
+    check_compat("INSERT", &insert, is_valid_qusql_parse);
+    check_compat("UPDATE", &update, is_valid_qusql_parse);
+    check_compat("DELETE", &delete, is_valid_qusql_parse);
 
     println!("\ndatabend compatibility:");
     check_compat("SELECT", &select, is_valid_databend);
