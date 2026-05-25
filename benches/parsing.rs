@@ -1,182 +1,111 @@
+//! Multi-dialect parse-throughput benchmark over the `datasets/` corpus.
+//!
+//! For every dialect that has a downloaded corpus, each parser that models that
+//! dialect is timed parsing concatenated batches of 1/10/100/1000 statements,
+//! run in its best-matching dialect. Parsers that do not model a dialect are
+//! skipped for it.
+//!
+//!   cargo bench
+//!
+//! Requires `cargo run --bin download_datasets` to have populated `datasets/`.
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode};
-use databend_common_ast::parser::{
-    parse_sql as databend_parse, tokenize_sql as databend_tokenize, Dialect as DatabendDialect,
-};
-use polyglot_sql::{parse as polyglot_parse, DialectType};
-use sql_ast_benchmark::{
-    concatenate_statements, load_delete_statements, load_dml_statements, load_insert_statements,
-    load_select_statements, load_update_statements,
-};
-use qusql_parse::{parse_statements, Issues, ParseOptions, SQLDialect};
-use sqlparser::dialect::PostgreSqlDialect;
-use sqlparser::parser::Parser;
+use sql_ast_benchmark::datasets::Dialect;
+use sql_ast_benchmark::{concatenate_statements, BenchParser};
+use std::fs;
 use std::hint::black_box;
+use std::path::Path;
 use std::time::Duration;
 
-fn bench_sqlparser(sql: &str) {
-    let dialect = PostgreSqlDialect {};
-    let _ = black_box(Parser::parse_sql(&dialect, sql));
-}
+/// Dialects benchmarked, in report order.
+const DIALECTS: &[Dialect] = &[
+    Dialect::Postgresql,
+    Dialect::Sqlite,
+    Dialect::Mysql,
+    Dialect::Clickhouse,
+    Dialect::Duckdb,
+    Dialect::Hive,
+    Dialect::SparkSql,
+    Dialect::Trino,
+    Dialect::Tsql,
+    Dialect::Oracle,
+    Dialect::Bigquery,
+    Dialect::Redshift,
+    Dialect::Multi,
+];
 
-#[cfg(feature = "pg_query_parser")]
-fn bench_pg_query(sql: &str) {
-    let _ = black_box(pg_query::parse(sql));
-}
-
-#[cfg(feature = "pg_query_parser")]
-fn bench_pg_query_summary(sql: &str) {
-    let _ = black_box(pg_query::summary(sql, -1));
-}
-
-#[cfg(feature = "pg_parse_parser")]
-fn bench_pg_parse(sql: &str) {
-    let _ = black_box(pg_parse::parse(sql));
-}
-
-fn bench_polyglot(sql: &str) {
-    let _ = black_box(polyglot_parse(sql, DialectType::PostgreSQL));
-}
-
-fn bench_qusql_parse(sql: &str) {
-    let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL).arguments(qusql_parse::SQLArguments::Dollar);
-    let mut issues = Issues::new(sql);
-    let _ = black_box(parse_statements(sql, &mut issues, &options));
-}
-
-fn bench_orql(sql: &str) {
-    for result in orql::parser::iter(sql) {
-        let _ = black_box(result);
-    }
-}
-
-fn bench_databend(sql: &str) {
-    for stmt in sql.split(';') {
-        let stmt = stmt.trim();
-        if stmt.is_empty() {
-            continue;
+/// Load up to `cap` statements for a dialect from its `datasets/` subdir.
+fn load_dialect(dialect: Dialect, cap: usize) -> Vec<String> {
+    let dir = Path::new("datasets").join(dialect.dir_name());
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<_> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "txt"))
+        .collect();
+    files.sort();
+    let mut stmts = Vec::new();
+    for f in files {
+        if let Ok(content) = fs::read_to_string(&f) {
+            for line in content.lines() {
+                // Skip blank and pathologically long statements: criterion runs
+                // on the default 8 MiB stack, and a deeply nested statement can
+                // overflow a recursive-descent parser (uncatchable abort).
+                if !line.trim().is_empty() && line.len() <= 50_000 {
+                    stmts.push(line.to_string());
+                    if stmts.len() >= cap {
+                        return stmts;
+                    }
+                }
+            }
         }
-        if let Ok(tokens) = databend_tokenize(stmt) {
-            let _ = black_box(databend_parse(&tokens, DatabendDialect::PostgreSQL));
-        }
     }
+    stmts
 }
 
-fn run_benchmark_group(c: &mut Criterion, group_name: &str, statements: &[String]) {
+fn bench_dialect(c: &mut Criterion, dialect: Dialect) {
+    let statements = load_dialect(dialect, 1000);
     if statements.is_empty() {
-        eprintln!("Warning: No statements for group '{group_name}', skipping");
         return;
     }
+    let parsers: Vec<BenchParser> = BenchParser::all()
+        .into_iter()
+        .filter(|p| p.supports(dialect))
+        .collect();
 
-    // Build sizes list, adding max count if between 500 and 1000
-    let base_sizes = [1, 10, 50, 100, 500, 1000];
-    let max_count = statements.len();
-    let sizes: Vec<usize> = if max_count > 500 && max_count < 1000 {
-        base_sizes
-            .iter()
-            .copied()
-            .filter(|&s| s <= max_count)
-            .chain(std::iter::once(max_count))
-            .collect()
-    } else {
-        base_sizes.to_vec()
-    };
-    let mut group = c.benchmark_group(group_name);
+    let sizes: Vec<usize> = [1, 10, 100, 1000]
+        .into_iter()
+        .filter(|&s| s <= statements.len())
+        .collect();
 
-    // Reduce sample size for faster benchmarks with large datasets
+    let mut group = c.benchmark_group(dialect.dir_name());
     group.sampling_mode(SamplingMode::Flat);
-    group.sample_size(50);
-    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(2));
+    group.warm_up_time(Duration::from_millis(500));
 
-    for size in &sizes {
-        let size = *size;
-
+    for size in sizes {
         let subset: Vec<String> = statements.iter().take(size).cloned().collect();
-        let concatenated = concatenate_statements(&subset);
-
-        group.bench_with_input(
-            BenchmarkId::new("sqlparser", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_sqlparser(sql)),
-        );
-
-        group.bench_with_input(
-            BenchmarkId::new("polyglot", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_polyglot(sql)),
-        );
-
-        #[cfg(feature = "pg_query_parser")]
-        group.bench_with_input(
-            BenchmarkId::new("pg_query", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_pg_query(sql)),
-        );
-
-        #[cfg(feature = "pg_query_parser")]
-        group.bench_with_input(
-            BenchmarkId::new("pg_query_summary", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_pg_query_summary(sql)),
-        );
-
-        #[cfg(feature = "pg_parse_parser")]
-        group.bench_with_input(
-            BenchmarkId::new("pg_parse", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_pg_parse(sql)),
-        );
-
-        group.bench_with_input(
-            BenchmarkId::new("qusql_parse", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_qusql_parse(sql)),
-        );
-
-        group.bench_with_input(
-            BenchmarkId::new("databend", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_databend(sql)),
-        );
-
-        group.bench_with_input(BenchmarkId::new("orql", size), &concatenated, |b, sql| {
-            b.iter(|| bench_orql(sql));
-        });
+        let sql = concatenate_statements(&subset);
+        for &parser in &parsers {
+            group.bench_with_input(BenchmarkId::new(parser.name(), size), &sql, |b, sql| {
+                b.iter(|| black_box(parser.accepts(black_box(sql), dialect)));
+            });
+        }
     }
-
     group.finish();
 }
 
-fn select_benchmark(c: &mut Criterion) {
-    let statements = load_select_statements();
-    run_benchmark_group(c, "select", &statements);
+fn all_dialects(c: &mut Criterion) {
+    // Several parsers panic on edge-case SQL; accepts() catches it. Silence the
+    // default hook so benchmark output stays clean.
+    std::panic::set_hook(Box::new(|_| {}));
+    for &dialect in DIALECTS {
+        bench_dialect(c, dialect);
+    }
 }
 
-fn insert_benchmark(c: &mut Criterion) {
-    let statements = load_insert_statements();
-    run_benchmark_group(c, "insert", &statements);
-}
-
-fn update_benchmark(c: &mut Criterion) {
-    let statements = load_update_statements();
-    run_benchmark_group(c, "update", &statements);
-}
-
-fn delete_benchmark(c: &mut Criterion) {
-    let statements = load_delete_statements();
-    run_benchmark_group(c, "delete", &statements);
-}
-
-fn dml_benchmark(c: &mut Criterion) {
-    let statements = load_dml_statements();
-    run_benchmark_group(c, "dml", &statements);
-}
-
-criterion_group!(
-    benches,
-    select_benchmark,
-    insert_benchmark,
-    update_benchmark,
-    delete_benchmark,
-    dml_benchmark
-);
+criterion_group!(benches, all_dialects);
 criterion_main!(benches);

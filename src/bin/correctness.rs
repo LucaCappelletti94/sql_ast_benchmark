@@ -1,172 +1,69 @@
-#![allow(clippy::doc_markdown, clippy::print_literal, clippy::redundant_closure)]
+#![allow(clippy::doc_markdown, clippy::print_literal, clippy::too_many_lines)]
 
-/// Correctness benchmark: tests each SQL parser against SQL statements
-/// extracted from the sqlparser-rs test suite (produced by `scrape_tests`).
-///
-/// Ground truth: pg_query.rs (libpg_query) — the actual PostgreSQL parser.
-///   Valid   = accepted by pg_query.rs
-///   Invalid = rejected by pg_query.rs
-///
-/// Three metrics per parser:
-///
-///   Recall (true-positive rate):
-///     Of SQL that pg_query.rs accepts, how many does this parser also accept?
-///     Higher is better.
-///
-///   False-positive rate:
-///     Of SQL that pg_query.rs rejects, how many does this parser wrongly accept?
-///     Lower is better.
-///
-///   Round-trip stability:
-///     Of valid SQL that this parser accepts, does parse → print → re-parse → re-print
-///     produce stable output? (N/A for parsers without a pretty-printer)
-///     Higher is better.
-///
-/// Requires the default `pg_query_parser` feature:
-///   cargo run --bin correctness
-///
-/// Run scrape_tests first:
-///   cargo run --bin scrape_tests
-#[cfg(feature = "pg_query_parser")]
-use sql_ast_benchmark::{
-    databend_roundtrip, is_valid_databend, is_valid_orql, is_valid_polyglot, is_valid_qusql_parse,
-    is_valid_sqlparser, polyglot_roundtrip, sqlparser_roundtrip,
-};
-#[cfg(feature = "pg_query_parser")]
+//! Multi-dialect correctness benchmark over the `datasets/` corpus.
+//!
+//! Ground truth ("correct") is defined per dialect:
+//!
+//!   * Oracle-backed dialects — PostgreSQL (pg_query / libpg_query) and SQLite
+//!     (sqlite3-parser / lemon-rs, the real SQLite grammar). The oracle splits
+//!     the corpus into valid (oracle accepts) and invalid (oracle rejects), and
+//!     every parser is graded on four metrics: Recall (of valid stmts, how many
+//!     the parser accepts, up), False positives (of invalid stmts, how many it
+//!     wrongly accepts, down), Round-trip (of accepted-valid, parse-print-
+//!     reparse stable, up) and Fidelity (of accepted-valid, oracle-canonical
+//!     preserved, up).
+//!
+//!   * Other dialects have no oracle. Statements come from that dialect's own
+//!     test suites / official samples and are treated as provenance-valid, so
+//!     the metric is acceptance rate (+ round-trip of accepted).
+//!
+//! Each parser runs in its best-matching dialect; parsers that do not model a
+//! dialect are shown as N/A.
+//!
+//!   cargo run --release --bin correctness
+
+use sql_ast_benchmark::datasets::Dialect;
+use sql_ast_benchmark::{has_oracle, oracle_accepts, BenchParser};
 use std::fs;
-#[cfg(feature = "pg_query_parser")]
 use std::path::Path;
 
-#[cfg(feature = "pg_query_parser")]
-use sql_ast_benchmark::{
-    databend_fidelity, is_valid_pg_query, is_valid_pg_query_summary, pg_query_roundtrip,
-    polyglot_fidelity, sqlparser_fidelity,
-};
+/// Large worker stack: deeply nested SQL overflows recursive-descent parsers
+/// and stack overflow aborts the process (uncatchable), so give headroom.
+const WORKER_STACK: usize = 512 * 1024 * 1024;
 
-// ── Per-parser counts ─────────────────────────────────────────────────────────
-
-#[cfg(feature = "pg_query_parser")]
-struct ParserCounts {
-    /// Correctly accepted (true positives): parser accepts pg_query-valid SQL
-    accepted: usize,
-    /// Wrongly accepted (false positives): parser accepts pg_query-invalid SQL
-    false_pos: usize,
-    /// Of `accepted`, how many also round-trip stably; None = no pretty-printer
-    roundtrip: Option<usize>,
-    /// Of `accepted`, how many produce output with the same pg_query canonical
-    /// form as the original; None = no pretty-printer or fidelity check N/A
-    fidelity: Option<usize>,
+/// Per-parser aggregate counts within a dialect.
+#[derive(Clone, Default)]
+struct Agg {
+    /// has a pretty-printer (round-trip / fidelity applicable)?
+    can_reprint: bool,
+    /// accepted among oracle-valid (recall numerator), or among all (provenance)
+    accepted_valid: usize,
+    /// accepted among oracle-invalid (false-positive numerator)
+    accepted_invalid: usize,
+    /// round-trip stable among accepted-valid
+    roundtrip_ok: usize,
+    /// oracle-fidelity ok among accepted-valid
+    fidelity_ok: usize,
 }
 
-#[cfg(feature = "pg_query_parser")]
-struct Counts {
-    extracted: usize,
-    /// Accepted by pg_query.rs — the PostgreSQL ground truth
+impl Agg {
+    const fn merge(&mut self, o: &Self) {
+        self.accepted_valid += o.accepted_valid;
+        self.accepted_invalid += o.accepted_invalid;
+        self.roundtrip_ok += o.roundtrip_ok;
+        self.fidelity_ok += o.fidelity_ok;
+    }
+}
+
+struct DialectResult {
+    dialect: Dialect,
+    has_oracle: bool,
     valid_total: usize,
-    /// Rejected by pg_query.rs
     invalid_total: usize,
-    /// pg_query baseline round-trip count
-    #[cfg(feature = "pg_query_parser")]
-    pg_query_rt: usize,
-
-    sqlparser: ParserCounts,
-    polyglot: ParserCounts,
-    databend: ParserCounts,
-    qusql_parse: ParserCounts,
-    orql: ParserCounts,
-    #[cfg(feature = "pg_query_parser")]
-    pg_query_summary: ParserCounts,
+    parsers: Vec<BenchParser>,
+    aggs: Vec<Agg>,
 }
 
-#[cfg(feature = "pg_query_parser")]
-fn count_for(accept: impl Fn(&str) -> bool, valid: &[&str], invalid: &[&str]) -> ParserCounts {
-    ParserCounts {
-        accepted: valid.iter().filter(|s| accept(s)).count(),
-        false_pos: invalid.iter().filter(|s| accept(s)).count(),
-        roundtrip: None,
-        fidelity: None,
-    }
-}
-
-#[cfg(feature = "pg_query_parser")]
-fn with_roundtrip(mut pc: ParserCounts, rt: impl Fn(&str) -> bool, valid: &[&str]) -> ParserCounts {
-    pc.roundtrip = Some(valid.iter().filter(|s| rt(s)).count());
-    pc
-}
-
-#[cfg(feature = "pg_query_parser")]
-fn with_fidelity(mut pc: ParserCounts, fi: impl Fn(&str) -> bool, valid: &[&str]) -> ParserCounts {
-    pc.fidelity = Some(valid.iter().filter(|s| fi(s)).count());
-    pc
-}
-
-#[cfg(feature = "pg_query_parser")]
-fn check_file(path: &Path) -> Option<Counts> {
-    if !path.exists() {
-        return None;
-    }
-    let content = fs::read_to_string(path).ok()?;
-    let all: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
-    let extracted = all.len();
-    if extracted == 0 {
-        return None;
-    }
-
-    // Ground truth: split by pg_query.rs (libpg_query = the actual PostgreSQL parser)
-    let valid: Vec<&str> = all
-        .iter()
-        .copied()
-        .filter(|s| is_valid_pg_query(s))
-        .collect();
-    let invalid: Vec<&str> = all
-        .iter()
-        .copied()
-        .filter(|s| !is_valid_pg_query(s))
-        .collect();
-
-    let pg_query_rt = valid.iter().filter(|s| pg_query_roundtrip(s)).count();
-
-    Some(Counts {
-        extracted,
-        valid_total: valid.len(),
-        invalid_total: invalid.len(),
-        pg_query_rt,
-        sqlparser: with_fidelity(
-            with_roundtrip(
-                count_for(|s| is_valid_sqlparser(s), &valid, &invalid),
-                |s| sqlparser_roundtrip(s),
-                &valid,
-            ),
-            |s| sqlparser_fidelity(s),
-            &valid,
-        ),
-        polyglot: with_fidelity(
-            with_roundtrip(
-                count_for(|s| is_valid_polyglot(s), &valid, &invalid),
-                |s| polyglot_roundtrip(s),
-                &valid,
-            ),
-            |s| polyglot_fidelity(s),
-            &valid,
-        ),
-        databend: with_fidelity(
-            with_roundtrip(
-                count_for(|s| is_valid_databend(s), &valid, &invalid),
-                |s| databend_roundtrip(s),
-                &valid,
-            ),
-            |s| databend_fidelity(s),
-            &valid,
-        ),
-        qusql_parse: count_for(|s| is_valid_qusql_parse(s), &valid, &invalid),
-        orql: count_for(|s| is_valid_orql(s), &valid, &invalid),
-        pg_query_summary: count_for(|s| is_valid_pg_query_summary(s), &valid, &invalid),
-    })
-}
-
-// ── Formatting ────────────────────────────────────────────────────────────────
-
-#[cfg(feature = "pg_query_parser")]
 fn pct(n: usize, base: usize) -> f64 {
     if base == 0 {
         0.0
@@ -175,212 +72,266 @@ fn pct(n: usize, base: usize) -> f64 {
     }
 }
 
-#[cfg(feature = "pg_query_parser")]
-fn bar(n: usize, base: usize, width: usize) -> String {
-    let filled = (n * width).checked_div(base).unwrap_or(0).min(width);
-    format!("[{}{}]", "█".repeat(filled), "░".repeat(width - filled))
-}
-
-#[cfg(feature = "pg_query_parser")]
-fn print_recall_row(label: &str, accepted: usize, base: usize) {
-    println!(
-        "│  {:<24} {:>6}/{:<6}  {:>6.1}%  {}",
-        label,
-        accepted,
-        base,
-        pct(accepted, base),
-        bar(accepted, base, 30)
-    );
-}
-
-#[cfg(feature = "pg_query_parser")]
-fn print_fp_row(label: &str, pc: &ParserCounts, base: usize) {
-    println!(
-        "│  {:<24} {:>6}/{:<6}  {:>6.1}%  {}",
-        label,
-        pc.false_pos,
-        base,
-        pct(pc.false_pos, base),
-        bar(pc.false_pos, base, 30)
-    );
-}
-
-#[cfg(feature = "pg_query_parser")]
-fn print_rt_row(label: &str, pc: &ParserCounts) {
-    match pc.roundtrip {
-        Some(rt) => println!(
-            "│  {:<24} {:>6}/{:<6}  {:>6.1}%  {}",
-            label,
-            rt,
-            pc.accepted,
-            pct(rt, pc.accepted),
-            bar(rt, pc.accepted, 30)
-        ),
-        None => println!("│  {:<24}  {:>38}", label, "N/A (no pretty-printer)"),
+/// Load all non-empty statements for a dialect from its `datasets/` subdir.
+fn load_dialect(dialect: Dialect) -> Vec<String> {
+    let dir = Path::new("datasets").join(dialect.dir_name());
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<_> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "txt"))
+        .collect();
+    files.sort();
+    let mut stmts = Vec::new();
+    for f in files {
+        if let Ok(content) = fs::read_to_string(&f) {
+            stmts.extend(
+                content
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(String::from),
+            );
+        }
     }
+    stmts
 }
 
-#[cfg(feature = "pg_query_parser")]
-fn print_fidelity_row(label: &str, pc: &ParserCounts) {
-    match pc.fidelity {
-        Some(fi) => println!(
-            "│  {:<24} {:>6}/{:<6}  {:>6.1}%  {}",
-            label,
-            fi,
-            pc.accepted,
-            pct(fi, pc.accepted),
-            bar(fi, pc.accepted, 30)
-        ),
-        None => println!("│  {:<24}  {:>38}", label, "N/A (no pretty-printer)"),
+fn fresh_aggs(parsers: &[BenchParser], dialect: Dialect) -> Vec<Agg> {
+    parsers
+        .iter()
+        .map(|p| Agg {
+            can_reprint: p.can_reprint(dialect),
+            ..Agg::default()
+        })
+        .collect()
+}
+
+/// Grade one chunk of statements for a dialect, returning per-parser aggregates
+/// plus (valid_total, invalid_total) within the chunk.
+fn grade_chunk(
+    stmts: &[String],
+    dialect: Dialect,
+    parsers: &[BenchParser],
+) -> (Vec<Agg>, usize, usize) {
+    let oracle = has_oracle(dialect);
+    let mut aggs = fresh_aggs(parsers, dialect);
+    let mut valid_total = 0usize;
+    let mut invalid_total = 0usize;
+
+    for sql in stmts {
+        // Oracle split (provenance dialects treat every stmt as "valid").
+        let is_valid = if oracle {
+            oracle_accepts(sql, dialect) == Some(true)
+        } else {
+            true
+        };
+        if is_valid {
+            valid_total += 1;
+        } else {
+            invalid_total += 1;
+        }
+
+        for (i, &p) in parsers.iter().enumerate() {
+            if p.accepts(sql, dialect) != Some(true) {
+                continue;
+            }
+            if is_valid {
+                aggs[i].accepted_valid += 1;
+                if aggs[i].can_reprint {
+                    if p.roundtrips(sql, dialect) == Some(true) {
+                        aggs[i].roundtrip_ok += 1;
+                    }
+                    if p.fidelity(sql, dialect) == Some(true) {
+                        aggs[i].fidelity_ok += 1;
+                    }
+                }
+            } else {
+                aggs[i].accepted_invalid += 1;
+            }
+        }
     }
+    (aggs, valid_total, invalid_total)
 }
 
-#[cfg(feature = "pg_query_parser")]
-fn print_table_header(col2: &str) {
-    println!(
-        "│  {:<24} {:>13}  {:>7}  {}",
-        "Parser", col2, "Score", "Visual (30 cols)"
-    );
-    println!(
-        "│  {:<24} {:>13}  {:>7}  {}",
-        "──────────────────────", "─────────────", "───────", "──────────────────────────────"
-    );
+fn process_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Option<DialectResult> {
+    let stmts = load_dialect(dialect);
+    if stmts.is_empty() {
+        return None;
+    }
+    let parsers: Vec<BenchParser> = all_parsers
+        .iter()
+        .copied()
+        .filter(|p| p.supports(dialect))
+        .collect();
+
+    let n_threads = std::thread::available_parallelism()
+        .map_or(8, std::num::NonZeroUsize::get)
+        .min(32);
+    let chunk = stmts.len().div_ceil(n_threads).max(1);
+
+    let (aggs, valid_total, invalid_total) = std::thread::scope(|scope| {
+        let handles: Vec<_> = stmts
+            .chunks(chunk)
+            .map(|c| {
+                let parsers = &parsers;
+                std::thread::Builder::new()
+                    .stack_size(WORKER_STACK)
+                    .spawn_scoped(scope, move || grade_chunk(c, dialect, parsers))
+                    .expect("spawn worker")
+            })
+            .collect();
+
+        let mut merged = fresh_aggs(&parsers, dialect);
+        let mut vt = 0usize;
+        let mut it = 0usize;
+        for h in handles {
+            let (part, pv, pi) = h.join().expect("grade thread panicked");
+            for (m, o) in merged.iter_mut().zip(part.iter()) {
+                m.merge(o);
+            }
+            vt += pv;
+            it += pi;
+        }
+        (merged, vt, it)
+    });
+
+    Some(DialectResult {
+        dialect,
+        has_oracle: has_oracle(dialect),
+        valid_total,
+        invalid_total,
+        parsers,
+        aggs,
+    })
 }
 
-#[cfg(feature = "pg_query_parser")]
-fn print_section(label: &str, c: &Counts) {
-    println!("\n┌─ {label}");
-    println!(
-        "│  Extracted: {}  │  Valid (pg_query accepts): {}  │  Invalid (pg_query rejects): {}",
-        c.extracted, c.valid_total, c.invalid_total
-    );
+fn cell(v: f64) -> String {
+    format!("{v:>6.1}%")
+}
+const NA: &str = "   N/A";
 
-    // ── Recall ───────────────────────────────────────────────────────────────
-    println!("│");
-    println!(
-        "│  RECALL — accepted out of {} valid stmts  (↑ higher is better)",
-        c.valid_total
-    );
-    print_table_header("Accepted");
-    print_recall_row("pg_query.rs (baseline)", c.valid_total, c.valid_total);
-    print_recall_row(
-        "pg_query (summary)",
-        c.pg_query_summary.accepted,
-        c.valid_total,
-    );
-    print_recall_row("sqlparser-rs", c.sqlparser.accepted, c.valid_total);
-    print_recall_row("polyglot-sql", c.polyglot.accepted, c.valid_total);
-    print_recall_row("databend-common-ast", c.databend.accepted, c.valid_total);
-    print_recall_row("qusql-parse", c.qusql_parse.accepted, c.valid_total);
-    print_recall_row("orql", c.orql.accepted, c.valid_total);
+fn print_result(r: &DialectResult) {
+    println!("\n═══ {} ═══", r.dialect.dir_name());
+    let nw = r
+        .parsers
+        .iter()
+        .map(|p| p.name().len())
+        .max()
+        .unwrap_or(22)
+        .max(22);
 
-    // ── False positives ───────────────────────────────────────────────────────
-    if c.invalid_total > 0 {
-        println!("│");
+    if r.has_oracle {
+        let oracle_name = if r.dialect == Dialect::Sqlite {
+            "sqlite3-parser (lemon-rs)"
+        } else {
+            "pg_query (libpg_query)"
+        };
         println!(
-            "│  FALSE POSITIVES — wrongly accepted out of {} invalid stmts  (↓ lower is better)",
-            c.invalid_total
+            "Oracle: {}   valid: {}   invalid: {}",
+            oracle_name, r.valid_total, r.invalid_total
         );
-        print_table_header("Wrong+");
-        print_recall_row("pg_query.rs (baseline)", 0, c.invalid_total);
-        print_fp_row("pg_query (summary)", &c.pg_query_summary, c.invalid_total);
-        print_fp_row("sqlparser-rs", &c.sqlparser, c.invalid_total);
-        print_fp_row("polyglot-sql", &c.polyglot, c.invalid_total);
-        print_fp_row("databend-common-ast", &c.databend, c.invalid_total);
-        print_fp_row("qusql-parse", &c.qusql_parse, c.invalid_total);
-        print_fp_row("orql", &c.orql, c.invalid_total);
+        println!(
+            "{:<nw$}  {:>7}  {:>7}  {:>7}  {:>8}",
+            "parser",
+            "Recall",
+            "FalseP",
+            "RTrip",
+            "Fidelity",
+            nw = nw
+        );
+        println!("{}", "─".repeat(nw + 2 + 7 + 2 + 7 + 2 + 7 + 2 + 8));
+        for (p, a) in r.parsers.iter().zip(r.aggs.iter()) {
+            let recall = cell(pct(a.accepted_valid, r.valid_total));
+            let fp = if r.invalid_total > 0 {
+                cell(pct(a.accepted_invalid, r.invalid_total))
+            } else {
+                NA.to_string()
+            };
+            let rt = if a.can_reprint {
+                cell(pct(a.roundtrip_ok, a.accepted_valid))
+            } else {
+                NA.to_string()
+            };
+            let fid = if a.can_reprint {
+                cell(pct(a.fidelity_ok, a.accepted_valid))
+            } else {
+                NA.to_string()
+            };
+            println!(
+                "{:<nw$}  {:>7}  {:>7}  {:>7}  {:>8}",
+                p.name(),
+                recall,
+                fp,
+                rt,
+                fid,
+                nw = nw
+            );
+        }
+    } else {
+        println!(
+            "No oracle (provenance corpus). Total statements: {}",
+            r.valid_total
+        );
+        println!(
+            "{:<nw$}  {:>8}  {:>7}",
+            "parser",
+            "Accept",
+            "RTrip",
+            nw = nw
+        );
+        println!("{}", "─".repeat(nw + 2 + 8 + 2 + 7));
+        for (p, a) in r.parsers.iter().zip(r.aggs.iter()) {
+            let acc = cell(pct(a.accepted_valid, r.valid_total));
+            let rt = if a.can_reprint {
+                cell(pct(a.roundtrip_ok, a.accepted_valid))
+            } else {
+                NA.to_string()
+            };
+            println!("{:<nw$}  {:>8}  {:>7}", p.name(), acc, rt, nw = nw);
+        }
     }
-
-    // ── Round-trip ────────────────────────────────────────────────────────────
-    println!("│");
-    println!(
-        "│  ROUND-TRIP — parse→print→reparse→reprint stable, of accepted  (↑ higher is better)"
-    );
-    print_table_header("Stable");
-    println!(
-        "│  {:<24} {:>6}/{:<6}  {:>6.1}%  {}",
-        "pg_query.rs (baseline)",
-        c.pg_query_rt,
-        c.valid_total,
-        pct(c.pg_query_rt, c.valid_total),
-        bar(c.pg_query_rt, c.valid_total, 30)
-    );
-    println!(
-        "│  {:<24}  {:>38}",
-        "pg_query (summary)", "N/A (summary, not full parse)"
-    );
-    print_rt_row("sqlparser-rs", &c.sqlparser);
-    print_rt_row("polyglot-sql", &c.polyglot);
-    print_rt_row("databend-common-ast", &c.databend);
-    println!("│  {:<24}  {:>38}", "qusql-parse", "N/A (no pretty-printer)");
-    println!("│  {:<24}  {:>38}", "orql", "N/A (no pretty-printer)");
-
-    // ── Fidelity ──────────────────────────────────────────────────────────────
-    println!("│");
-    println!("│  FIDELITY — pg_query canonical of output matches canonical of input, of accepted  (↑ higher is better)");
-    print_table_header("Faithful");
-    println!(
-        "│  {:<24}  {:>38}",
-        "pg_query.rs (baseline)", "100% by definition"
-    );
-    println!(
-        "│  {:<24}  {:>38}",
-        "pg_query (summary)", "N/A (summary, not full parse)"
-    );
-    print_fidelity_row("sqlparser-rs", &c.sqlparser);
-    print_fidelity_row("polyglot-sql", &c.polyglot);
-    print_fidelity_row("databend-common-ast", &c.databend);
-    println!("│  {:<24}  {:>38}", "qusql-parse", "N/A (no pretty-printer)");
-    println!(
-        "│  {:<24}  {:>38}",
-        "orql", "N/A (Oracle dialect, no deparse)"
-    );
-
-    println!("└─");
 }
-
-// ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() {
-    // Some parsers panic on edge-case SQL instead of returning Err.
-    // The is_valid_* and *_roundtrip functions use catch_unwind; suppress noise.
     std::panic::set_hook(Box::new(|_| {}));
 
-    println!("╔══════════════════════════════════════════════════════════════════════╗");
-    println!("║           SQL Parser Correctness Report                             ║");
-    println!("║  Ground truth: pg_query.rs (libpg_query = real PostgreSQL)         ║");
-    println!("║  Metrics: Recall · False-positive rate · Round-trip stability      ║");
-    println!("╚══════════════════════════════════════════════════════════════════════╝");
-
-    #[cfg(not(feature = "pg_query_parser"))]
-    {
-        eprintln!("ERROR: pg_query_parser feature is required for the correctness benchmark.");
-        eprintln!("Run: cargo run --bin correctness   (pg_query_parser is enabled by default)");
+    if !Path::new("datasets").exists() {
+        eprintln!("ERROR: `datasets/` directory not found. Run download_datasets first.");
         std::process::exit(1);
     }
 
-    #[cfg(feature = "pg_query_parser")]
-    {
-        let files: &[(&str, &str)] = &[
-            ("sqlparser_test_postgres.txt", "PostgreSQL-specific tests"),
-            ("sqlparser_test_common.txt", "Common (all-dialect) tests"),
-            ("sqlparser_test_regression.txt", "Regression / TPC-H tests"),
-        ];
+    println!("╔══════════════════════════════════════════════════════════════════════╗");
+    println!("║  Multi-dialect SQL parser correctness                                ║");
+    println!("║  Oracle-graded (PostgreSQL=pg_query, SQLite=lemon-rs); acceptance-    ║");
+    println!("║  rate elsewhere. Each parser run in its best-matching dialect.       ║");
+    println!("╚══════════════════════════════════════════════════════════════════════╝");
 
-        let mut any = false;
-        for (file, label) in files {
-            match check_file(Path::new(file)) {
-                Some(counts) => {
-                    print_section(label, &counts);
-                    any = true;
-                }
-                None => eprintln!("\n  [skip] {file} — run `cargo run --bin scrape_tests` first"),
-            }
-        }
+    let all_parsers = BenchParser::all();
 
-        if !any {
-            eprintln!("\nNo test files found. Run `cargo run --bin scrape_tests` first.");
-            std::process::exit(1);
+    // Oracle-backed dialects first, then the rest.
+    let order = [
+        Dialect::Postgresql,
+        Dialect::Sqlite,
+        Dialect::Mysql,
+        Dialect::Clickhouse,
+        Dialect::Duckdb,
+        Dialect::Hive,
+        Dialect::SparkSql,
+        Dialect::Trino,
+        Dialect::Tsql,
+        Dialect::Oracle,
+        Dialect::Bigquery,
+        Dialect::Redshift,
+        Dialect::Multi,
+    ];
+
+    for dialect in order {
+        eprintln!("processing {} …", dialect.dir_name());
+        if let Some(r) = process_dialect(dialect, &all_parsers) {
+            print_result(&r);
         }
     }
+    println!();
 }

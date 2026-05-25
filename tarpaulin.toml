@@ -1,0 +1,21 @@
+# cargo-tarpaulin configuration.
+#
+# Coverage includes the Criterion benchmark (`benches/parsing.rs`) in addition
+# to any unit/integration tests. The benchmark is the primary exercise of the
+# multi-dialect `BenchParser` layer in `src/lib.rs`, so running it under
+# coverage exercises the dialect mappings and every parser's accept/reprint
+# paths.
+#
+# `args = ["--test"]` is forwarded to the Criterion harness so each benchmark
+# runs once (verify-only) instead of doing full timed measurement, which would
+# be prohibitively slow under instrumentation.
+#
+# Note: the benchmark loads the `datasets/` corpus (gitignored). Run
+# `cargo run --release --bin download_datasets` first, or the bench groups are
+# skipped and lib coverage drops accordingly.
+#
+# Usage: cargo tarpaulin
+[default]
+engine = "Llvm"
+run-types = ["Tests", "Benchmarks"]
+args = ["--test"]

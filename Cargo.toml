@@ -32,10 +32,14 @@ pg_parse_parser = ["pg_parse"]
 sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
 pg_query = { git = "https://github.com/pganalyze/pg_query.rs", optional = true }
 pg_parse = { git = "https://github.com/paupino/pg_parse", optional = true }
-qusql-parse = "0.3.0"
+qusql-parse = "0.8.0"
 polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
-databend-common-ast = "0.2.4"
+databend-common-ast = "0.2.5"
 orql = { git = "https://codeberg.org/xitep/orql" }
+sqlglot-rust = "0.9.28"
+sqlite3-parser = "0.16.0"
+senax-mysql-parser = "0.1.10"
+fallible-iterator = "0.3.0"
 plotters = "0.3"
 regex = "1"
 
@@ -69,4 +73,16 @@ path = "src/bin/divergence.rs"
 [[bin]]
 name = "check_deparse"
 path = "src/bin/check_deparse.rs"
+
+[[bin]]
+name = "evaluate_datasets"
+path = "src/bin/evaluate_datasets.rs"
+
+[[bin]]
+name = "diagnose_pg_sqlite"
+path = "src/bin/diagnose_pg_sqlite.rs"
+
+[[bin]]
+name = "pg_sqlparser_failures"
+path = "src/bin/pg_sqlparser_failures.rs"
 

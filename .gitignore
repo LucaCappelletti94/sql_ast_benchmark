@@ -23,3 +23,11 @@ Thumbs.db
 sqlparser_test_common.txt
 sqlparser_test_postgres.txt
 sqlparser_test_regression.txt
+
+# Legacy dataset download cache (the downloader has been removed)
+.dataset_cache/
+
+# Extracted SQL corpus. The corpus is committed compressed as datasets.tar.zst;
+# extract it with `tar --zstd -xf datasets.tar.zst`. The extracted tree is
+# ignored (datasets.tar.zst itself is tracked).
+datasets/
