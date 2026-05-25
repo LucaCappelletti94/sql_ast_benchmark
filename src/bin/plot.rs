@@ -32,7 +32,7 @@ const PARSERS: [(&str, &str, RGBColor); 6] = [
         "pg_query.rs (summary)",
         PANTONE_ROSE_QUARTZ,
     ),
-    ("sql_parse", "sql-parse", PANTONE_ULTRA_VIOLET),
+    ("qusql_parse", "qusql-parse", PANTONE_ULTRA_VIOLET),
     ("databend", "databend-common-ast", PANTONE_EMERALD),
 ];
 

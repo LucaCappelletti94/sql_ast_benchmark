@@ -7,7 +7,7 @@ use sql_ast_benchmark::{
     concatenate_statements, load_delete_statements, load_dml_statements, load_insert_statements,
     load_select_statements, load_update_statements,
 };
-use sql_parse::{parse_statements, Issues, ParseOptions, SQLDialect};
+use qusql_parse::{parse_statements, Issues, ParseOptions, SQLDialect};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 use std::hint::black_box;
@@ -37,8 +37,8 @@ fn bench_polyglot(sql: &str) {
     let _ = black_box(polyglot_parse(sql, DialectType::PostgreSQL));
 }
 
-fn bench_sql_parse(sql: &str) {
-    let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL);
+fn bench_qusql_parse(sql: &str) {
+    let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL).arguments(qusql_parse::SQLArguments::Dollar);
     let mut issues = Issues::new(sql);
     let _ = black_box(parse_statements(sql, &mut issues, &options));
 }
@@ -127,9 +127,9 @@ fn run_benchmark_group(c: &mut Criterion, group_name: &str, statements: &[String
         );
 
         group.bench_with_input(
-            BenchmarkId::new("sql_parse", size),
+            BenchmarkId::new("qusql_parse", size),
             &concatenated,
-            |b, sql| b.iter(|| bench_sql_parse(sql)),
+            |b, sql| b.iter(|| bench_qusql_parse(sql)),
         );
 
         group.bench_with_input(

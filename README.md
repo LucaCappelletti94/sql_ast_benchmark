@@ -13,7 +13,7 @@ Benchmarking Rust SQL parsers using real-world PostgreSQL statements.
 | **[sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)**                 | 0.61.0  | [`d9b53a0`](https://github.com/sqlparser-rs/sqlparser-rs/commit/d9b53a0cdb369124d9b6ce6237959e66bad859af)   | Pure Rust (multi-dialect)         |
 | **[polyglot-sql](https://github.com/tobilg/polyglot)**                           | 0.1.8   | [`b5e23ec`](https://github.com/tobilg/polyglot/commit/b5e23ec24a053e6a19f4219a82693c8937c50ca8)             | Pure Rust (multi-dialect)         |
 | **[pg_query.rs](https://github.com/pganalyze/pg_query.rs)**                      | 6.1.1   | [`35b8783`](https://github.com/pganalyze/pg_query.rs/commit/35b8783fda79636dd29d787765ca4a0978788f96)       | Rust FFI to C (libpg_query)       |
-| **[sql-parse](https://github.com/antialize/sql-parse)**                          | 0.28.0  | [`ac352f9`](https://github.com/antialize/sql-parse/commit/ac352f97f7ef13ebc44af9295a08095d89882319)         | Pure Rust (zero-copy)             |
+| **[sql-parse](https://github.com/antialize/qusql/)**                          | 0.28.0  | 0.3.0         | Pure Rust (zero-copy)             |
 | **[databend-common-ast](https://github.com/datafuselabs/databend)**              | 0.2.4   | (crates.io release)                                                                                         | Pure Rust (zero-copy, custom)     |
 | **[orql](https://codeberg.org/xitep/orql)**                                      | 0.1.0   | [`c9101ff`](https://codeberg.org/xitep/orql/commit/c9101ffe0efb14ea4c58b761dece532fa62ba9eb)                | Pure Rust (Oracle dialect, early-stage) |
 
@@ -27,7 +27,9 @@ Benchmarking Rust SQL parsers using real-world PostgreSQL statements.
 
 - **pg_query.rs (summary)**: The `pg_query::summary()` function extracts metadata (tables, functions, filter columns, statement types) without deserializing the full AST over protobuf. According to pg_query documentation, this can provide up to an order of magnitude performance improvement over full parsing.
 
-- **sql-parse**: A zero-copy parser using borrowed tokens for minimal allocations. Primarily focused on MySQL/MariaDB with experimental PostgreSQL support.
+- **qusql-parse**: A zero-copy parser using borrowed tokens for minimal allocations. Hand-coded recursive decent parser, with a push down stack for
+faster expression parsing. Focuses primarily on Mysql and PostgreSQL, with some
+support for sqlite.
 
 - **databend-common-ast**: A custom SQL parser built from scratch by the Databend cloud data warehouse team after sqlparser-rs became a performance bottleneck. Uses zero-copy parsing with Pratt expression parsing and logos-based lexing. Supports multiple SQL dialects including a PostgreSQL-compatible mode.
 
@@ -37,17 +39,17 @@ All parsers are configured for PostgreSQL dialect in this benchmark.
 
 ### Project Health & Metrics
 
-| Metric                      | sqlparser-rs        | polyglot-sql    | pg_query.rs     | sql-parse  | databend-common-ast | orql          |
+| Metric                      | sqlparser-rs        | polyglot-sql    | pg_query.rs     | qusql-parse  | databend-common-ast | orql          |
 | --------------------------- | ------------------: | --------------: | --------------: | ---------: | ------------------: | ------------: |
-| **GitHub Stars**            |               3,323 |             615 |             229 |         25 |            9,163    | N/A (Codeberg)|
-| **Total Downloads**         |               50.8M |            <1K  |            1.0M |        53K |                 21K |           <1K |
-| **Recent Downloads** (90d)  |                9.9M |            <1K  |            129K |      1.7K  |               2.6K  |           <1K |
-| **Last Commit**             |            Feb 2026 |        Feb 2026 |        Dec 2025 |   Oct 2025 |            Jan 2026 |      Feb 2026 |
+| **GitHub Stars**            |               3,323 |             615 |             229 |          0 |            9,163    | N/A (Codeberg)|
+| **Total Downloads**         |               50.8M |            <1K  |            1.0M |        918 |                 21K |           <1K |
+| **Recent Downloads** (90d)  |                9.9M |            <1K  |            129K |        918 |                2.6K |           <1K |
+| **Last Commit**             |            Feb 2026 |        Feb 2026 |        Dec 2025 |   Mar 2026 |            Jan 2026 |      Feb 2026 |
 | **First Release**           |            Feb 2018 |        Feb 2026 |        Jan 2022 |   Jan 2022 |            Jun 2024 |      Feb 2026 |
 | **License**                 |          Apache-2.0 |     Apache-2.0  |             MIT | Apache-2.0 |          Apache-2.0 |          0BSD |
 | **Dependencies**            |            0 (core) |        0 (core) | C (libpg_query) |          0 |             0 (core)|             0 |
 | **WASM Support**            |                 Yes |             Yes |              No |        Yes |                  No |       Unknown |
-| **Multi-dialect support**   |                 Yes |  Claims 32 (early-stage; see description) |      PG only    |    MySQL+  |         Yes (4+)    | Oracle only   |
+| **Multi-dialect support**   |                 Yes |  Claims 32 (early-stage; see description) |      PG only    |    Pg,Mysql+  |         Yes (4+)    | Oracle only   |
 | **Maintainer**              | Apache (DataFusion) |      Individual |       pganalyze | Individual |    Databend Labs    |    Individual |
 
 **Key observations:**
@@ -56,7 +58,7 @@ All parsers are configured for PostgreSQL dialect in this benchmark.
 - **polyglot-sql** is brand new (Feb 2026) and still very early-stage. It claims 32-dialect support, but correctness testing shows a ~52–61% false-positive rate, and translation testing reveals widespread silent pass-through failures (22+ constructs not translated, semantic correctness bugs). Treat with caution in any production context.
 - **pg_query.rs** has solid adoption (1M downloads) and is maintained by pganalyze, a company that uses it in production for PostgreSQL query analysis.
 - **databend-common-ast** was purpose-built to overcome sqlparser-rs performance bottlenecks. The crate is extracted from the larger Databend project (8K+ stars).
-- **sql-parse** is a smaller project with limited maintainer bandwidth, primarily targeting MySQL/MariaDB.
+- **qusql-parse** is a smaller project with limited maintainer bandwidth.
 
 ### Correctness Benchmark
 
@@ -131,10 +133,8 @@ Not all parsers successfully parse all statements in the performance benchmark c
 | pg_query.rs           |      100% |   100% |   100% |   100% |
 | pg_query.rs (summary) |      100% |   100% |   100% |   100% |
 | databend-common-ast   |   **99.2%**| **94.3%**| **98.2%**| **97.3%**|
-| sql-parse             | **30.1%** |  97.8% |  95.8% |  95.7% |
+| sql-parse             |      100% |   100% |   100% |   100% |
 | orql                  | **62.3%** |   0.0% |   0.0% |   0.0% |
-
-**⚠️ sql-parse**: Only ~30% of SELECT statements parse successfully - it is primarily a MySQL/MariaDB parser. Speed results for sql-parse SELECT benchmarks reflect only the simpler subset of statements it can handle.
 
 **⚠️ databend-common-ast**: Fails on some PostgreSQL-specific constructs (`RETURNING`, certain type casts, PG-specific syntax). The ~1–6% failure rate is small but reflects its Databend/ClickHouse dialect focus.
 

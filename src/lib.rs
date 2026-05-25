@@ -3,13 +3,13 @@ use databend_common_ast::parser::{
 };
 use orql::parser as orql_parser;
 use polyglot_sql::{parse as polyglot_parse, DialectType, Generator as PolyglotGenerator};
-use sql_parse::{parse_statements, Issues, Level, ParseOptions, SQLDialect};
+use qusql_parse::{Issues, Level, ParseOptions, SQLDialect, parse_statements};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 use std::path::Path;
 
-fn sql_parse_options() -> ParseOptions {
-    ParseOptions::new().dialect(SQLDialect::PostgreSQL)
+fn qusql_parse_options() -> ParseOptions {
+    ParseOptions::new().dialect(SQLDialect::PostgreSQL).arguments(qusql_parse::SQLArguments::Dollar)
 }
 
 // Dataset files
@@ -44,15 +44,10 @@ pub fn is_valid_polyglot(sql: &str) -> bool {
 }
 
 #[must_use]
-pub fn is_valid_sql_parse(sql: &str) -> bool {
-    // sql-parse uses todo!() in some unimplemented paths (e.g. hex literals);
-    // catch_unwind treats those as parse failures.
-    std::panic::catch_unwind(|| {
-        let mut issues = Issues::new(sql);
-        let _ = parse_statements(sql, &mut issues, &sql_parse_options());
-        !issues.get().iter().any(|i| i.level == Level::Error)
-    })
-    .unwrap_or(false)
+pub fn is_valid_qusql_parse(sql: &str) -> bool {
+    let mut issues = Issues::new(sql);
+    let _ = parse_statements(&sql, &mut issues, &qusql_parse_options());
+    !issues.get().iter().any(|i| i.level == Level::Error)
 }
 
 #[cfg(feature = "pg_parse_parser")]
