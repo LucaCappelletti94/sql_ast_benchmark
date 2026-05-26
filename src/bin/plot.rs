@@ -1,30 +1,31 @@
 #![allow(
-    clippy::cast_possible_wrap,
     clippy::cast_precision_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
     clippy::too_many_lines
 )]
 
-//! Renders `benchmark_results.svg` from Criterion output.
+//! Renders `benchmark_results.svg` from the raw per-statement timings written
+//! by `cargo bench` to `target/bench_dist/`.
 //!
-//! Reads `target/criterion/{dialect}/{parser}/{size}/new/estimates.json`
-//! (produced by `cargo bench`) and draws one log-log subplot per dialect, with
-//! one line per parser. Dialects and parsers are discovered dynamically, so the
-//! plot adapts to whatever the multi-dialect benchmark produced.
+//! One subplot per dialect. For each parser, an empirical CDF (eCDF) line:
+//! x = per-statement parse time (ns, log scale), y = fraction of that parser's
+//! accepted statements parsed within that time. A triangle on the x-axis marks
+//! the concatenated-body time normalized by statement count (`concat/n`).
+//! Parsers are colored consistently; a legend cell maps colors to names.
 
 use plotters::prelude::*;
 use plotters::style::text_anchor::{HPos, Pos, VPos};
 use plotters::style::RGBColor;
 use sql_ast_benchmark::datasets::Dialect;
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-const BENCHMARK_BASE_DIR: &str = "target/criterion";
+const DIST_DIR: &str = "target/bench_dist";
 const OUTPUT_FILE: &str = "benchmark_results.svg";
-const EXPECTED_SIZES: [usize; 4] = [1, 10, 100, 1000];
 
-/// Dialect plotting order (only those with benchmark data are drawn).
-const GROUP_ORDER: [Dialect; 13] = [
+const DIALECT_ORDER: [Dialect; 13] = [
     Dialect::Postgresql,
     Dialect::Sqlite,
     Dialect::Mysql,
@@ -40,253 +41,242 @@ const GROUP_ORDER: [Dialect; 13] = [
     Dialect::Multi,
 ];
 
-/// Stable color per parser display name (`BenchParser::name()`).
 fn parser_color(name: &str) -> RGBColor {
     match name {
-        "sqlparser-rs" => RGBColor(15, 76, 129), // classic blue
-        "pg_query.rs" => RGBColor(255, 111, 97), // living coral
-        "pg_query (summary)" => RGBColor(247, 202, 201), // rose quartz
-        "polyglot-sql" => RGBColor(245, 223, 77), // illuminating
-        "qusql-parse" => RGBColor(95, 75, 139),  // ultra violet
-        "databend-common-ast" => RGBColor(0, 155, 119), // emerald
-        "sqlglot-rust" => RGBColor(237, 135, 45), // orange
-        "sqlite3-parser" => RGBColor(0, 128, 128), // teal
-        "orql" => RGBColor(139, 69, 19),         // brown
-        _ => RGBColor(120, 120, 120),            // senax / unknown: gray
+        "sqlparser-rs" => RGBColor(15, 76, 129),
+        "pg_query.rs" => RGBColor(255, 111, 97),
+        "pg_query (summary)" => RGBColor(214, 153, 150),
+        "polyglot-sql" => RGBColor(230, 200, 40),
+        "qusql-parse" => RGBColor(95, 75, 139),
+        "databend-common-ast" => RGBColor(0, 155, 119),
+        "sqlglot-rust" => RGBColor(237, 135, 45),
+        "sqlite3-parser" => RGBColor(0, 128, 128),
+        "orql" => RGBColor(139, 69, 19),
+        _ => RGBColor(120, 120, 120),
     }
 }
 
-#[derive(Debug, Clone)]
-struct BenchmarkResult {
-    mean_ns: f64,
-    std_dev_ns: f64,
+/// Same slug as the benchmark uses for raw-file names.
+fn slug(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect()
 }
 
-type ParserResults = HashMap<usize, BenchmarkResult>;
-/// parser display name -> results by size
-type GroupResults = HashMap<String, ParserResults>;
+/// A parser's per-statement timing data within one dialect.
+struct Series {
+    parser: String,
+    times: Vec<f64>, // sorted ascending, ns
+    concat: f64,     // concatenated-normalized, ns
+}
 
-/// Read the per-size results for one parser directory.
-fn parse_parser_dir(dir: &Path) -> ParserResults {
-    let mut out = ParserResults::new();
-    let Ok(entries) = fs::read_dir(dir) else {
-        return out;
+/// (dialect, parser, concat/n) rows from summary.csv.
+fn load_summary(path: &Path) -> Vec<(String, String, f64)> {
+    let Ok(content) = fs::read_to_string(path) else {
+        return Vec::new();
     };
-    for entry in entries.filter_map(Result::ok) {
-        let size_name = entry.file_name().to_string_lossy().into_owned();
-        let Ok(size) = size_name.parse::<usize>() else {
-            continue;
-        };
-        if !EXPECTED_SIZES.contains(&size) {
-            continue;
-        }
-        let estimates = entry.path().join("new").join("estimates.json");
-        if let Ok(content) = fs::read_to_string(&estimates) {
-            if let Some((mean, std_dev)) = extract_mean_and_std_dev(&content) {
-                out.insert(
-                    size,
-                    BenchmarkResult {
-                        mean_ns: mean,
-                        std_dev_ns: std_dev,
-                    },
-                );
+    content
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let f: Vec<&str> = line.split(',').collect();
+            if f.len() < 14 {
+                return None;
             }
-        }
-    }
-    out
+            let n: usize = f[3].trim().parse().ok()?;
+            if n == 0 {
+                return None;
+            }
+            let concat: f64 = f[13].trim().parse().unwrap_or(0.0);
+            Some((f[0].to_string(), f[1].to_string(), concat))
+        })
+        .collect()
 }
 
-/// Read all parser results for one dialect group directory.
-fn parse_group(dir: &Path) -> GroupResults {
-    let mut group = GroupResults::new();
-    let Ok(entries) = fs::read_dir(dir) else {
-        return group;
+fn load_times(dialect: &str, parser: &str) -> Vec<f64> {
+    let path = format!("{DIST_DIR}/{dialect}__{}.txt", slug(parser));
+    let Ok(content) = fs::read_to_string(path) else {
+        return Vec::new();
     };
-    for entry in entries.filter_map(Result::ok) {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().into_owned();
-        // Skip criterion's "report" dir and the stale numeric value dirs.
-        if name == "report" || name.parse::<usize>().is_ok() {
-            continue;
-        }
-        let results = parse_parser_dir(&entry.path());
-        if !results.is_empty() {
-            group.insert(name, results);
-        }
-    }
-    group
+    let mut v: Vec<f64> = content
+        .lines()
+        .filter_map(|l| l.trim().parse::<f64>().ok())
+        .filter(|x| *x > 0.0)
+        .collect();
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    v
 }
 
-fn extract_mean_and_std_dev(json_content: &str) -> Option<(f64, f64)> {
-    let mean = extract_field(json_content, "\"mean\"");
-    let std_dev = extract_field(json_content, "\"std_dev\"");
-    match (mean, std_dev) {
-        (Some(m), Some(s)) => Some((m, s)),
-        (Some(m), None) => Some((m, 0.0)),
-        _ => None,
+/// Up to `max_pts` (x = time, y = cumulative fraction) points tracing the eCDF.
+fn ecdf_points(sorted: &[f64], max_pts: usize) -> Vec<(f64, f64)> {
+    let n = sorted.len();
+    if n == 0 {
+        return Vec::new();
     }
-}
-
-fn extract_field(json_content: &str, field_name: &str) -> Option<f64> {
-    let start = json_content.find(field_name)?;
-    let rest = &json_content[start..];
-    let pe_start = rest.find("\"point_estimate\"")?;
-    let pe_rest = &rest[pe_start + 17..];
-    let end = pe_rest.find([',', '}'])?;
-    pe_rest[..end].trim().parse::<f64>().ok()
+    if n <= max_pts {
+        return sorted
+            .iter()
+            .enumerate()
+            .map(|(i, &t)| (t, (i + 1) as f64 / n as f64))
+            .collect();
+    }
+    (0..=max_pts)
+        .map(|k| {
+            let frac = k as f64 / max_pts as f64;
+            let idx = ((frac * (n - 1) as f64).round() as usize).min(n - 1);
+            (sorted[idx], frac)
+        })
+        .collect()
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let base = Path::new(BENCHMARK_BASE_DIR);
-    if !base.exists() {
-        eprintln!("Benchmark results not found at {BENCHMARK_BASE_DIR}");
-        eprintln!("Run `cargo bench` first to generate benchmark data.");
+    let summary = load_summary(&Path::new(DIST_DIR).join("summary.csv"));
+    if summary.is_empty() {
+        eprintln!("No data in {DIST_DIR}/summary.csv. Run `cargo bench` first.");
         std::process::exit(1);
     }
 
-    // Discover groups in plotting order, keeping only those with data.
-    let groups: Vec<(Dialect, GroupResults)> = GROUP_ORDER
+    // Group series by dialect in canonical order.
+    let groups: Vec<(Dialect, Vec<Series>)> = DIALECT_ORDER
         .iter()
-        .filter_map(|&d| {
-            let g = parse_group(&base.join(d.dir_name()));
-            (!g.is_empty()).then_some((d, g))
+        .filter_map(|d| {
+            let mut series: Vec<Series> = summary
+                .iter()
+                .filter(|(dia, _, _)| dia == d.dir_name())
+                .map(|(_, parser, concat)| Series {
+                    parser: parser.clone(),
+                    times: load_times(d.dir_name(), parser),
+                    concat: *concat,
+                })
+                .filter(|s| !s.times.is_empty())
+                .collect();
+            series.sort_by(|a, b| a.parser.cmp(&b.parser));
+            (!series.is_empty()).then_some((*d, series))
         })
         .collect();
 
     if groups.is_empty() {
-        eprintln!("No benchmark results found. Run `cargo bench` first.");
+        eprintln!("No raw timing files found in {DIST_DIR}/.");
         std::process::exit(1);
     }
 
-    // Stable sorted list of all parser names seen (for the legend).
-    let mut all_parsers: Vec<String> = groups.iter().flat_map(|(_, g)| g.keys().cloned()).collect();
-    all_parsers.sort_unstable();
+    let mut all_parsers: Vec<String> = summary.iter().map(|(_, p, _)| p.clone()).collect();
+    all_parsers.sort();
     all_parsers.dedup();
 
+    // X range (ns, log): global min to a high percentile, so rare multi-ms
+    // outliers do not stretch the axis. Use the 99th percentile per series.
+    let mut xmin = f64::MAX;
+    let mut xmax = 0.0_f64;
+    for (_, series) in &groups {
+        for s in series {
+            xmin = xmin.min(s.times[0]).min(s.concat.max(1.0));
+            let p99 =
+                s.times[((0.99 * (s.times.len() - 1) as f64) as usize).min(s.times.len() - 1)];
+            xmax = xmax.max(p99).max(s.concat);
+        }
+    }
+    let xmin = (xmin * 0.8).max(1.0);
+    let xmax = xmax * 1.3;
+
     // Text summary.
-    println!("Benchmark results (median, ms):");
-    for (dialect, group) in &groups {
-        println!("\n{}:", dialect.dir_name());
-        let mut sizes: Vec<usize> = group.values().flat_map(|p| p.keys().copied()).collect();
-        sizes.sort_unstable();
-        sizes.dedup();
-        for size in &sizes {
-            println!("  {size} statements:");
-            let mut names: Vec<&String> = group.keys().collect();
-            names.sort();
-            for name in names {
-                if let Some(r) = group[name].get(size) {
-                    println!("    {name:24}: {:.4} ms", r.mean_ns / 1_000_000.0);
-                }
-            }
+    println!("Per-statement median / p90 and concatenated-normalized (ns):");
+    for (d, series) in &groups {
+        println!("\n{}:", d.dir_name());
+        for s in series {
+            let q = |f: f64| {
+                s.times[((f * (s.times.len() - 1) as f64) as usize).min(s.times.len() - 1)]
+            };
+            println!(
+                "  {:<24} n={:<6} median={:>8.0}  p90={:>9.0}  concat/n={:>8.0}",
+                s.parser,
+                s.times.len(),
+                q(0.5),
+                q(0.9),
+                s.concat
+            );
         }
     }
 
-    // ── SVG grid: one subplot per dialect, plus a legend cell. ──
     let num_plots = groups.len();
     let cols = 4usize;
-    let rows = (num_plots + 1).div_ceil(cols); // +1 reserves a legend cell
-    let subplot_w = 380u32;
-    let subplot_h = 290u32;
-    let total_width = cols as u32 * subplot_w;
-    let total_height = rows as u32 * subplot_h + 70;
+    let rows_n = (num_plots + 1).div_ceil(cols);
+    let sub_w = 440u32;
+    let sub_h = 330u32;
+    let width = cols as u32 * sub_w;
+    let height = rows_n as u32 * sub_h + 70;
 
-    let root = SVGBackend::new(OUTPUT_FILE, (total_width, total_height)).into_drawing_area();
+    let root = SVGBackend::new(OUTPUT_FILE, (width, height)).into_drawing_area();
     root.fill(&WHITE)?;
     root.draw(&Text::new(
-        "SQL Parser Benchmark (parse time, log-log, per dialect)",
-        (total_width as i32 / 2, 28),
-        ("sans-serif", 22)
+        "Per-statement parse-time eCDF by dialect (x = ns/statement, log; y = fraction of accepted statements; triangle = concatenated/n)",
+        (width as i32 / 2, 26),
+        ("sans-serif", 17)
             .into_font()
             .color(&BLACK)
             .pos(Pos::new(HPos::Center, VPos::Center)),
     ))?;
 
-    // Global y-range (ms) for consistent axes.
-    let all_means = || {
-        groups
-            .iter()
-            .flat_map(|(_, g)| g.values())
-            .flat_map(|p| p.values())
-    };
-    let global_min = all_means()
-        .map(|r| r.mean_ns / 1_000_000.0)
-        .fold(f64::MAX, f64::min)
-        * 0.5;
-    let global_max = all_means()
-        .map(|r| (r.mean_ns + r.std_dev_ns) / 1_000_000.0)
-        .fold(0.0_f64, f64::max)
-        * 1.5;
-    let global_min = if global_min.is_finite() && global_min > 0.0 {
-        global_min
-    } else {
-        0.0001
-    };
+    let plotting = root.margin(45, 10, 10, 10);
+    let areas = plotting.split_evenly((rows_n, cols));
 
-    let plotting_area = root.margin(45, 10, 10, 10);
-    let areas = plotting_area.split_evenly((rows, cols));
-
-    for (idx, (dialect, group)) in groups.iter().enumerate() {
+    for (idx, (dialect, series)) in groups.iter().enumerate() {
         let area = &areas[idx];
         let mut chart = ChartBuilder::on(area)
             .caption(dialect.dir_name(), ("sans-serif", 15))
             .margin(8)
-            .x_label_area_size(32)
-            .y_label_area_size(52)
-            .build_cartesian_2d(
-                (1f64..1000f64).log_scale(),
-                (global_min..global_max).log_scale(),
-            )?;
+            .x_label_area_size(30)
+            .y_label_area_size(40)
+            .build_cartesian_2d((xmin..xmax).log_scale(), 0f64..1.02f64)?;
         chart
             .configure_mesh()
-            .x_desc("Statements")
-            .y_desc("Time (ms)")
+            .x_desc("ns / statement")
+            .y_desc("frac <= t")
             .x_label_style(("sans-serif", 10))
             .y_label_style(("sans-serif", 10))
             .draw()?;
 
-        let mut names: Vec<&String> = group.keys().collect();
-        names.sort();
-        for name in names {
-            let color = parser_color(name);
-            let mut points: Vec<(f64, f64)> = group[name]
-                .iter()
-                .map(|(&size, r)| (size as f64, r.mean_ns / 1_000_000.0))
-                .collect();
-            points.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        for s in series {
+            let color = parser_color(&s.parser);
             chart.draw_series(LineSeries::new(
-                points.iter().copied(),
+                ecdf_points(&s.times, 300),
                 color.stroke_width(2),
             ))?;
-            chart.draw_series(
-                points
-                    .iter()
-                    .map(|&(x, y)| Circle::new((x, y), 3, color.filled())),
-            )?;
+            // concat/n marker on the baseline.
+            if s.concat > 0.0 {
+                chart.draw_series(std::iter::once(TriangleMarker::new(
+                    (s.concat, 0.0),
+                    6,
+                    color.filled(),
+                )))?;
+            }
         }
     }
 
-    // Legend in the next free cell.
+    // Legend cell.
     if num_plots < areas.len() {
         let legend = &areas[num_plots];
-        let (w, h) = legend.dim_in_pixel();
         let line_h = 22;
-        let start_y = (h as i32 - all_parsers.len() as i32 * line_h) / 2;
+        let start_y = 20;
         for (i, name) in all_parsers.iter().enumerate() {
             let y = start_y + i as i32 * line_h;
-            legend.draw(&Rectangle::new(
-                [(15, y), (35, y + 12)],
-                parser_color(name).filled(),
+            legend.draw(&PathElement::new(
+                vec![(12, y + 6), (40, y + 6)],
+                parser_color(name).stroke_width(3),
             ))?;
             legend.draw(&Text::new(
                 name.clone(),
-                (42, y),
+                (46, y),
                 ("sans-serif", 12).into_font(),
             ))?;
-            let _ = w;
         }
+        let y = start_y + all_parsers.len() as i32 * line_h + 8;
+        legend.draw(&TriangleMarker::new((26, y + 6), 6, BLACK.filled()))?;
+        legend.draw(&Text::new(
+            "concatenated / n",
+            (46, y),
+            ("sans-serif", 12).into_font(),
+        ))?;
     }
 
     root.present()?;

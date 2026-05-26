@@ -394,6 +394,56 @@ impl BenchParser {
         }
     }
 
+    /// Parse `sql` once in `dialect` for timing, WITHOUT panic protection.
+    /// Returns whether the parse succeeded. Intended only for statements already
+    /// known to be in the accepted set (so re-parsing cannot panic); calling it
+    /// on rejected/edge-case input may abort the process. Avoiding `catch_unwind`
+    /// keeps the timing free of landing-pad overhead and fair across parsers.
+    #[must_use]
+    pub fn parse_once(self, sql: &str, dialect: Dialect) -> bool {
+        match self {
+            Self::Sqlparser => Parser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok(),
+            #[cfg(feature = "pg_query_parser")]
+            Self::PgQuery => pg_query::parse(sql).is_ok(),
+            #[cfg(feature = "pg_query_parser")]
+            Self::PgQuerySummary => pg_query::summary(sql, -1).is_ok(),
+            #[cfg(feature = "pg_parse_parser")]
+            Self::PgParse => pg_parse::parse(sql).is_ok(),
+            Self::Qusql => {
+                let d = qusql_dialect(dialect).unwrap_or(SQLDialect::PostgreSQL);
+                let opts = ParseOptions::new()
+                    .dialect(d)
+                    .arguments(qusql_parse::SQLArguments::Dollar);
+                let mut issues = Issues::new(sql);
+                let _ = parse_statements(sql, &mut issues, &opts);
+                !issues.get().iter().any(|i| i.level == Level::Error)
+            }
+            Self::Polyglot => polyglot_parse(sql, polyglot_dialect(dialect)).is_ok(),
+            Self::Databend => {
+                let d = databend_dialect_of(dialect).unwrap_or(DatabendDialect::PostgreSQL);
+                databend_tokenize(sql)
+                    .ok()
+                    .and_then(|t| databend_parse(&t, d).ok())
+                    .is_some()
+            }
+            Self::Orql => orql_parser::parse(sql).is_ok(),
+            Self::Sqlglot => {
+                sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect)).is_ok()
+            }
+            Self::Sqlite3 => {
+                let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+                loop {
+                    match parser.next() {
+                        Ok(Some(_)) => {}
+                        Ok(None) => break true,
+                        Err(_) => break false,
+                    }
+                }
+            }
+            Self::Senax => senax_mysql_parser::create::creation(sql.as_bytes()).is_ok(),
+        }
+    }
+
     /// Parse and pretty-print; `None` if the parser has no printer, does not
     /// model `dialect`, or fails to parse `sql`.
     #[must_use]

@@ -42,9 +42,6 @@ senax-mysql-parser = "0.1.10"
 fallible-iterator = "0.3.0"
 plotters = "0.3"
 
-[dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports"] }
-
 [[bench]]
 name = "parsing"
 harness = false

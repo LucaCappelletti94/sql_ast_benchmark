@@ -60,7 +60,9 @@ There is no universal oracle across dialects, so correctness is defined per dial
 
 ### Performance
 
-Each performance benchmark measures wall-clock time to parse a batch of statements (1, 10, 100, 1000) concatenated with `;` into one string, per dialect, using [Criterion.rs](https://github.com/bheisler/criterion.rs). Parsers are invoked through the same dialect-aware entry point used for correctness.
+The performance benchmark (`cargo bench`) is keyed to each parser's accepted set. For every (parser, dialect) pair it: builds the set of statements that parser accepts in that dialect, times each accepted statement individually to produce a per-statement parse-time distribution, and separately times the whole accepted body concatenated and divides by the statement count. Keying on the accepted set means the concatenated parse never stops early on a statement the parser would reject, so the normalized concatenated number is a fair amortized-throughput figure. Per-statement timing uses an adaptive iteration count (best of several rounds) and a no-`catch_unwind` parse path, so the measurement is free of panic-guard overhead. Every accepted statement is timed (no sampling); the full corpus is covered.
+
+Raw per-statement times are written to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus the normalized concatenated time to `target/bench_dist/summary.csv`, so plots can be regenerated without re-running. `cargo run --release --bin plot` renders `benchmark_results.svg`: one subplot per dialect with an empirical CDF (eCDF) line per parser (x = per-statement time in ns on a log scale, y = fraction of that parser's accepted statements parsed within that time), and a triangle on the x-axis marking the concatenated-normalized time.
 
 ## Dataset Corpus
 
@@ -162,23 +164,28 @@ cargo run --release --bin evaluate_datasets
 
 ## Performance Results
 
-Run with `cargo bench`; HTML reports land in `target/criterion/`. Times below are per batch (lower is better), with each parser run in the dialect's matching dialect.
+`cargo bench` times every accepted statement in every dialect (full corpus, no sampling) and writes raw per-statement times + percentiles to `target/bench_dist/`. The chart below (one subplot per dialect) shows, for each parser, an empirical CDF of per-statement parse time: x = ns per statement (log), y = fraction of that parser's accepted statements parsed within that time, so a curve further to the left is faster. A triangle on the x-axis marks the concatenated-body time normalized by statement count.
 
-PostgreSQL parse latency (median, each parser run in PostgreSQL dialect on the defog + pg_regress corpus), single statement and a 1000-statement batch:
+![Benchmark results](benchmark_results.svg)
 
-| Parser | 1 statement | 1000 statements |
-| --- | ---: | ---: |
-| qusql-parse | 0.80 us | 0.49 ms |
-| sqlglot-rust | 1.99 us | 1.44 ms |
-| pg_query (summary) | 2.62 us | 1.58 ms |
-| sqlparser-rs | 5.78 us | 2.41 ms |
-| polyglot-sql | 13.7 us | 2.64 ms |
-| pg_query.rs (full) | 15.7 us | 1.58 ms |
-| databend-common-ast | 14.8 us | 5.78 ms |
+PostgreSQL example (ns per statement, on the 27,844 statements pg_query accepts; `concat/n` = full accepted body parsed once, divided by n):
 
-Single-statement latency is the cleanest cross-parser comparison: qusql-parse and sqlglot-rust are fastest, the libpg_query FFI (pg_query full) is slowest per call but competitive in bulk, and pg_query (summary) is far faster than full parsing because it skips AST deserialization.
+| Parser | median | p90 | concat / n |
+| --- | ---: | ---: | ---: |
+| qusql-parse | 474 | 1,235 | 162 |
+| sqlglot-rust | 1,442 | 3,397 | 531 |
+| pg_query (summary) | 1,824 | 3,596 | 628 |
+| sqlparser-rs | 5,595 | 20,439 | 877 |
+| databend-common-ast | 6,635 | 17,497 | 2,139 |
+| pg_query.rs (full) | 8,236 | 23,651 | 1,694 |
+| polyglot-sql | 12,128 | 16,838 | 1,037 |
 
-Note on cross-dialect timings: `cargo bench` benchmarks every dialect and writes HTML reports to `target/criterion/`, but raw per-dialect timings should be read with care. Each parser is timed on that dialect's corpus as-is, so when a parser rejects a statement quickly (for example lemon-rs on the T-SQL-flavored SEDE statements in the SQLite corpus) the measurement reflects rejection speed rather than full-parse speed. The PostgreSQL numbers above are on a representative all-valid sample and are directly comparable.
+Key observations:
+
+- **Bulk amortizes strongly.** For most dialects `concat/n` is far below the per-statement median (sqlparser-rs PostgreSQL: 877 ns amortized vs 5,595 ns per call), because parsing one big body amortizes per-call setup and allocation. The exceptions are Redshift, BigQuery, and Trino, whose corpora are dominated by a few very large analytical queries, so `concat/n` is at or above the median.
+- **polyglot-sql has a high, flat per-statement floor** (~9-15 us in every dialect, visible as boxes that never drop low) from fixed per-call overhead, but it amortizes well in bulk.
+- **qusql-parse and sqlglot-rust are the fastest per statement**; the libpg_query FFI (`pg_query.rs`) is the slowest full parser per call but competitive in bulk, and `pg_query (summary)` is much faster than full parsing because it skips AST deserialization.
+- **senax-mysql** is CREATE-TABLE-only, so its `concat/n` is meaningless (the parser consumes only the first statement of a concatenated body); read only its per-statement distribution.
 
 ## Running
 
