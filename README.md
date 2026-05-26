@@ -62,7 +62,7 @@ There is no universal oracle across dialects, so correctness is defined per dial
 
 The performance benchmark (`cargo bench`) is keyed to each parser's accepted set. For every (parser, dialect) pair it: builds the set of statements that parser accepts in that dialect, times each accepted statement individually to produce a per-statement parse-time distribution, and separately times the whole accepted body concatenated and divides by the statement count. Keying on the accepted set means the concatenated parse never stops early on a statement the parser would reject, so the normalized concatenated number is a fair amortized-throughput figure. Per-statement timing uses an adaptive iteration count (best of several rounds) and a no-`catch_unwind` parse path, so the measurement is free of panic-guard overhead. Every accepted statement is timed (no sampling); the full corpus is covered.
 
-Raw per-statement times are written to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus the normalized concatenated time to `target/bench_dist/summary.csv`, so plots can be regenerated without re-running. `cargo run --release --bin plot` renders `benchmark_results.svg`: one subplot per dialect with an empirical CDF (eCDF) line per parser (x = per-statement time in ns on a log scale, y = fraction of that parser's accepted statements parsed within that time), and a triangle on the x-axis marking the concatenated-normalized time.
+Raw per-statement times are written to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus the normalized concatenated time to `target/bench_dist/summary.csv`, so plots can be regenerated without re-running. `cargo run --release --bin sqlbench plot` renders `benchmark_results.svg`: one subplot per dialect with an empirical CDF (eCDF) line per parser (x = per-statement time in ns on a log scale, y = fraction of that parser's accepted statements parsed within that time), and a triangle on the x-axis marking the concatenated-normalized time.
 
 ## Dataset Corpus
 
@@ -97,7 +97,7 @@ All sources are openly licensed (Apache-2.0, MIT, BSD, public domain or CC-BY). 
 Run on the full corpus with:
 
 ```bash
-cargo run --release --bin correctness
+cargo run --release --bin sqlbench correctness
 ```
 
 ### PostgreSQL (oracle: pg_query / libpg_query)
@@ -159,12 +159,12 @@ Acceptance rate = fraction of each dialect's own corpus accepted, with the parse
 A per-file acceptance breakdown (every dataset file, every supporting parser, in the dialect's matching dialect) is produced by:
 
 ```bash
-cargo run --release --bin evaluate_datasets
+cargo run --release --bin sqlbench correctness --per-file
 ```
 
 ## Performance Results
 
-`cargo bench` times every accepted statement in every dialect (full corpus, no sampling) and writes raw per-statement times + percentiles to `target/bench_dist/`. `cargo run --release --bin plot` renders two views of the same data.
+`cargo bench` times every accepted statement in every dialect (full corpus, no sampling) and writes raw per-statement times + percentiles to `target/bench_dist/`. `cargo run --release --bin sqlbench plot` renders two views of the same data.
 
 The eCDF view (one subplot per dialect) shows, for each parser, the empirical CDF of per-statement parse time: x = ns per statement (log), y = fraction of that parser's accepted statements parsed within that time, so a curve further to the left is faster. A triangle on the x-axis marks the concatenated-body time normalized by statement count.
 
@@ -197,15 +197,15 @@ Key observations:
 
 ```bash
 tar --zstd -xf datasets.tar.zst                # extract the corpus into datasets/
-cargo run --release --bin evaluate_datasets    # per-file acceptance, every dialect
-cargo run --release --bin correctness          # oracle + provenance correctness
+cargo run --release --bin sqlbench correctness --per-file    # per-file acceptance, every dialect
+cargo run --release --bin sqlbench correctness          # oracle + provenance correctness
 cargo bench                                     # parse-throughput, every dialect
 ```
 
 The default build uses pg_query (the PostgreSQL oracle). To use the alternate libpg_query binding instead:
 
 ```bash
-cargo run --release --no-default-features --features pg_parse_parser --bin correctness
+cargo run --release --no-default-features --features pg_parse_parser --bin sqlbench correctness
 ```
 
 ## Environment

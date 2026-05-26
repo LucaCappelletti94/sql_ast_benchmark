@@ -47,22 +47,6 @@ name = "parsing"
 harness = false
 
 [[bin]]
-name = "plot"
-path = "src/bin/plot.rs"
-
-[[bin]]
-name = "correctness"
-path = "src/bin/correctness.rs"
-
-[[bin]]
-name = "evaluate_datasets"
-path = "src/bin/evaluate_datasets.rs"
-
-[[bin]]
-name = "diagnose_pg_sqlite"
-path = "src/bin/diagnose_pg_sqlite.rs"
-
-[[bin]]
-name = "pg_sqlparser_failures"
-path = "src/bin/pg_sqlparser_failures.rs"
+name = "sqlbench"
+path = "src/bin/sqlbench.rs"
 

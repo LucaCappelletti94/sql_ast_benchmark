@@ -16,26 +16,9 @@ use sqlparser::dialect::{
     RedshiftSqlDialect, SQLiteDialect,
 };
 
-#[must_use]
-pub fn is_valid_sqlparser(sql: &str) -> bool {
-    let dialect = PostgreSqlDialect {};
-    Parser::parse_sql(&dialect, sql).is_ok()
-}
-
-#[cfg(feature = "pg_query_parser")]
-#[must_use]
-pub fn is_valid_pg_query(sql: &str) -> bool {
-    pg_query::parse(sql).is_ok()
-}
-
 #[cfg(feature = "pg_query_parser")]
 fn pg_query_canonical(sql: &str) -> Option<String> {
     pg_query::parse(sql).ok()?.deparse().ok()
-}
-
-#[must_use]
-pub fn concatenate_statements(statements: &[String]) -> String {
-    statements.join("; ")
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -516,3 +499,171 @@ impl BenchParser {
 }
 
 pub mod datasets;
+pub mod plot;
+pub mod report;
+pub mod stats;
+
+#[cfg(test)]
+mod tests {
+    use super::{has_oracle, oracle_accepts, BenchParser};
+    use crate::datasets::Dialect;
+
+    const ALL_DIALECTS: [Dialect; 13] = [
+        Dialect::Postgresql,
+        Dialect::Mysql,
+        Dialect::Sqlite,
+        Dialect::Clickhouse,
+        Dialect::Hive,
+        Dialect::Trino,
+        Dialect::Duckdb,
+        Dialect::SparkSql,
+        Dialect::Tsql,
+        Dialect::Oracle,
+        Dialect::Bigquery,
+        Dialect::Redshift,
+        Dialect::Multi,
+    ];
+
+    /// Dialects a parser models, in `ALL_DIALECTS` order.
+    fn supported(p: BenchParser) -> Vec<Dialect> {
+        ALL_DIALECTS
+            .into_iter()
+            .filter(|&d| p.supports(d))
+            .collect()
+    }
+
+    #[test]
+    fn accepts_returns_some_exactly_for_supported_dialects() {
+        for p in BenchParser::all() {
+            for d in ALL_DIALECTS {
+                assert_eq!(
+                    p.accepts("SELECT 1", d).is_some(),
+                    p.supports(d),
+                    "{}: accepts/supports disagree on {d:?}",
+                    p.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn multi_dialect_parsers_support_everything() {
+        for p in [
+            BenchParser::Sqlparser,
+            BenchParser::Polyglot,
+            BenchParser::Sqlglot,
+        ] {
+            assert_eq!(
+                supported(p).len(),
+                ALL_DIALECTS.len(),
+                "{} should model every dialect",
+                p.name()
+            );
+        }
+    }
+
+    #[test]
+    fn dialect_specific_parsers_model_expected_sets() {
+        assert_eq!(
+            supported(BenchParser::Qusql),
+            vec![Dialect::Postgresql, Dialect::Mysql, Dialect::Sqlite]
+        );
+        assert_eq!(
+            supported(BenchParser::Databend),
+            vec![Dialect::Postgresql, Dialect::Mysql, Dialect::Hive]
+        );
+        assert_eq!(supported(BenchParser::Sqlite3), vec![Dialect::Sqlite]);
+        assert_eq!(supported(BenchParser::Senax), vec![Dialect::Mysql]);
+        assert_eq!(supported(BenchParser::Orql), vec![Dialect::Oracle]);
+    }
+
+    #[cfg(feature = "pg_query_parser")]
+    #[test]
+    fn pg_query_models_postgresql_only() {
+        assert_eq!(supported(BenchParser::PgQuery), vec![Dialect::Postgresql]);
+        assert_eq!(
+            supported(BenchParser::PgQuerySummary),
+            vec![Dialect::Postgresql]
+        );
+    }
+
+    #[test]
+    fn parser_names_are_unique() {
+        let mut names: Vec<&str> = BenchParser::all().iter().map(|p| p.name()).collect();
+        let len = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), len, "duplicate parser name");
+    }
+
+    #[test]
+    fn sqlparser_accepts_valid_and_rejects_garbage() {
+        assert_eq!(
+            BenchParser::Sqlparser.accepts("SELECT 1", Dialect::Postgresql),
+            Some(true)
+        );
+        assert_eq!(
+            BenchParser::Sqlparser.accepts("SELECT 1 FROM", Dialect::Postgresql),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn parse_once_agrees_with_accepts_on_accepted_statements() {
+        let sql = "SELECT 1";
+        for p in BenchParser::all() {
+            if p.accepts(sql, Dialect::Postgresql) == Some(true) {
+                assert!(
+                    p.parse_once(sql, Dialect::Postgresql),
+                    "{}: parse_once should succeed on an accepted statement",
+                    p.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn oracle_only_for_postgresql_and_sqlite() {
+        assert!(has_oracle(Dialect::Sqlite));
+        assert!(!has_oracle(Dialect::Mysql));
+        assert!(!has_oracle(Dialect::Clickhouse));
+        assert_eq!(oracle_accepts("SELECT 1", Dialect::Mysql), None);
+        assert_eq!(oracle_accepts("SELECT 1", Dialect::Sqlite), Some(true));
+
+        #[cfg(feature = "pg_query_parser")]
+        {
+            assert!(has_oracle(Dialect::Postgresql));
+            assert_eq!(oracle_accepts("SELECT 1", Dialect::Postgresql), Some(true));
+            assert_eq!(
+                oracle_accepts("SELECT 1 FROM", Dialect::Postgresql),
+                Some(false)
+            );
+        }
+    }
+
+    #[test]
+    fn roundtrip_and_fidelity_gating() {
+        // No pretty-printer => round-trip is N/A.
+        assert_eq!(
+            BenchParser::Orql.roundtrips("SELECT 1 FROM dual", Dialect::Oracle),
+            None
+        );
+        assert_eq!(
+            BenchParser::Qusql.roundtrips("SELECT 1", Dialect::Postgresql),
+            None
+        );
+        // Fidelity needs an oracle: None on a non-oracle dialect even for a
+        // parser that can reprint.
+        assert_eq!(
+            BenchParser::Sqlparser.fidelity("SELECT 1", Dialect::Mysql),
+            None
+        );
+        // Reprintable parser on an oracle dialect => a verdict (Some).
+        assert!(BenchParser::Sqlparser
+            .roundtrips("SELECT 1", Dialect::Postgresql)
+            .is_some());
+        assert!(BenchParser::Sqlparser
+            .fidelity("SELECT 1", Dialect::Sqlite)
+            .is_some());
+    }
+}

@@ -7,20 +7,20 @@
 )]
 
 //! Renders the benchmark charts from the raw per-statement timings written by
-//! `cargo bench` to `target/bench_dist/`.
+//! the benchmark to `target/bench_dist/`.
 //!
-//! Produces two views, both one subplot per dialect with consistent parser
-//! colors and a legend cell. `benchmark_results.svg` is an empirical CDF (eCDF)
-//! per parser (x = per-statement ns log, y = fraction of accepted statements
-//! parsed within t). `benchmark_results_boxplot.svg` is a box per parser
-//! (p25/median/p75, whiskers p10/p90), log-y per-statement time. In both, a
-//! triangle / black tick marks the concatenated-body time normalized by
-//! statement count (`concat/n`).
+//! [`render`] produces two views, both one subplot per dialect with consistent
+//! parser colors and a legend cell. `benchmark_results.svg` is an empirical CDF
+//! (eCDF) per parser (x = per-statement ns log, y = fraction of accepted
+//! statements parsed within t). `benchmark_results_boxplot.svg` is a box per
+//! parser (p25/median/p75, whiskers p10/p90), log-y. In both, a triangle /
+//! black tick marks the concatenated-body time normalized by statement count.
 
+use crate::datasets::Dialect;
+use crate::stats::{ecdf_points, quantile, slug};
 use plotters::prelude::*;
 use plotters::style::text_anchor::{HPos, Pos, VPos};
 use plotters::style::RGBColor;
-use sql_ast_benchmark::datasets::Dialect;
 use std::fs;
 use std::path::Path;
 
@@ -59,29 +59,11 @@ fn parser_color(name: &str) -> RGBColor {
     }
 }
 
-/// Same slug as the benchmark uses for raw-file names.
-fn slug(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect()
-}
-
 /// A parser's per-statement timing data within one dialect.
 struct Series {
     parser: String,
     times: Vec<f64>, // sorted ascending, ns
     concat: f64,     // concatenated-normalized, ns
-}
-
-impl Series {
-    fn quantile(&self, q: f64) -> f64 {
-        let n = self.times.len();
-        if n == 0 {
-            return 0.0;
-        }
-        let idx = ((q * (n - 1) as f64).round() as usize).min(n - 1);
-        self.times[idx]
-    }
 }
 
 type Group = (Dialect, Vec<Series>);
@@ -112,9 +94,14 @@ fn load_summary(path: &Path) -> Vec<(String, String, f64)> {
 
 fn load_times(dialect: &str, parser: &str) -> Vec<f64> {
     let path = format!("{DIST_DIR}/{dialect}__{}.txt", slug(parser));
-    let Ok(content) = fs::read_to_string(path) else {
-        return Vec::new();
-    };
+    fs::read_to_string(path)
+        .map(|c| parse_times(&c))
+        .unwrap_or_default()
+}
+
+/// Parse one-value-per-line ns timings: drop blanks/unparsable/non-positive,
+/// return ascending-sorted.
+fn parse_times(content: &str) -> Vec<f64> {
     let mut v: Vec<f64> = content
         .lines()
         .filter_map(|l| l.trim().parse::<f64>().ok())
@@ -122,28 +109,6 @@ fn load_times(dialect: &str, parser: &str) -> Vec<f64> {
         .collect();
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     v
-}
-
-/// Up to `max_pts` (x = time, y = cumulative fraction) points tracing the eCDF.
-fn ecdf_points(sorted: &[f64], max_pts: usize) -> Vec<(f64, f64)> {
-    let n = sorted.len();
-    if n == 0 {
-        return Vec::new();
-    }
-    if n <= max_pts {
-        return sorted
-            .iter()
-            .enumerate()
-            .map(|(i, &t)| (t, (i + 1) as f64 / n as f64))
-            .collect();
-    }
-    (0..=max_pts)
-        .map(|k| {
-            let frac = k as f64 / max_pts as f64;
-            let idx = ((frac * (n - 1) as f64).round() as usize).min(n - 1);
-            (sorted[idx], frac)
-        })
-        .collect()
 }
 
 fn draw_legend(legend: &Svg, parsers: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -179,7 +144,7 @@ fn render_ecdf(groups: &[Group], parsers: &[String]) -> Result<(), Box<dyn std::
     for (_, series) in groups {
         for s in series {
             xmin = xmin.min(s.times[0]).min(s.concat.max(1.0));
-            xmax = xmax.max(s.quantile(0.99)).max(s.concat);
+            xmax = xmax.max(quantile(&s.times, 0.99)).max(s.concat);
         }
     }
     let xmin = (xmin * 0.8).max(1.0);
@@ -230,8 +195,8 @@ fn render_box(groups: &[Group], parsers: &[String]) -> Result<(), Box<dyn std::e
     let mut ymax = 0.0_f64;
     for (_, series) in groups {
         for s in series {
-            ymin = ymin.min(s.quantile(0.10)).min(s.concat.max(1.0));
-            ymax = ymax.max(s.quantile(0.90)).max(s.concat);
+            ymin = ymin.min(quantile(&s.times, 0.10)).min(s.concat.max(1.0));
+            ymax = ymax.max(quantile(&s.times, 0.90)).max(s.concat);
         }
     }
     let ymin = (ymin * 0.7).max(1.0);
@@ -261,11 +226,11 @@ fn render_box(groups: &[Group], parsers: &[String]) -> Result<(), Box<dyn std::e
             let (l, r) = (x - 0.32, x + 0.32);
             let color = parser_color(&s.parser);
             let (p10, p25, med, p75, p90) = (
-                s.quantile(0.10),
-                s.quantile(0.25),
-                s.quantile(0.50),
-                s.quantile(0.75),
-                s.quantile(0.90),
+                quantile(&s.times, 0.10),
+                quantile(&s.times, 0.25),
+                quantile(&s.times, 0.50),
+                quantile(&s.times, 0.75),
+                quantile(&s.times, 0.90),
             );
             chart.draw_series(std::iter::once(Rectangle::new(
                 [(l, p25), (r, p75)],
@@ -330,11 +295,15 @@ fn grid(
     Ok((root, areas, num_plots))
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// Render `benchmark_results.svg` (eCDF) and `benchmark_results_boxplot.svg`
+/// (box plots) from `target/bench_dist/summary.csv` + the raw timing files.
+///
+/// # Errors
+/// Returns an error if no benchmark data is present or SVG writing fails.
+pub fn render() -> Result<(), Box<dyn std::error::Error>> {
     let summary = load_summary(&Path::new(DIST_DIR).join("summary.csv"));
     if summary.is_empty() {
-        eprintln!("No data in {DIST_DIR}/summary.csv. Run `cargo bench` first.");
-        std::process::exit(1);
+        return Err(format!("no data in {DIST_DIR}/summary.csv; run `cargo bench` first").into());
     }
 
     let groups: Vec<Group> = DIALECT_ORDER
@@ -356,31 +325,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
 
     if groups.is_empty() {
-        eprintln!("No raw timing files found in {DIST_DIR}/.");
-        std::process::exit(1);
+        return Err(format!("no raw timing files found in {DIST_DIR}/").into());
     }
 
     let mut all_parsers: Vec<String> = summary.iter().map(|(_, p, _)| p.clone()).collect();
     all_parsers.sort();
     all_parsers.dedup();
 
-    println!("Per-statement median / p90 and concatenated-normalized (ns):");
-    for (d, series) in &groups {
-        println!("\n{}:", d.dir_name());
-        for s in series {
-            println!(
-                "  {:<24} n={:<6} median={:>8.0}  p90={:>9.0}  concat/n={:>8.0}",
-                s.parser,
-                s.times.len(),
-                s.quantile(0.5),
-                s.quantile(0.9),
-                s.concat
-            );
-        }
-    }
-
     render_ecdf(&groups, &all_parsers)?;
     render_box(&groups, &all_parsers)?;
-    println!("\nSaved {ECDF_FILE} and {BOX_FILE}");
+    println!("Saved {ECDF_FILE} and {BOX_FILE}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{load_summary, parse_times};
+    use std::fs;
+    use std::io::Write as _;
+
+    #[test]
+    fn parse_times_drops_junk_and_sorts() {
+        let v = parse_times("3.0\n1.5\n\n  \nbad\n-2.0\n0\n2.0\n");
+        assert_eq!(v, vec![1.5, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn load_summary_parses_rows_skips_zero_and_short_lines() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "sqlbench_summary_{}_{nanos}.csv",
+            std::process::id()
+        ));
+        let mut f = fs::File::create(&path).unwrap();
+        writeln!(f, "dialect,parser,n_total,n_accepted,min_ns,p10_ns,p25_ns,median_ns,p75_ns,p90_ns,p99_ns,max_ns,mean_ns,concat_ns_per_stmt").unwrap();
+        writeln!(f, "postgresql,sqlparser-rs,100,80,1,2,3,4,5,6,7,8,9,42.5").unwrap();
+        writeln!(f, "mysql,senax,10,0,0,0,0,0,0,0,0,0,0,0").unwrap(); // n_accepted=0 -> skipped
+        writeln!(f, "too,short,line").unwrap(); // < 14 columns -> skipped
+        drop(f);
+
+        let rows = load_summary(&path);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "postgresql");
+        assert_eq!(rows[0].1, "sqlparser-rs");
+        assert!((rows[0].2 - 42.5).abs() < f64::EPSILON);
+        let _ = fs::remove_file(&path);
+    }
 }

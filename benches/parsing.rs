@@ -22,6 +22,7 @@
 //! Requires `tar --zstd -xf datasets.tar.zst` to have populated `datasets/`.
 
 use sql_ast_benchmark::datasets::Dialect;
+use sql_ast_benchmark::stats::{quantile, slug};
 use sql_ast_benchmark::BenchParser;
 use std::fmt::Write as _;
 use std::fs;
@@ -85,20 +86,6 @@ fn time_once(mut f: impl FnMut() -> bool) -> f64 {
         best = best.min(start.elapsed().as_nanos() as f64);
     }
     best
-}
-
-fn percentile(sorted: &[f64], p: f64) -> f64 {
-    if sorted.is_empty() {
-        return 0.0;
-    }
-    let idx = ((p / 100.0) * (sorted.len() - 1) as f64).round() as usize;
-    sorted[idx.min(sorted.len() - 1)]
-}
-
-fn slug(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect()
 }
 
 fn load_dialect(dialect: Dialect) -> Vec<String> {
@@ -203,12 +190,12 @@ fn run_pair(parser: BenchParser, dialect: Dialect, stmts: &[String]) -> Row {
     row.min = sorted[0];
     row.max = sorted[sorted.len() - 1];
     row.mean = times.iter().sum::<f64>() / times.len() as f64;
-    row.p10 = percentile(&sorted, 10.0);
-    row.p25 = percentile(&sorted, 25.0);
-    row.median = percentile(&sorted, 50.0);
-    row.p75 = percentile(&sorted, 75.0);
-    row.p90 = percentile(&sorted, 90.0);
-    row.p99 = percentile(&sorted, 99.0);
+    row.p10 = quantile(&sorted, 0.10);
+    row.p25 = quantile(&sorted, 0.25);
+    row.median = quantile(&sorted, 0.50);
+    row.p75 = quantile(&sorted, 0.75);
+    row.p90 = quantile(&sorted, 0.90);
+    row.p99 = quantile(&sorted, 0.99);
     row
 }
 
