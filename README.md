@@ -164,9 +164,15 @@ cargo run --release --bin evaluate_datasets
 
 ## Performance Results
 
-`cargo bench` times every accepted statement in every dialect (full corpus, no sampling) and writes raw per-statement times + percentiles to `target/bench_dist/`. The chart below (one subplot per dialect) shows, for each parser, an empirical CDF of per-statement parse time: x = ns per statement (log), y = fraction of that parser's accepted statements parsed within that time, so a curve further to the left is faster. A triangle on the x-axis marks the concatenated-body time normalized by statement count.
+`cargo bench` times every accepted statement in every dialect (full corpus, no sampling) and writes raw per-statement times + percentiles to `target/bench_dist/`. `cargo run --release --bin plot` renders two views of the same data.
 
-![Benchmark results](benchmark_results.svg)
+The eCDF view (one subplot per dialect) shows, for each parser, the empirical CDF of per-statement parse time: x = ns per statement (log), y = fraction of that parser's accepted statements parsed within that time, so a curve further to the left is faster. A triangle on the x-axis marks the concatenated-body time normalized by statement count.
+
+![Benchmark results (eCDF)](benchmark_results.svg)
+
+The box-plot view summarises the same per-statement distributions (box = p25/median/p75, whiskers = p10/p90, log-y) with a black tick at the concatenated-normalized time.
+
+![Benchmark results (box plots)](benchmark_results_boxplot.svg)
 
 PostgreSQL example (ns per statement, on the 27,844 statements pg_query accepts; `concat/n` = full accepted body parsed once, divided by n):
 

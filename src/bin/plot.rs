@@ -6,14 +6,16 @@
     clippy::too_many_lines
 )]
 
-//! Renders `benchmark_results.svg` from the raw per-statement timings written
-//! by `cargo bench` to `target/bench_dist/`.
+//! Renders the benchmark charts from the raw per-statement timings written by
+//! `cargo bench` to `target/bench_dist/`.
 //!
-//! One subplot per dialect. For each parser, an empirical CDF (eCDF) line:
-//! x = per-statement parse time (ns, log scale), y = fraction of that parser's
-//! accepted statements parsed within that time. A triangle on the x-axis marks
-//! the concatenated-body time normalized by statement count (`concat/n`).
-//! Parsers are colored consistently; a legend cell maps colors to names.
+//! Produces two views, both one subplot per dialect with consistent parser
+//! colors and a legend cell. `benchmark_results.svg` is an empirical CDF (eCDF)
+//! per parser (x = per-statement ns log, y = fraction of accepted statements
+//! parsed within t). `benchmark_results_boxplot.svg` is a box per parser
+//! (p25/median/p75, whiskers p10/p90), log-y per-statement time. In both, a
+//! triangle / black tick marks the concatenated-body time normalized by
+//! statement count (`concat/n`).
 
 use plotters::prelude::*;
 use plotters::style::text_anchor::{HPos, Pos, VPos};
@@ -23,7 +25,8 @@ use std::fs;
 use std::path::Path;
 
 const DIST_DIR: &str = "target/bench_dist";
-const OUTPUT_FILE: &str = "benchmark_results.svg";
+const ECDF_FILE: &str = "benchmark_results.svg";
+const BOX_FILE: &str = "benchmark_results_boxplot.svg";
 
 const DIALECT_ORDER: [Dialect; 13] = [
     Dialect::Postgresql,
@@ -69,6 +72,20 @@ struct Series {
     times: Vec<f64>, // sorted ascending, ns
     concat: f64,     // concatenated-normalized, ns
 }
+
+impl Series {
+    fn quantile(&self, q: f64) -> f64 {
+        let n = self.times.len();
+        if n == 0 {
+            return 0.0;
+        }
+        let idx = ((q * (n - 1) as f64).round() as usize).min(n - 1);
+        self.times[idx]
+    }
+}
+
+type Group = (Dialect, Vec<Series>);
+type Svg = DrawingArea<SVGBackend<'static>, plotters::coord::Shift>;
 
 /// (dialect, parser, concat/n) rows from summary.csv.
 fn load_summary(path: &Path) -> Vec<(String, String, f64)> {
@@ -129,6 +146,190 @@ fn ecdf_points(sorted: &[f64], max_pts: usize) -> Vec<(f64, f64)> {
         .collect()
 }
 
+fn draw_legend(legend: &Svg, parsers: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let line_h = 22;
+    let start_y = 20;
+    for (i, name) in parsers.iter().enumerate() {
+        let y = start_y + i as i32 * line_h;
+        legend.draw(&PathElement::new(
+            vec![(12, y + 6), (40, y + 6)],
+            parser_color(name).stroke_width(3),
+        ))?;
+        legend.draw(&Text::new(
+            name.clone(),
+            (46, y),
+            ("sans-serif", 12).into_font(),
+        ))?;
+    }
+    let y = start_y + parsers.len() as i32 * line_h + 8;
+    legend.draw(&TriangleMarker::new((26, y + 6), 6, BLACK.filled()))?;
+    legend.draw(&Text::new(
+        "concatenated / n",
+        (46, y),
+        ("sans-serif", 12).into_font(),
+    ))?;
+    Ok(())
+}
+
+fn render_ecdf(groups: &[Group], parsers: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    // X range (ns, log): global min to a per-series p99, so rare multi-ms
+    // outliers do not stretch the axis.
+    let mut xmin = f64::MAX;
+    let mut xmax = 0.0_f64;
+    for (_, series) in groups {
+        for s in series {
+            xmin = xmin.min(s.times[0]).min(s.concat.max(1.0));
+            xmax = xmax.max(s.quantile(0.99)).max(s.concat);
+        }
+    }
+    let xmin = (xmin * 0.8).max(1.0);
+    let xmax = xmax * 1.3;
+
+    let (root, areas, n) = grid(ECDF_FILE, groups.len(),
+        "Per-statement parse-time eCDF by dialect (x = ns/statement, log; y = fraction of accepted statements; triangle = concatenated/n)")?;
+
+    for (idx, (dialect, series)) in groups.iter().enumerate() {
+        let mut chart = ChartBuilder::on(&areas[idx])
+            .caption(dialect.dir_name(), ("sans-serif", 15))
+            .margin(8)
+            .x_label_area_size(30)
+            .y_label_area_size(40)
+            .build_cartesian_2d((xmin..xmax).log_scale(), 0f64..1.02f64)?;
+        chart
+            .configure_mesh()
+            .x_desc("ns / statement")
+            .y_desc("frac <= t")
+            .x_label_style(("sans-serif", 10))
+            .y_label_style(("sans-serif", 10))
+            .draw()?;
+        for s in series {
+            let color = parser_color(&s.parser);
+            chart.draw_series(LineSeries::new(
+                ecdf_points(&s.times, 300),
+                color.stroke_width(2),
+            ))?;
+            if s.concat > 0.0 {
+                chart.draw_series(std::iter::once(TriangleMarker::new(
+                    (s.concat, 0.0),
+                    6,
+                    color.filled(),
+                )))?;
+            }
+        }
+    }
+    if n < areas.len() {
+        draw_legend(&areas[n], parsers)?;
+    }
+    root.present()?;
+    Ok(())
+}
+
+fn render_box(groups: &[Group], parsers: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    // Y range (ns, log) from p10..max(p90, concat).
+    let mut ymin = f64::MAX;
+    let mut ymax = 0.0_f64;
+    for (_, series) in groups {
+        for s in series {
+            ymin = ymin.min(s.quantile(0.10)).min(s.concat.max(1.0));
+            ymax = ymax.max(s.quantile(0.90)).max(s.concat);
+        }
+    }
+    let ymin = (ymin * 0.7).max(1.0);
+    let ymax = ymax * 1.5;
+
+    let (root, areas, n) = grid(BOX_FILE, groups.len(),
+        "Per-statement parse time by dialect (box = p25/median/p75, whiskers p10/p90; black tick = concatenated/n)")?;
+
+    for (idx, (dialect, series)) in groups.iter().enumerate() {
+        let cnt = series.len();
+        let mut chart = ChartBuilder::on(&areas[idx])
+            .caption(dialect.dir_name(), ("sans-serif", 15))
+            .margin(8)
+            .x_label_area_size(18)
+            .y_label_area_size(52)
+            .build_cartesian_2d(0f64..(cnt as f64), (ymin..ymax).log_scale())?;
+        chart
+            .configure_mesh()
+            .disable_x_mesh()
+            .x_labels(0)
+            .y_desc("ns / statement")
+            .y_label_style(("sans-serif", 10))
+            .draw()?;
+
+        for (i, s) in series.iter().enumerate() {
+            let x = i as f64 + 0.5;
+            let (l, r) = (x - 0.32, x + 0.32);
+            let color = parser_color(&s.parser);
+            let (p10, p25, med, p75, p90) = (
+                s.quantile(0.10),
+                s.quantile(0.25),
+                s.quantile(0.50),
+                s.quantile(0.75),
+                s.quantile(0.90),
+            );
+            chart.draw_series(std::iter::once(Rectangle::new(
+                [(l, p25), (r, p75)],
+                color.mix(0.45).filled(),
+            )))?;
+            chart.draw_series(std::iter::once(Rectangle::new(
+                [(l, p25), (r, p75)],
+                color.stroke_width(1),
+            )))?;
+            chart.draw_series(std::iter::once(PathElement::new(
+                vec![(l, med), (r, med)],
+                color.stroke_width(2),
+            )))?;
+            for (a, b) in [(p10, p25), (p75, p90)] {
+                chart.draw_series(std::iter::once(PathElement::new(
+                    vec![(x, a), (x, b)],
+                    color.stroke_width(1),
+                )))?;
+            }
+            for y in [p10, p90] {
+                chart.draw_series(std::iter::once(PathElement::new(
+                    vec![(x - 0.15, y), (x + 0.15, y)],
+                    color.stroke_width(1),
+                )))?;
+            }
+            if s.concat > 0.0 {
+                chart.draw_series(std::iter::once(PathElement::new(
+                    vec![(l, s.concat), (r, s.concat)],
+                    BLACK.stroke_width(2),
+                )))?;
+            }
+        }
+    }
+    if n < areas.len() {
+        draw_legend(&areas[n], parsers)?;
+    }
+    root.present()?;
+    Ok(())
+}
+
+/// Build the SVG grid (one cell per dialect plus a legend cell) and title.
+fn grid(
+    file: &'static str,
+    num_plots: usize,
+    title: &str,
+) -> Result<(Svg, Vec<Svg>, usize), Box<dyn std::error::Error>> {
+    let cols = 4usize;
+    let rows_n = (num_plots + 1).div_ceil(cols);
+    let width = cols as u32 * 440;
+    let height = rows_n as u32 * 330 + 70;
+    let root = SVGBackend::new(file, (width, height)).into_drawing_area();
+    root.fill(&WHITE)?;
+    root.draw(&Text::new(
+        title.to_string(),
+        (width as i32 / 2, 26),
+        ("sans-serif", 17)
+            .into_font()
+            .color(&BLACK)
+            .pos(Pos::new(HPos::Center, VPos::Center)),
+    ))?;
+    let areas = root.margin(45, 10, 10, 10).split_evenly((rows_n, cols));
+    Ok((root, areas, num_plots))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let summary = load_summary(&Path::new(DIST_DIR).join("summary.csv"));
     if summary.is_empty() {
@@ -136,8 +337,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    // Group series by dialect in canonical order.
-    let groups: Vec<(Dialect, Vec<Series>)> = DIALECT_ORDER
+    let groups: Vec<Group> = DIALECT_ORDER
         .iter()
         .filter_map(|d| {
             let mut series: Vec<Series> = summary
@@ -164,122 +364,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     all_parsers.sort();
     all_parsers.dedup();
 
-    // X range (ns, log): global min to a high percentile, so rare multi-ms
-    // outliers do not stretch the axis. Use the 99th percentile per series.
-    let mut xmin = f64::MAX;
-    let mut xmax = 0.0_f64;
-    for (_, series) in &groups {
-        for s in series {
-            xmin = xmin.min(s.times[0]).min(s.concat.max(1.0));
-            let p99 =
-                s.times[((0.99 * (s.times.len() - 1) as f64) as usize).min(s.times.len() - 1)];
-            xmax = xmax.max(p99).max(s.concat);
-        }
-    }
-    let xmin = (xmin * 0.8).max(1.0);
-    let xmax = xmax * 1.3;
-
-    // Text summary.
     println!("Per-statement median / p90 and concatenated-normalized (ns):");
     for (d, series) in &groups {
         println!("\n{}:", d.dir_name());
         for s in series {
-            let q = |f: f64| {
-                s.times[((f * (s.times.len() - 1) as f64) as usize).min(s.times.len() - 1)]
-            };
             println!(
                 "  {:<24} n={:<6} median={:>8.0}  p90={:>9.0}  concat/n={:>8.0}",
                 s.parser,
                 s.times.len(),
-                q(0.5),
-                q(0.9),
+                s.quantile(0.5),
+                s.quantile(0.9),
                 s.concat
             );
         }
     }
 
-    let num_plots = groups.len();
-    let cols = 4usize;
-    let rows_n = (num_plots + 1).div_ceil(cols);
-    let sub_w = 440u32;
-    let sub_h = 330u32;
-    let width = cols as u32 * sub_w;
-    let height = rows_n as u32 * sub_h + 70;
-
-    let root = SVGBackend::new(OUTPUT_FILE, (width, height)).into_drawing_area();
-    root.fill(&WHITE)?;
-    root.draw(&Text::new(
-        "Per-statement parse-time eCDF by dialect (x = ns/statement, log; y = fraction of accepted statements; triangle = concatenated/n)",
-        (width as i32 / 2, 26),
-        ("sans-serif", 17)
-            .into_font()
-            .color(&BLACK)
-            .pos(Pos::new(HPos::Center, VPos::Center)),
-    ))?;
-
-    let plotting = root.margin(45, 10, 10, 10);
-    let areas = plotting.split_evenly((rows_n, cols));
-
-    for (idx, (dialect, series)) in groups.iter().enumerate() {
-        let area = &areas[idx];
-        let mut chart = ChartBuilder::on(area)
-            .caption(dialect.dir_name(), ("sans-serif", 15))
-            .margin(8)
-            .x_label_area_size(30)
-            .y_label_area_size(40)
-            .build_cartesian_2d((xmin..xmax).log_scale(), 0f64..1.02f64)?;
-        chart
-            .configure_mesh()
-            .x_desc("ns / statement")
-            .y_desc("frac <= t")
-            .x_label_style(("sans-serif", 10))
-            .y_label_style(("sans-serif", 10))
-            .draw()?;
-
-        for s in series {
-            let color = parser_color(&s.parser);
-            chart.draw_series(LineSeries::new(
-                ecdf_points(&s.times, 300),
-                color.stroke_width(2),
-            ))?;
-            // concat/n marker on the baseline.
-            if s.concat > 0.0 {
-                chart.draw_series(std::iter::once(TriangleMarker::new(
-                    (s.concat, 0.0),
-                    6,
-                    color.filled(),
-                )))?;
-            }
-        }
-    }
-
-    // Legend cell.
-    if num_plots < areas.len() {
-        let legend = &areas[num_plots];
-        let line_h = 22;
-        let start_y = 20;
-        for (i, name) in all_parsers.iter().enumerate() {
-            let y = start_y + i as i32 * line_h;
-            legend.draw(&PathElement::new(
-                vec![(12, y + 6), (40, y + 6)],
-                parser_color(name).stroke_width(3),
-            ))?;
-            legend.draw(&Text::new(
-                name.clone(),
-                (46, y),
-                ("sans-serif", 12).into_font(),
-            ))?;
-        }
-        let y = start_y + all_parsers.len() as i32 * line_h + 8;
-        legend.draw(&TriangleMarker::new((26, y + 6), 6, BLACK.filled()))?;
-        legend.draw(&Text::new(
-            "concatenated / n",
-            (46, y),
-            ("sans-serif", 12).into_font(),
-        ))?;
-    }
-
-    root.present()?;
-    println!("\nSVG plot saved to {OUTPUT_FILE}");
+    render_ecdf(&groups, &all_parsers)?;
+    render_box(&groups, &all_parsers)?;
+    println!("\nSaved {ECDF_FILE} and {BOX_FILE}");
     Ok(())
 }
