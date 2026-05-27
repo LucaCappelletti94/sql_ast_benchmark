@@ -6,13 +6,7 @@
 
 Benchmarking Rust SQL parsers on a real-world, multi-dialect corpus of 311,594 statements across 13 SQL dialects (PostgreSQL, MySQL, SQLite, ClickHouse, DuckDB, Hive, Spark SQL, Trino, T-SQL, Oracle, BigQuery, Redshift, plus a mixed-dialect set). Each parser is run in its best-matching dialect, and "correct" is graded against a real reference parser where one exists.
 
-## What changed in the May 2026 refresh
-
-- All benchmarked crates were updated to their latest versions (sqlparser 0.62, polyglot-sql 0.4.1, qusql-parse 0.8, databend-common-ast 0.2.5, pg_parse 0.14, pg_query and orql to latest commits).
-- Three parsers were added: **sqlglot-rust** (standalone 30-dialect parser), **sqlite3-parser / lemon-rs** (SQLite's real Lemon grammar), and **senax-mysql-parser** (MySQL CREATE TABLE only).
-- The benchmark went from PostgreSQL-only to **multi-dialect**: every parser is now run in the dialect that matches the corpus it is being tested against.
-- The corpus was expanded from a few thousand PostgreSQL statements to 311,594 statements over 13 dialects, now shipped pre-built and compressed as `datasets.tar.zst`.
-- A data-quality pass removed mislabeled/non-SQL content: BiomedSQL (natural-language answers, not SQL) was dropped, the Stack Exchange Data Explorer queries were relabeled from SQLite to their real T-SQL dialect, a metadata-contaminated Trino testcase file was dropped, Oracle SQL\*Plus directive lines were stripped, and the SQL Server sample scripts were dropped because their `GO`-batch separators (not `;`) defeated statement segmentation.
+See [CHANGELOG.md](CHANGELOG.md) for the project history.
 
 ## Parsers Under Test
 
@@ -144,7 +138,6 @@ Acceptance rate = fraction of each dialect's own corpus accepted, with the parse
 | redshift (2,992) | 92.1% (100%) | 91.5% (99%) | 79.4% (100%) | -- |
 | bigquery (224) | 99.1% (100%) | 99.1% (73%) | 75.0% (92%) | -- |
 | trino (71) | 98.6% (100%) | 98.6% (100%) | 56.3% (100%) | -- |
-| multi (10,935) | 45.6% (100%) | 67.0% (98%) | 16.3% (99%) | -- |
 
 ### Key correctness findings
 
