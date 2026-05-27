@@ -25,22 +25,22 @@ See [CHANGELOG.md](CHANGELOG.md) for the project history.
 
 ### Parser notes
 
-- **sqlparser-rs**: the most widely adopted Rust SQL parser (part of Apache DataFusion). Has dedicated dialects for PostgreSQL, MySQL, SQLite, ClickHouse, Hive, MsSql, MySql, Oracle, Redshift, BigQuery, DuckDB, Databricks, Snowflake, ANSI and Generic. Trino maps to Generic and Spark SQL maps to Databricks in this benchmark.
-- **sqlglot-rust**: a from-scratch Rust port of Python's sqlglot with a full AST, a SQL generator (so it round-trips), and an optimizer. In this version the parser itself is dialect-agnostic (the dialect argument only affects generation), so its acceptance rate does not change between dialects.
-- **polyglot-sql**: a SQL parsing, formatting and transpilation library covering 32 dialects. It is very permissive: on oracle-backed dialects it has a high false-positive rate (it accepts large amounts of SQL the reference parser rejects), so high acceptance numbers should be read alongside its false-positive rate.
-- **pg_query.rs**: Rust bindings to libpg_query, which embeds PostgreSQL's actual parser. It is the **ground-truth oracle for the PostgreSQL corpus**, not just another parser under test.
-- **pg_query.rs (summary)**: `pg_query::summary()` extracts metadata without deserializing the full AST. Same accept/reject decisions as full parse, much faster.
-- **qusql-parse**: a zero-copy hand-coded parser focused on MySQL/MariaDB and PostgreSQL, with SQLite support added in 0.8. Can `todo!()`-panic on some unimplemented paths, which the benchmark treats as a parse failure.
-- **databend-common-ast**: a custom parser built by the Databend team for speed. PostgreSQL, MySQL and Hive modes are exercised here.
-- **sqlite3-parser (lemon-rs)**: generated from SQLite's own Lemon grammar, so it is the closest thing to real-SQLite parity in Rust. It is the **ground-truth oracle for the SQLite corpus**.
+- **sqlparser-rs**: the most widely adopted Rust SQL parser (part of Apache DataFusion), with dedicated dialects for most engines. Here Trino maps to its Generic dialect and Spark SQL to Databricks.
+- **sqlglot-rust**: a from-scratch Rust port of Python's sqlglot with a full AST, SQL generator and optimizer. Its parser is dialect-agnostic in this version (the dialect only affects generation), so acceptance does not vary by dialect.
+- **polyglot-sql**: a parsing/formatting/transpilation library covering 32 dialects. Very permissive, so its high acceptance comes with a high false-positive rate on oracle-backed dialects. Read the two together.
+- **pg_query.rs**: Rust bindings to libpg_query, which embeds PostgreSQL's actual parser. The **ground-truth oracle for the PostgreSQL corpus**.
+- **pg_query.rs (summary)**: `pg_query::summary()` extracts metadata without deserializing the full AST. Same accept/reject decisions as a full parse, much faster.
+- **qusql-parse**: a zero-copy hand-coded parser for MySQL/MariaDB, PostgreSQL and (since 0.8) SQLite. Can `todo!()`-panic on unimplemented paths, treated as a parse failure.
+- **databend-common-ast**: a custom parser built by the Databend team for speed, exercised here in PostgreSQL, MySQL and Hive modes.
+- **sqlite3-parser (lemon-rs)**: generated from SQLite's own Lemon grammar. The **ground-truth oracle for the SQLite corpus**.
 - **orql**: an early-stage Oracle-dialect parser, SELECT only, included at its [author's request](https://github.com/LucaCappelletti94/sql_ast_benchmark/issues/1). No pretty-printer, so round-trip and fidelity are N/A.
-- **senax-mysql-parser**: the only maintained descendant of nom-sql, but it parses **CREATE TABLE statements only**. It therefore reads close to 0% on SELECT-heavy corpora and only registers on DDL. It is included as a DDL-only data point and labeled as such everywhere.
+- **senax-mysql-parser**: the only maintained descendant of nom-sql, but it parses **CREATE TABLE only**, so it reads near 0% on SELECT-heavy corpora. Included as a DDL-only data point, labeled as such throughout.
 
 ## Methodology
 
 ### Multi-dialect mapping
 
-The corpus is organised as `datasets/{dialect}/{name}.txt`, one statement per line. For each dialect, every parser that models that dialect is run with its matching dialect setting. Parsers that do not model a dialect are reported as N/A for it. For example the Oracle corpus is parsed by sqlparser-rs (Oracle dialect), polyglot-sql (Oracle), sqlglot-rust and orql, but not by pg_query, qusql-parse, databend, sqlite3-parser or senax.
+The corpus is organised as `datasets/{dialect}/{name}.txt`, one statement per line. Each dialect is parsed by every parser that models it, in its matching dialect setting, with the rest reported as N/A. The Oracle corpus, for example, is parsed by sqlparser-rs, polyglot-sql, sqlglot-rust and orql, but not by the PostgreSQL-, SQLite- or MySQL-only parsers.
 
 ### Defining "correct"
 
@@ -55,9 +55,9 @@ There is no universal oracle across dialects, so correctness is defined per dial
 
 ### Performance
 
-The performance benchmark (`cargo bench`) is keyed to each parser's accepted set. For every (parser, dialect) pair it builds the set of statements that parser accepts in that dialect and times each accepted statement individually to produce a per-statement parse-time distribution. Per-statement timing uses an adaptive iteration count (best of several rounds) and a no-`catch_unwind` parse path, so the measurement is free of panic-guard overhead. Every accepted statement is timed (no sampling); the full corpus is covered.
+The performance benchmark (`cargo bench`) times each statement a parser accepts, individually, to build a per-statement parse-time distribution per (parser, dialect). Timing uses an adaptive iteration count (best of several rounds) on a no-`catch_unwind` path, so panic-guard overhead is excluded. Every accepted statement is timed, no sampling.
 
-Raw per-statement times are written to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus the round-trip rate to `target/bench_dist/summary.csv`, so plots can be regenerated without re-running. `cargo run --release --bin sqlbench plot` renders `benchmark_results.svg`: one subplot per dialect with an empirical CDF (eCDF) line per parser (x = per-statement time in ns on a log scale, y = fraction of that parser's accepted statements parsed within that time).
+Raw times go to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus the round-trip rate to `summary.csv`, so plots regenerate without re-running. `cargo run --release --bin sqlbench plot` renders the eCDF and box-plot SVGs.
 
 ## Dataset Corpus
 
@@ -67,7 +67,7 @@ Raw per-statement times are written to `target/bench_dist/{dialect}__{parser}.tx
 tar --zstd -xf datasets.tar.zst   # produces datasets/{dialect}/{name}.txt
 ```
 
-The original fetch/extraction tooling that scraped these statements from upstream repositories and datasets has been removed; the compressed corpus is the source of truth (see git history for the downloader).
+The original fetch/extraction tooling has been removed (see git history). The compressed corpus is the source of truth.
 
 | Dialect | Files | Statements | Example sources |
 | --- | ---: | ---: | --- |
@@ -146,7 +146,7 @@ Acceptance rate = fraction of each dialect's own corpus accepted, with the parse
 - **polyglot-sql** is the most permissive parser. It posts very high acceptance and recall (99.9% SQLite, 99.9% ClickHouse) but also the highest PostgreSQL false-positive rate (27.5%): it accepts SQL the reference parser rejects.
 - **sqlglot-rust** is the most conservative on PostgreSQL (54.7% recall, only 1.3% false positives) with strong PostgreSQL fidelity (94.9%), but the lowest SQLite fidelity (73.4%) - its SQLite reprints often diverge from the original. Because its parser is dialect-agnostic in this version, its acceptance is uniform across dialects rather than tuned per dialect.
 - **databend-common-ast** has moderate recall and a low false-positive rate, reflecting its Databend/ClickHouse focus rather than broad PostgreSQL coverage.
-- **The hardest provenance dialects are the mixed `multi` fixtures (~46%, intentionally cross-dialect) and Oracle (~59%)** for the general-purpose parsers, reflecting cross-dialect and SQL\*Plus syntax; BigQuery, Trino and Redshift are well-supported (90%+ by sqlparser-rs and polyglot-sql), with MySQL and T-SQL in the low-to-mid 70s.
+- **The hardest provenance dialects** for the general-purpose parsers are the mixed `multi` fixtures (~46%, intentionally cross-dialect) and Oracle (~59%, SQL\*Plus syntax). BigQuery, Trino and Redshift sit above 90% (sqlparser-rs and polyglot-sql), with MySQL and T-SQL in the low-to-mid 70s.
 - **senax-mysql-parser** reads 7.0% on the MySQL corpus, consistent with it being a CREATE TABLE-only parser on a SELECT-heavy corpus.
 
 ## Coverage Results
@@ -159,11 +159,9 @@ cargo run --release --bin sqlbench correctness --per-file
 
 ## Performance Results
 
-`cargo bench` times every accepted statement in every dialect (full corpus, no sampling) and writes raw per-statement times + percentiles to `target/bench_dist/`. `cargo run --release --bin sqlbench plot` renders two views of the same data.
+Both views have one subplot per dialect (titled with its statement count) and a per-dialect legend. Each legend entry pairs the parser with two quality metrics, so speed reads against coverage and correctness at a glance: `fail%` (share of the corpus the parser rejected) and `RT%` (Display round-trip stability among accepted, `n/a` without a printer).
 
-Each subplot is titled with the dialect and its total statement count, and carries its own legend listing only the parsers run in that dialect. Every legend entry pairs the parser with two quality metrics so speed can be read against coverage and correctness at a glance: `fail%` (share of the dialect corpus the parser did not accept) and `RT%` (Display round-trip rate among the statements it accepted, i.e. how often pretty-printing is stable, shown as `n/a` for parsers without a pretty-printer).
-
-The eCDF view (one subplot per dialect) shows, for each parser, the empirical CDF of per-statement parse time: x = ns per statement (log), y = fraction of that parser's accepted statements parsed within that time, so a curve further to the left is faster.
+In the eCDF view, x = ns per statement (log) and y = fraction of the parser's accepted statements parsed within that time, so a curve further left is faster.
 
 ![Benchmark results (eCDF)](benchmark_results.svg)
 
@@ -171,7 +169,7 @@ The box-plot view summarises the same per-statement distributions (box = p25/med
 
 ![Benchmark results (box plots)](benchmark_results_boxplot.svg)
 
-PostgreSQL example (ns per statement; `n` is each parser's own accepted count, so the rows are not directly comparable on volume; `fail%` = share of the corpus the parser rejected; `RT%` = Display round-trip rate among accepted, N/A without a pretty-printer):
+PostgreSQL example (ns per statement). Each parser's `fail%`/`RT%` is over its own accepted set, so rows are not comparable on volume:
 
 | Parser | median | p90 | fail% | RT% |
 | --- | ---: | ---: | ---: | ---: |
@@ -185,10 +183,10 @@ PostgreSQL example (ns per statement; `n` is each parser's own accepted count, s
 
 Key observations:
 
-- **qusql-parse and sqlglot-rust are the fastest per statement**; the libpg_query FFI (`pg_query.rs`) is the slowest full parser per call, and `pg_query (summary)` is much faster than full parsing because it skips AST deserialization.
-- **polyglot-sql has a high, flat per-statement floor** (~9-15 us in every dialect, visible as boxes that never drop low) from fixed per-call overhead.
-- **Speed trades off against coverage.** The fastest parsers also reject the most: qusql-parse and sqlglot-rust are quickest but reject 27% and 48% of the PostgreSQL corpus, while sqlparser-rs and the pg_query family accept far more at a higher per-statement cost.
-- **Round-trip is stable where a printer exists.** Among parsers that pretty-print, Display round-trip rates are ~99-100% in most dialects (BigQuery polyglot-sql is a low outlier); parsers without a printer (qusql-parse, pg_query summary, orql, senax) are N/A.
+- **qusql-parse and sqlglot-rust are the fastest per statement.** The libpg_query FFI (`pg_query.rs`) is the slowest full parser per call, and `pg_query (summary)` is much faster because it skips AST deserialization.
+- **polyglot-sql has a high, flat per-statement floor** (~9-15 us in every dialect) from fixed per-call overhead.
+- **Speed trades off against coverage.** qusql-parse and sqlglot-rust are quickest but reject 27% and 48% of the PostgreSQL corpus, while sqlparser-rs and the pg_query family accept far more at a higher per-statement cost.
+- **Round-trip is stable where a printer exists** (~99-100% in most dialects, BigQuery polyglot-sql the low outlier). Parsers without a printer (qusql-parse, pg_query summary, orql, senax) are N/A.
 
 ## Running
 
@@ -228,7 +226,7 @@ Several recursive-descent parsers can overflow the stack on deeply nested SQL, a
 
 ## Reproducibility
 
-Git dependencies track the latest commit of each parser; the commit hashes in the Parsers Under Test table identify the exact versions benchmarked. To pin versions, replace the git dependencies in `Cargo.toml` with crates.io version numbers.
+Git dependencies track each parser's latest commit. The hashes in the Parsers Under Test table identify the exact versions benchmarked. To pin them, replace the git dependencies in `Cargo.toml` with crates.io versions.
 
 ## Development
 
@@ -247,7 +245,7 @@ tar --zstd -xf datasets.tar.zst   # the bench needs datasets/ present
 cargo tarpaulin                    # LLVM engine, includes the bench
 ```
 
-`tarpaulin.toml` configures the LLVM engine and runs the Criterion benchmark in verify-only mode (`--test`) as part of coverage, since the benchmark is the main exercise of the multi-dialect `BenchParser` layer. With the corpus present this covers `benches/parsing.rs` and the dialect-mapping / accept / reprint paths in `src/lib.rs`. The CLI tool binaries (`correctness`, `evaluate_datasets`, etc.) have no unit tests and read as uncovered.
+`tarpaulin.toml` uses the LLVM engine and runs the benchmark in verify-only mode (`--test`), since it is the main exercise of the multi-dialect `BenchParser` layer. With the corpus present this covers `benches/parsing.rs` and the dialect-mapping / accept / reprint paths in `src/lib.rs`.
 
 ## License
 
