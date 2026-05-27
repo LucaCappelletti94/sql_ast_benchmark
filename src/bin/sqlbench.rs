@@ -57,7 +57,7 @@ fn cell(v: f64) -> String {
 }
 const NA: &str = "   N/A";
 
-// ── correctness (per-dialect oracle + provenance) ──────────────────────────
+// correctness (per-dialect oracle + provenance).
 
 /// Grade one dialect, parallelising over statement chunks on large stacks.
 fn process_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Option<DialectReport> {
@@ -97,7 +97,7 @@ fn process_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Option<Dial
 }
 
 fn print_report(r: &DialectReport) {
-    println!("\n═══ {} ═══", r.dialect.dir_name());
+    println!("\n=== {} ===", r.dialect.dir_name());
     let nw = r
         .parsers
         .iter()
@@ -120,7 +120,7 @@ fn print_report(r: &DialectReport) {
             "{:<nw$}  {:>7}  {:>7}  {:>7}  {:>8}",
             "parser", "Recall", "FalseP", "RTrip", "Fidelity"
         );
-        println!("{}", "─".repeat(nw + 2 + 7 + 2 + 7 + 2 + 7 + 2 + 8));
+        println!("{}", "-".repeat(nw + 2 + 7 + 2 + 7 + 2 + 7 + 2 + 8));
         for (p, a) in r.parsers.iter().zip(r.stats.iter()) {
             let recall = cell(pct(a.accepted_valid, r.valid_total));
             let fp = if r.invalid_total > 0 {
@@ -146,7 +146,7 @@ fn print_report(r: &DialectReport) {
             r.valid_total
         );
         println!("{:<nw$}  {:>8}  {:>7}", "parser", "Accept", "RTrip");
-        println!("{}", "─".repeat(nw + 2 + 8 + 2 + 7));
+        println!("{}", "-".repeat(nw + 2 + 8 + 2 + 7));
         for (p, a) in r.parsers.iter().zip(r.stats.iter()) {
             let acc = cell(pct(a.accepted_valid, r.valid_total));
             let rt = if a.can_reprint {
@@ -160,15 +160,13 @@ fn print_report(r: &DialectReport) {
 }
 
 fn run_correctness() {
-    println!("╔══════════════════════════════════════════════════════════════════════╗");
-    println!("║  Multi-dialect SQL parser correctness                                ║");
-    println!("║  Oracle-graded (PostgreSQL=pg_query, SQLite=lemon-rs); acceptance-    ║");
-    println!("║  rate elsewhere. Each parser run in its best-matching dialect.       ║");
-    println!("╚══════════════════════════════════════════════════════════════════════╝");
+    println!("Multi-dialect SQL parser correctness");
+    println!("Oracle-graded (PostgreSQL=pg_query, SQLite=lemon-rs), acceptance-rate elsewhere.");
+    println!("Each parser run in its best-matching dialect.");
 
     let all = BenchParser::all();
     for dialect in ORDER {
-        eprintln!("processing {} …", dialect.dir_name());
+        eprintln!("processing {}...", dialect.dir_name());
         if let Some(r) = process_dialect(dialect, &all) {
             print_report(&r);
         }
@@ -176,7 +174,7 @@ fn run_correctness() {
     println!();
 }
 
-// ── coverage (per-file acceptance matrix) ──────────────────────────────────
+// coverage (per-file acceptance matrix).
 
 struct FileStat {
     name: String,
@@ -211,9 +209,7 @@ fn truncate(s: &str, w: usize) -> String {
 }
 
 fn run_coverage() {
-    println!("\n╔══════════════════════════════════════════════════════════════════════╗");
-    println!("║  Per-file acceptance rate per parser (parser run in matching dialect) ║");
-    println!("╚══════════════════════════════════════════════════════════════════════╝");
+    println!("\nPer-file acceptance rate per parser (parser run in matching dialect)");
 
     let all = BenchParser::all();
     let mut dirs: Vec<_> = fs::read_dir("datasets")
@@ -266,13 +262,13 @@ fn run_coverage() {
 
         let name_w = stats.iter().map(|s| s.name.len()).max().unwrap_or(8).max(8);
         let col_w = 10usize;
-        println!("\n═══ {} ═══", dialect.dir_name());
+        println!("\n=== {} ===", dialect.dir_name());
         print!("{:<name_w$}  {:>8}", "dataset", "total");
         for p in &parsers {
             print!("  {:>col_w$}", truncate(p.name(), col_w));
         }
         println!();
-        let line = "─".repeat(name_w + 10 + (col_w + 2) * parsers.len());
+        let line = "-".repeat(name_w + 10 + (col_w + 2) * parsers.len());
         println!("{line}");
 
         let mut dia_total = 0usize;

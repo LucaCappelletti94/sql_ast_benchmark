@@ -21,16 +21,14 @@ fn pg_query_canonical(sql: &str) -> Option<String> {
     pg_query::parse(sql).ok()?.deparse().ok()
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Multi-dialect benchmark layer
+// Multi-dialect benchmark layer.
 //
-//  Each parser is run in its best-matching dialect for a given corpus. Parsers
-//  that do not model a dialect return `None` (reported as N/A). "Correct" is
-//  graded against an oracle where one exists (pg_query for PostgreSQL, lemon-rs
-//  for SQLite) and otherwise by acceptance rate over a dialect's own corpus.
-// ════════════════════════════════════════════════════════════════════════════
+// Each parser is run in its best-matching dialect for a given corpus. Parsers
+// that do not model a dialect return `None` (reported as N/A). "Correct" is
+// graded against an oracle where one exists (pg_query for PostgreSQL, lemon-rs
+// for SQLite) and otherwise by acceptance rate over a dialect's own corpus.
 
-// ── Dialect mappings ────────────────────────────────────────────────────────
+// Dialect mappings.
 
 /// Best-matching sqlparser-rs dialect for a corpus dialect (always available).
 /// Trino has no dedicated dialect (uses Generic); Spark SQL maps to Databricks.
@@ -111,7 +109,7 @@ const fn databend_dialect_of(d: Dialect) -> Option<DatabendDialect> {
     }
 }
 
-// ── Per-parser primitives (acceptance + reprint) ────────────────────────────
+// Per-parser primitives (acceptance + reprint).
 
 fn qusql_accepts_dialect(sql: &str, d: SQLDialect) -> bool {
     // qusql-parse uses todo!()/panic in some unimplemented paths; treat those
@@ -235,7 +233,7 @@ fn databend_reprint(sql: &str, d: DatabendDialect) -> Option<String> {
     .unwrap_or(None)
 }
 
-// ── Oracles (ground truth) ──────────────────────────────────────────────────
+// Oracles (ground truth).
 
 /// Canonical form for an oracle-backed dialect, used for fidelity checks.
 /// `None` for dialects with no oracle (or when the relevant feature is off).
@@ -271,7 +269,7 @@ pub const fn has_oracle(d: Dialect) -> bool {
     }
 }
 
-// ── BenchParser ─────────────────────────────────────────────────────────────
+// BenchParser.
 
 /// A parser under test. The single source of truth for dialect support,
 /// acceptance, round-trip stability and oracle fidelity.
