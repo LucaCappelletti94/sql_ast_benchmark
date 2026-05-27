@@ -32,41 +32,21 @@ pg_parse_parser = ["pg_parse"]
 sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
 pg_query = { git = "https://github.com/pganalyze/pg_query.rs", optional = true }
 pg_parse = { git = "https://github.com/paupino/pg_parse", optional = true }
-qusql-parse = "0.3.0"
+qusql-parse = "0.8.0"
 polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
-databend-common-ast = "0.2.4"
+databend-common-ast = "0.2.5"
 orql = { git = "https://codeberg.org/xitep/orql" }
+sqlglot-rust = "0.9.28"
+sqlite3-parser = "0.16.0"
+senax-mysql-parser = "0.1.10"
+fallible-iterator = "0.3.0"
 plotters = "0.3"
-regex = "1"
-
-[dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports"] }
 
 [[bench]]
 name = "parsing"
 harness = false
 
 [[bin]]
-name = "plot"
-path = "src/bin/plot.rs"
-
-[[bin]]
-name = "check_compat"
-path = "src/bin/check_compat.rs"
-
-[[bin]]
-name = "scrape_tests"
-path = "src/bin/scrape_tests.rs"
-
-[[bin]]
-name = "correctness"
-path = "src/bin/correctness.rs"
-
-[[bin]]
-name = "divergence"
-path = "src/bin/divergence.rs"
-
-[[bin]]
-name = "check_deparse"
-path = "src/bin/check_deparse.rs"
+name = "sqlbench"
+path = "src/bin/sqlbench.rs"
 

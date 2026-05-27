@@ -1,182 +1,338 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode};
-use databend_common_ast::parser::{
-    parse_sql as databend_parse, tokenize_sql as databend_tokenize, Dialect as DatabendDialect,
-};
-use polyglot_sql::{parse as polyglot_parse, DialectType};
-use sql_ast_benchmark::{
-    concatenate_statements, load_delete_statements, load_dml_statements, load_insert_statements,
-    load_select_statements, load_update_statements,
-};
-use qusql_parse::{parse_statements, Issues, ParseOptions, SQLDialect};
-use sqlparser::dialect::PostgreSqlDialect;
-use sqlparser::parser::Parser;
+//! Multi-dialect parse-time benchmark over the FULL `datasets/` corpus.
+//!
+//! For every (parser, dialect) pair, this:
+//!   1. builds the parser's accepted set (statements it parses in that dialect),
+//!   2. times each accepted statement individually to produce a per-statement
+//!      time distribution, and
+//!   3. records the Display round-trip rate among accepted statements.
+//!
+//! Timing uses `parse_once` (no `catch_unwind`) for overhead-free, fair
+//! measurement; accepted statements are known not to panic.
+//!
+//! Outputs (under `target/bench_dist/`):
+//!   - `{dialect}__{parser}.txt` : raw per-statement times (ns, one per line),
+//!     so any plot can be regenerated without re-running.
+//!   - `summary.csv`             : per-pair percentiles + round-trip rate.
+//!
+//! Full benchmark (long, intended for a dedicated run):  cargo bench
+//! Quick smoke check (pre-commit hook, and `cargo test`): cargo bench -- --test
+//!
+//! The full run requires `tar --zstd -xf datasets.tar.zst` to have populated
+//! `datasets/`. The smoke path is a no-op without it, so `cargo test` does not
+//! need the corpus.
+
+use sql_ast_benchmark::datasets::Dialect;
+use sql_ast_benchmark::stats::{quantile, slug};
+use sql_ast_benchmark::BenchParser;
+use std::fmt::Write as _;
+use std::fs;
 use std::hint::black_box;
-use std::time::Duration;
+use std::io::Write as _;
+use std::path::Path;
+use std::time::Instant;
 
-fn bench_sqlparser(sql: &str) {
-    let dialect = PostgreSqlDialect {};
-    let _ = black_box(Parser::parse_sql(&dialect, sql));
-}
+/// Deep statements can exhaust the default stack inside recursive-descent
+/// parsers; a stack overflow aborts the process, so time on a large stack.
+const WORKER_STACK: usize = 1024 * 1024 * 1024;
 
-#[cfg(feature = "pg_query_parser")]
-fn bench_pg_query(sql: &str) {
-    let _ = black_box(pg_query::parse(sql));
-}
+const OUT_DIR: &str = "target/bench_dist";
 
-#[cfg(feature = "pg_query_parser")]
-fn bench_pg_query_summary(sql: &str) {
-    let _ = black_box(pg_query::summary(sql, -1));
-}
+const DIALECTS: &[Dialect] = &[
+    Dialect::Postgresql,
+    Dialect::Sqlite,
+    Dialect::Mysql,
+    Dialect::Clickhouse,
+    Dialect::Duckdb,
+    Dialect::Hive,
+    Dialect::SparkSql,
+    Dialect::Trino,
+    Dialect::Tsql,
+    Dialect::Oracle,
+    Dialect::Bigquery,
+    Dialect::Redshift,
+    Dialect::Multi,
+];
 
-#[cfg(feature = "pg_parse_parser")]
-fn bench_pg_parse(sql: &str) {
-    let _ = black_box(pg_parse::parse(sql));
-}
+/// Per-statement time (ns/parse): adaptive iteration count to accumulate at
+/// least `TARGET_NS` per round, best (min) of `ROUNDS` rounds.
+fn time_stmt(mut f: impl FnMut() -> bool) -> f64 {
+    const TARGET_NS: u128 = 100_000;
+    const ROUNDS: usize = 5;
 
-fn bench_polyglot(sql: &str) {
-    let _ = black_box(polyglot_parse(sql, DialectType::PostgreSQL));
-}
+    black_box(f()); // warm up
+    let probe = Instant::now();
+    black_box(f());
+    let single = probe.elapsed().as_nanos().max(1);
+    let iters = u64::try_from((TARGET_NS / single).clamp(3, 1_000_000)).unwrap_or(3);
 
-fn bench_qusql_parse(sql: &str) {
-    let options = ParseOptions::new().dialect(SQLDialect::PostgreSQL).arguments(qusql_parse::SQLArguments::Dollar);
-    let mut issues = Issues::new(sql);
-    let _ = black_box(parse_statements(sql, &mut issues, &options));
-}
-
-fn bench_orql(sql: &str) {
-    for result in orql::parser::iter(sql) {
-        let _ = black_box(result);
+    let mut best = f64::MAX;
+    for _ in 0..ROUNDS {
+        let start = Instant::now();
+        for _ in 0..iters {
+            black_box(f());
+        }
+        let per = start.elapsed().as_nanos() as f64 / iters as f64;
+        best = best.min(per);
     }
+    best
 }
 
-fn bench_databend(sql: &str) {
-    for stmt in sql.split(';') {
-        let stmt = stmt.trim();
-        if stmt.is_empty() {
+fn load_dialect(dialect: Dialect) -> Vec<String> {
+    let dir = Path::new("datasets").join(dialect.dir_name());
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<_> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "txt"))
+        .collect();
+    files.sort();
+    let mut out = Vec::new();
+    for f in files {
+        if let Ok(content) = fs::read_to_string(&f) {
+            out.extend(
+                content
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(String::from),
+            );
+        }
+    }
+    out
+}
+
+struct Row {
+    dialect: &'static str,
+    parser: &'static str,
+    n_total: usize,
+    n_accepted: usize,
+    min: f64,
+    p10: f64,
+    p25: f64,
+    median: f64,
+    p75: f64,
+    p90: f64,
+    p99: f64,
+    max: f64,
+    mean: f64,
+    /// Display round-trip rate (%) among accepted statements, or -1 if the
+    /// parser has no pretty-printer in this dialect (N/A).
+    roundtrip_pct: f64,
+}
+
+/// Time one (parser, dialect) pair: accepted set, per-statement distribution
+/// (written raw to disk), and Display round-trip rate.
+fn run_pair(parser: BenchParser, dialect: Dialect, stmts: &[String]) -> Row {
+    let accepted: Vec<&str> = stmts
+        .iter()
+        .filter(|s| parser.accepts(s, dialect) == Some(true))
+        .map(String::as_str)
+        .collect();
+
+    let mut row = Row {
+        dialect: dialect.dir_name(),
+        parser: parser.name(),
+        n_total: stmts.len(),
+        n_accepted: accepted.len(),
+        min: 0.0,
+        p10: 0.0,
+        p25: 0.0,
+        median: 0.0,
+        p75: 0.0,
+        p90: 0.0,
+        p99: 0.0,
+        max: 0.0,
+        mean: 0.0,
+        roundtrip_pct: -1.0,
+    };
+    if accepted.is_empty() {
+        return row;
+    }
+
+    // Display round-trip rate among accepted statements: a quality companion to
+    // the timing, so a reader can weigh speed against at least one correctness
+    // signal. Only meaningful where the parser can pretty-print; left N/A (-1)
+    // otherwise. Each check is panic-guarded (a printer can panic on an edge
+    // case even when the parse succeeded). This runs outside the timed paths, so
+    // it does not affect any reported time.
+    if parser.can_reprint(dialect) {
+        let ok = accepted
+            .iter()
+            .filter(|s| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    parser.roundtrips(s, dialect) == Some(true)
+                }))
+                .unwrap_or(false)
+            })
+            .count();
+        row.roundtrip_pct = 100.0 * ok as f64 / accepted.len() as f64;
+    }
+
+    // Per-statement distribution.
+    let mut times: Vec<f64> = Vec::with_capacity(accepted.len());
+    for s in &accepted {
+        times.push(time_stmt(|| parser.parse_once(s, dialect)));
+    }
+
+    // Persist raw times for re-plotting.
+    let raw_path = format!(
+        "{OUT_DIR}/{}__{}.txt",
+        dialect.dir_name(),
+        slug(parser.name())
+    );
+    if let Ok(mut file) = fs::File::create(&raw_path) {
+        let mut buf = String::with_capacity(times.len() * 8);
+        for t in &times {
+            let _ = writeln!(buf, "{t:.1}");
+        }
+        let _ = file.write_all(buf.as_bytes());
+    }
+
+    // Distribution stats.
+    let mut sorted = times.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    row.min = sorted[0];
+    row.max = sorted[sorted.len() - 1];
+    row.mean = times.iter().sum::<f64>() / times.len() as f64;
+    row.p10 = quantile(&sorted, 0.10);
+    row.p25 = quantile(&sorted, 0.25);
+    row.median = quantile(&sorted, 0.50);
+    row.p75 = quantile(&sorted, 0.75);
+    row.p90 = quantile(&sorted, 0.90);
+    row.p99 = quantile(&sorted, 0.99);
+    row
+}
+
+/// Quick smoke check used by the pre-commit hook: every parser parses one of
+/// its accepted statements per dialect without panicking. Fast.
+fn smoke() {
+    std::panic::set_hook(Box::new(|_| {}));
+    for &dialect in DIALECTS {
+        let stmts = load_dialect(dialect);
+        if stmts.is_empty() {
             continue;
         }
-        if let Ok(tokens) = databend_tokenize(stmt) {
-            let _ = black_box(databend_parse(&tokens, DatabendDialect::PostgreSQL));
+        for parser in BenchParser::all() {
+            if !parser.supports(dialect) {
+                continue;
+            }
+            if let Some(s) = stmts
+                .iter()
+                .find(|s| parser.accepts(s, dialect) == Some(true))
+            {
+                black_box(parser.parse_once(s, dialect));
+            }
         }
     }
+    println!("smoke ok");
 }
 
-fn run_benchmark_group(c: &mut Criterion, group_name: &str, statements: &[String]) {
-    if statements.is_empty() {
-        eprintln!("Warning: No statements for group '{group_name}', skipping");
+fn main() {
+    // `cargo bench` passes `--bench`; `cargo test` (including `--all-targets`)
+    // passes neither `--bench` nor `--test`. Only do the full, datasets-backed
+    // run for an explicit `cargo bench`. Anything else (cargo test, a bare run,
+    // or an explicit `--test`) takes the fast smoke path, which is a no-op when
+    // `datasets/` is absent, so `cargo test` neither needs the corpus nor kicks
+    // off the multi-minute benchmark.
+    let args: Vec<String> = std::env::args().collect();
+    let full_run = args.iter().any(|a| a == "--bench") && !args.iter().any(|a| a == "--test");
+    if !full_run {
+        smoke();
         return;
     }
 
-    // Build sizes list, adding max count if between 500 and 1000
-    let base_sizes = [1, 10, 50, 100, 500, 1000];
-    let max_count = statements.len();
-    let sizes: Vec<usize> = if max_count > 500 && max_count < 1000 {
-        base_sizes
-            .iter()
-            .copied()
-            .filter(|&s| s <= max_count)
-            .chain(std::iter::once(max_count))
-            .collect()
-    } else {
-        base_sizes.to_vec()
-    };
-    let mut group = c.benchmark_group(group_name);
+    // Round-trip checks are guarded with catch_unwind; suppress the default
+    // panic message so a caught panic does not spam stderr.
+    std::panic::set_hook(Box::new(|_| {}));
 
-    // Reduce sample size for faster benchmarks with large datasets
-    group.sampling_mode(SamplingMode::Flat);
-    group.sample_size(50);
-    group.measurement_time(Duration::from_secs(3));
+    if !Path::new("datasets").exists() {
+        eprintln!("ERROR: datasets/ not found. Run `tar --zstd -xf datasets.tar.zst` first.");
+        std::process::exit(1);
+    }
+    fs::create_dir_all(OUT_DIR).expect("create out dir");
 
-    for size in &sizes {
-        let size = *size;
+    let mut summary = fs::File::create(format!("{OUT_DIR}/summary.csv")).expect("summary.csv");
+    writeln!(
+        summary,
+        "dialect,parser,n_total,n_accepted,min_ns,p10_ns,p25_ns,median_ns,p75_ns,p90_ns,p99_ns,max_ns,mean_ns,roundtrip_pct"
+    )
+    .unwrap();
 
-        let subset: Vec<String> = statements.iter().take(size).cloned().collect();
-        let concatenated = concatenate_statements(&subset);
+    let parsers = BenchParser::all();
+    let start_all = Instant::now();
 
-        group.bench_with_input(
-            BenchmarkId::new("sqlparser", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_sqlparser(sql)),
-        );
+    for &dialect in DIALECTS {
+        let stmts = load_dialect(dialect);
+        if stmts.is_empty() {
+            continue;
+        }
+        for parser in &parsers {
+            if !parser.supports(dialect) {
+                continue;
+            }
+            let parser = *parser;
+            let job_start = Instant::now();
+            // Run on a large stack: deeply nested accepted statements can
+            // otherwise overflow the default stack and abort the process.
+            let result = std::thread::scope(|scope| {
+                std::thread::Builder::new()
+                    .stack_size(WORKER_STACK)
+                    .spawn_scoped(scope, || run_pair(parser, dialect, &stmts))
+                    .expect("spawn worker")
+                    .join()
+            });
+            let Ok(row) = result else {
+                eprintln!(
+                    "  [warn] {}/{} panicked, skipping pair",
+                    dialect.dir_name(),
+                    parser.name()
+                );
+                continue;
+            };
 
-        group.bench_with_input(
-            BenchmarkId::new("polyglot", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_polyglot(sql)),
-        );
+            writeln!(
+                summary,
+                "{},{},{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+                row.dialect,
+                row.parser,
+                row.n_total,
+                row.n_accepted,
+                row.min,
+                row.p10,
+                row.p25,
+                row.median,
+                row.p75,
+                row.p90,
+                row.p99,
+                row.max,
+                row.mean,
+                row.roundtrip_pct,
+            )
+            .unwrap();
+            summary.flush().unwrap();
 
-        #[cfg(feature = "pg_query_parser")]
-        group.bench_with_input(
-            BenchmarkId::new("pg_query", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_pg_query(sql)),
-        );
-
-        #[cfg(feature = "pg_query_parser")]
-        group.bench_with_input(
-            BenchmarkId::new("pg_query_summary", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_pg_query_summary(sql)),
-        );
-
-        #[cfg(feature = "pg_parse_parser")]
-        group.bench_with_input(
-            BenchmarkId::new("pg_parse", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_pg_parse(sql)),
-        );
-
-        group.bench_with_input(
-            BenchmarkId::new("qusql_parse", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_qusql_parse(sql)),
-        );
-
-        group.bench_with_input(
-            BenchmarkId::new("databend", size),
-            &concatenated,
-            |b, sql| b.iter(|| bench_databend(sql)),
-        );
-
-        group.bench_with_input(BenchmarkId::new("orql", size), &concatenated, |b, sql| {
-            b.iter(|| bench_orql(sql));
-        });
+            let rt = if row.roundtrip_pct < 0.0 {
+                "  n/a".to_string()
+            } else {
+                format!("{:>4.0}%", row.roundtrip_pct)
+            };
+            println!(
+                "{:<11} {:<24} n={:>6}/{:<6} median={:>8.0}ns p90={:>9.0}ns rt={}  ({:.1}s)",
+                row.dialect,
+                row.parser,
+                row.n_accepted,
+                row.n_total,
+                row.median,
+                row.p90,
+                rt,
+                job_start.elapsed().as_secs_f64(),
+            );
+        }
     }
 
-    group.finish();
+    println!(
+        "\nDone in {:.1}s. Raw distributions + summary.csv in {OUT_DIR}/",
+        start_all.elapsed().as_secs_f64()
+    );
 }
-
-fn select_benchmark(c: &mut Criterion) {
-    let statements = load_select_statements();
-    run_benchmark_group(c, "select", &statements);
-}
-
-fn insert_benchmark(c: &mut Criterion) {
-    let statements = load_insert_statements();
-    run_benchmark_group(c, "insert", &statements);
-}
-
-fn update_benchmark(c: &mut Criterion) {
-    let statements = load_update_statements();
-    run_benchmark_group(c, "update", &statements);
-}
-
-fn delete_benchmark(c: &mut Criterion) {
-    let statements = load_delete_statements();
-    run_benchmark_group(c, "delete", &statements);
-}
-
-fn dml_benchmark(c: &mut Criterion) {
-    let statements = load_dml_statements();
-    run_benchmark_group(c, "dml", &statements);
-}
-
-criterion_group!(
-    benches,
-    select_benchmark,
-    insert_benchmark,
-    update_benchmark,
-    delete_benchmark,
-    dml_benchmark
-);
-criterion_main!(benches);
