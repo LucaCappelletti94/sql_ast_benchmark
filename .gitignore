@@ -1,6 +1,9 @@
 # Build artifacts
 /target
 
+# Coverage report (cargo tarpaulin --out Xml)
+/cobertura.xml
+
 # Cargo lock (not needed for binaries/benchmarks)
 Cargo.lock
 

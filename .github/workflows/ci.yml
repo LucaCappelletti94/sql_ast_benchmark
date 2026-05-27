@@ -108,3 +108,30 @@ jobs:
         with:
           key: ${{ matrix.feature }}
       - run: cargo bench --quiet --no-default-features --features ${{ matrix.feature }} -- --test
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage
+      - name: Install cargo-tarpaulin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+      - name: Extract corpus
+        run: tar --zstd -xf datasets.tar.zst
+      - name: Run coverage
+        run: cargo tarpaulin --out Xml
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: LucaCappelletti94/sql_ast_benchmark
+          files: cobertura.xml
+          fail_ci_if_error: false
