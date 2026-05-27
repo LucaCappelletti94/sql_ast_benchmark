@@ -22,7 +22,6 @@ Thumbs.db
 # Legacy dataset download cache (the downloader has been removed)
 .dataset_cache/
 
-# Extracted SQL corpus. The corpus is committed compressed as datasets.tar.zst;
-# extract it with `tar --zstd -xf datasets.tar.zst`. The extracted tree is
-# ignored (datasets.tar.zst itself is tracked).
+# Extracted SQL corpus. Committed compressed as datasets.tar.zst (tracked) and
+# auto-extracted on first use. The extracted tree is ignored.
 datasets/

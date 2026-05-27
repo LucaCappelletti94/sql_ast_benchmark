@@ -313,10 +313,8 @@ fn main() {
             }
         }
         Some("correctness") | None => {
-            if !Path::new("datasets").exists() {
-                eprintln!(
-                    "ERROR: datasets/ not found. Run `tar --zstd -xf datasets.tar.zst` first."
-                );
+            if let Err(e) = sql_ast_benchmark::datasets::ensure_corpus() {
+                eprintln!("ERROR: could not prepare datasets/: {e}");
                 std::process::exit(1);
             }
             if args.iter().any(|a| a == "--per-file") {

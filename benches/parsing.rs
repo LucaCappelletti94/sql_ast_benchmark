@@ -17,9 +17,8 @@
 //! Full benchmark (long, intended for a dedicated run):  cargo bench
 //! Quick smoke check (pre-commit hook, and `cargo test`): cargo bench -- --test
 //!
-//! The full run requires `tar --zstd -xf datasets.tar.zst` to have populated
-//! `datasets/`. The smoke path is a no-op without it, so `cargo test` does not
-//! need the corpus.
+//! The full run unpacks `datasets.tar.zst` automatically if `datasets/` is
+//! missing. The smoke path needs no corpus, so `cargo test` stays fast.
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::stats::{quantile, slug};
@@ -246,8 +245,8 @@ fn main() {
     // panic message so a caught panic does not spam stderr.
     std::panic::set_hook(Box::new(|_| {}));
 
-    if !Path::new("datasets").exists() {
-        eprintln!("ERROR: datasets/ not found. Run `tar --zstd -xf datasets.tar.zst` first.");
+    if let Err(e) = sql_ast_benchmark::datasets::ensure_corpus() {
+        eprintln!("ERROR: could not prepare datasets/: {e}");
         std::process::exit(1);
     }
     fs::create_dir_all(OUT_DIR).expect("create out dir");

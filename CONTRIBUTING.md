@@ -15,7 +15,7 @@ No unsafe code is allowed (`unsafe_code = "forbid"`). Clippy runs with pedantic 
 ## Coverage
 
 ```bash
-tar --zstd -xf datasets.tar.zst   # the bench needs datasets/ present
+tar --zstd -xf datasets.tar.zst   # coverage runs the bench in smoke mode, which needs datasets/ present
 cargo tarpaulin                    # LLVM engine, includes the bench
 ```
 

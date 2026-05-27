@@ -62,11 +62,7 @@ Raw times go to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus
 
 ## Dataset Corpus
 
-311,594 statements across 34 files and 13 dialects. The corpus is committed pre-built and compressed as `datasets.tar.zst` (5.3 MB). Extract it before running anything:
-
-```bash
-tar --zstd -xf datasets.tar.zst   # produces datasets/{dialect}/{name}.txt
-```
+311,594 statements across 34 files and 13 dialects, committed compressed as `datasets.tar.zst` (5.3 MB) and unpacked to `datasets/{dialect}/{name}.txt`. The commands below extract it automatically on first use, so no manual step is needed (to unpack it by hand anyway, run `tar --zstd -xf datasets.tar.zst`).
 
 The original fetch/extraction tooling has been removed (see git history). The compressed corpus is the source of truth.
 
@@ -188,11 +184,12 @@ Speed trades off against coverage: the quickest parsers reject the most (qusql-p
 
 ## Running
 
+The corpus auto-extracts on first use, so just run:
+
 ```bash
-tar --zstd -xf datasets.tar.zst                # extract the corpus into datasets/
 cargo run --release --bin sqlbench correctness --per-file    # per-file acceptance, every dialect
-cargo run --release --bin sqlbench correctness          # oracle + provenance correctness
-cargo bench                                     # parse-throughput, every dialect
+cargo run --release --bin sqlbench correctness               # oracle + provenance correctness
+cargo bench                                                  # parse-throughput, every dialect
 ```
 
 The default build uses pg_query (the PostgreSQL oracle). To use the alternate libpg_query binding instead:

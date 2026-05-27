@@ -3,9 +3,38 @@
 //! SQL dialects represented in the `datasets/` corpus.
 //!
 //! The corpus ships as `datasets.tar.zst`, organised as
-//! `datasets/{dialect}/{name}.txt`. This module only models each subdirectory's
-//! dialect. The original fetch/extraction machinery has been removed (see git
-//! history).
+//! `datasets/{dialect}/{name}.txt`, and [`ensure_corpus`] extracts it on demand.
+//! This module only models each subdirectory's dialect. The original
+//! fetch/extraction machinery has been removed (see git history).
+
+use std::io;
+use std::path::Path;
+
+/// Ensure `datasets/` is present, extracting `datasets.tar.zst` if not.
+/// Idempotent and a no-op once the corpus is unpacked.
+///
+/// # Errors
+/// Returns an error if `datasets/` is missing and the archive cannot be found
+/// or `tar --zstd` fails.
+pub fn ensure_corpus() -> io::Result<()> {
+    if Path::new("datasets").is_dir() {
+        return Ok(());
+    }
+    if !Path::new("datasets.tar.zst").is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "neither datasets/ nor datasets.tar.zst found",
+        ));
+    }
+    let status = std::process::Command::new("tar")
+        .args(["--zstd", "-xf", "datasets.tar.zst"])
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other("`tar --zstd -xf datasets.tar.zst` failed"))
+    }
+}
 
 /// A SQL dialect, matching a subdirectory of `datasets/`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
