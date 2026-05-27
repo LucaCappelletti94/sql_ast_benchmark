@@ -4,14 +4,15 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021_edition-orange.svg)](https://www.rust-lang.org)
 
-Benchmarking Rust SQL parsers on a real-world, multi-dialect corpus of 321,128 statements across 13 SQL dialects (PostgreSQL, MySQL, SQLite, ClickHouse, DuckDB, Hive, Spark SQL, Trino, T-SQL, Oracle, BigQuery, Redshift, plus a mixed-dialect set). Each parser is run in its best-matching dialect, and "correct" is graded against a real reference parser where one exists.
+Benchmarking Rust SQL parsers on a real-world, multi-dialect corpus of 311,594 statements across 13 SQL dialects (PostgreSQL, MySQL, SQLite, ClickHouse, DuckDB, Hive, Spark SQL, Trino, T-SQL, Oracle, BigQuery, Redshift, plus a mixed-dialect set). Each parser is run in its best-matching dialect, and "correct" is graded against a real reference parser where one exists.
 
 ## What changed in the May 2026 refresh
 
 - All benchmarked crates were updated to their latest versions (sqlparser 0.62, polyglot-sql 0.4.1, qusql-parse 0.8, databend-common-ast 0.2.5, pg_parse 0.14, pg_query and orql to latest commits).
 - Three parsers were added: **sqlglot-rust** (standalone 30-dialect parser), **sqlite3-parser / lemon-rs** (SQLite's real Lemon grammar), and **senax-mysql-parser** (MySQL CREATE TABLE only).
 - The benchmark went from PostgreSQL-only to **multi-dialect**: every parser is now run in the dialect that matches the corpus it is being tested against.
-- The corpus was expanded from a few thousand PostgreSQL statements to 321,128 statements over 13 dialects, now shipped pre-built and compressed as `datasets.tar.zst`.
+- The corpus was expanded from a few thousand PostgreSQL statements to 311,594 statements over 13 dialects, now shipped pre-built and compressed as `datasets.tar.zst`.
+- A data-quality pass removed mislabeled/non-SQL content: BiomedSQL (natural-language answers, not SQL) was dropped, the Stack Exchange Data Explorer queries were relabeled from SQLite to their real T-SQL dialect, a metadata-contaminated Trino testcase file was dropped, Oracle SQL\*Plus directive lines were stripped, and the SQL Server sample scripts were dropped because their `GO`-batch separators (not `;`) defeated statement segmentation.
 
 ## Parsers Under Test
 
@@ -60,13 +61,13 @@ There is no universal oracle across dialects, so correctness is defined per dial
 
 ### Performance
 
-The performance benchmark (`cargo bench`) is keyed to each parser's accepted set. For every (parser, dialect) pair it: builds the set of statements that parser accepts in that dialect, times each accepted statement individually to produce a per-statement parse-time distribution, and separately times the whole accepted body concatenated and divides by the statement count. Keying on the accepted set means the concatenated parse never stops early on a statement the parser would reject, so the normalized concatenated number is a fair amortized-throughput figure. Per-statement timing uses an adaptive iteration count (best of several rounds) and a no-`catch_unwind` parse path, so the measurement is free of panic-guard overhead. Every accepted statement is timed (no sampling); the full corpus is covered.
+The performance benchmark (`cargo bench`) is keyed to each parser's accepted set. For every (parser, dialect) pair it builds the set of statements that parser accepts in that dialect and times each accepted statement individually to produce a per-statement parse-time distribution. Per-statement timing uses an adaptive iteration count (best of several rounds) and a no-`catch_unwind` parse path, so the measurement is free of panic-guard overhead. Every accepted statement is timed (no sampling); the full corpus is covered.
 
-Raw per-statement times are written to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus the normalized concatenated time to `target/bench_dist/summary.csv`, so plots can be regenerated without re-running. `cargo run --release --bin sqlbench plot` renders `benchmark_results.svg`: one subplot per dialect with an empirical CDF (eCDF) line per parser (x = per-statement time in ns on a log scale, y = fraction of that parser's accepted statements parsed within that time), and a triangle on the x-axis marking the concatenated-normalized time.
+Raw per-statement times are written to `target/bench_dist/{dialect}__{parser}.txt` and percentiles plus the round-trip rate to `target/bench_dist/summary.csv`, so plots can be regenerated without re-running. `cargo run --release --bin sqlbench plot` renders `benchmark_results.svg`: one subplot per dialect with an empirical CDF (eCDF) line per parser (x = per-statement time in ns on a log scale, y = fraction of that parser's accepted statements parsed within that time).
 
 ## Dataset Corpus
 
-321,128 statements across 34 files and 13 dialects. The corpus is committed pre-built and compressed as `datasets.tar.zst` (5.3 MB). Extract it before running anything:
+311,594 statements across 34 files and 13 dialects. The corpus is committed pre-built and compressed as `datasets.tar.zst` (5.3 MB). Extract it before running anything:
 
 ```bash
 tar --zstd -xf datasets.tar.zst   # produces datasets/{dialect}/{name}.txt
@@ -76,19 +77,19 @@ The original fetch/extraction tooling that scraped these statements from upstrea
 
 | Dialect | Files | Statements | Example sources |
 | --- | ---: | ---: | --- |
-| clickhouse | 2 | 92,229 | ClickHouse stateless tests, ClickBench |
-| hive | 2 | 41,279 | Apache Hive clientpositive, hive-testbench |
-| duckdb | 3 | 41,098 | DuckDB test/sql + benchmark, DataFusion slt |
-| mysql | 4 | 30,202 | TiDB integration tests, Dolt, employees db, TPC-H |
+| clickhouse | 2 | 92,268 | ClickHouse stateless tests, ClickBench |
+| hive | 2 | 41,294 | Apache Hive clientpositive, hive-testbench |
+| duckdb | 3 | 41,148 | DuckDB test/sql + benchmark, DataFusion slt |
+| mysql | 4 | 30,220 | TiDB integration tests, Dolt, employees db, TPC-H |
 | postgresql | 3 | 29,402 | PostgreSQL regress suite + contrib + test modules, defog-ai |
-| sqlite | 3 | 24,244 | Spider, sql-create-context, SEDE |
-| oracle | 2 | 21,820 | Oracle sample schemas and examples |
-| spark_sql | 3 | 14,451 | Spark sql-tests, ClickBench, spark-sql-perf |
-| multi | 1 | 10,935 | sqlfluff dialect fixtures |
-| tsql | 2 | 6,710 | SQL Server samples, ANTLR T-SQL examples |
-| bigquery | 3 | 5,224 | BiomedSQL, TPC for BigQuery, ClickBench |
+| oracle | 2 | 21,648 | Oracle sample schemas and examples |
+| tsql | 2 | 14,782 | ANTLR T-SQL examples, Stack Exchange Data Explorer |
+| spark_sql | 3 | 14,464 | Spark sql-tests, ClickBench, spark-sql-perf |
+| sqlite | 2 | 12,119 | Spider, sql-create-context |
+| multi | 1 | 10,962 | sqlfluff dialect fixtures |
 | redshift | 3 | 2,992 | redshift-benchmarks, redshift-utils, ClickBench |
-| trino | 3 | 380 | Trino product tests, parser tests, ClickBench |
+| bigquery | 2 | 224 | TPC for BigQuery, ClickBench |
+| trino | 2 | 71 | Trino parser tests, ClickBench |
 
 All sources are openly licensed (Apache-2.0, MIT, BSD, public domain or CC-BY). Natural-language-with-embedded-SQL datasets are intentionally excluded.
 
@@ -116,15 +117,15 @@ cargo run --release --bin sqlbench correctness
 
 ### SQLite (oracle: sqlite3-parser / lemon-rs)
 
-18,306 oracle-valid and 5,938 oracle-invalid statements.
+12,040 oracle-valid and 79 oracle-invalid statements.
 
 | Parser | Recall | False positives | Round-trip | Fidelity |
 | --- | ---: | ---: | ---: | ---: |
 | sqlite3-parser (oracle) | 100.0% | 0.0% | 100.0% | 100.0% |
-| sqlparser-rs | 99.9% | 30.4% | 100.0% | 93.6% |
-| polyglot-sql | 98.6% | 57.6% | 99.6% | 68.0% |
-| sqlglot-rust | 95.8% | 22.4% | 98.1% | 56.1% |
-| qusql-parse | 83.5% | 0.7% | N/A | N/A |
+| sqlparser-rs | 99.9% | 25.3% | 100.0% | 100.0% |
+| polyglot-sql | 99.9% | 29.1% | 99.6% | 92.3% |
+| qusql-parse | 99.2% | 1.3% | N/A | N/A |
+| sqlglot-rust | 99.2% | 17.7% | 100.0% | 73.4% |
 
 ### Provenance dialects (acceptance rate, no oracle)
 
@@ -132,26 +133,27 @@ Acceptance rate = fraction of each dialect's own corpus accepted, with the parse
 
 | Dialect (stmts) | sqlparser-rs | polyglot-sql | sqlglot-rust | dialect-specific |
 | --- | ---: | ---: | ---: | --- |
-| mysql (30,202) | 75.7% (99%) | 76.0% (98%) | 46.7% (100%) | qusql 64.2%, databend 54.8%, senax 7.0% (DDL only) |
-| clickhouse (92,229) | 79.5% (100%) | 99.9% (98%) | 56.0% (99%) | -- |
-| duckdb (41,098) | 92.1% (100%) | 93.6% (99%) | 63.1% (99%) | -- |
-| hive (41,279) | 80.5% (100%) | 84.3% (97%) | 45.6% (100%) | databend 51.7% |
-| spark_sql (14,451) | 85.1% (100%) | 91.7% (96%) | 58.9% (100%) | -- |
-| trino (380) | 25.8% (100%) | 35.0% (98%) | 16.6% (100%) | -- |
-| tsql (6,710) | 34.9% (99%) | 36.3% (98%) | 16.2% (99%) | -- |
-| oracle (21,820) | 58.7% (100%) | 59.2% (100%) | 53.8% (100%) | orql 0.3% (SELECT only) |
-| bigquery (5,224) | 4.2% (100%) | 4.2% (73%) | 3.2% (92%) | -- |
+| clickhouse (92,268) | 79.5% (100%) | 99.9% (98%) | 56.0% (99%) | -- |
+| hive (41,294) | 80.5% (100%) | 84.3% (97%) | 45.6% (100%) | databend 51.7% |
+| duckdb (41,148) | 92.1% (100%) | 93.6% (99%) | 63.0% (99%) | -- |
+| mysql (30,220) | 75.8% (99%) | 76.1% (98%) | 46.7% (100%) | qusql 64.2%, databend 54.9%, senax 7.0% (DDL only) |
+| oracle (21,648) | 59.2% (100%) | 59.6% (100%) | 54.3% (100%) | orql 0.3% (SELECT only) |
+| tsql (14,782) | 72.1% (100%) | 74.8% (99%) | 53.9% (99%) | -- |
+| spark_sql (14,464) | 85.1% (100%) | 91.7% (96%) | 58.9% (100%) | -- |
+| multi (10,962) | 45.6% (100%) | 67.0% (98%) | 16.4% (99%) | -- |
 | redshift (2,992) | 92.1% (100%) | 91.5% (99%) | 79.4% (100%) | -- |
+| bigquery (224) | 99.1% (100%) | 99.1% (73%) | 75.0% (92%) | -- |
+| trino (71) | 98.6% (100%) | 98.6% (100%) | 56.3% (100%) | -- |
 | multi (10,935) | 45.6% (100%) | 67.0% (98%) | 16.3% (99%) | -- |
 
 ### Key correctness findings
 
 - **pg_query and sqlite3-parser are the oracles** and score 100% by construction. They are the right choice when correctness must equal "what the database actually accepts."
-- **sqlparser-rs** has the best balance among the general-purpose parsers: high recall (88.6% PostgreSQL, 99.9% SQLite) with the highest fidelity of the pure-Rust parsers (98.8% PostgreSQL). Its false-positive rate is moderate (11.0% PostgreSQL, 30.4% SQLite): its dialects are looser than the real databases.
-- **polyglot-sql** is the most permissive parser. It posts very high acceptance and recall (98.6% SQLite, 99.9% ClickHouse acceptance) but also the highest false-positive rate (27.5% PostgreSQL, 57.6% SQLite) and the lowest SQLite fidelity (68.0%): it accepts and reprints SQL that the reference parser rejects or that changes meaning.
-- **sqlglot-rust** is the most conservative on PostgreSQL (54.7% recall, only 1.3% false positives) with strong fidelity (94.9% PostgreSQL). Because its parser is dialect-agnostic in this version, its acceptance is uniform across dialects rather than tuned per dialect.
+- **sqlparser-rs** has the best balance among the general-purpose parsers: high recall (88.6% PostgreSQL, 99.9% SQLite) with the highest fidelity of the pure-Rust parsers (98.8% PostgreSQL, 100% SQLite). Its false-positive rate is moderate (11.0% PostgreSQL, 25.3% SQLite): its dialects are looser than the real databases.
+- **polyglot-sql** is the most permissive parser. It posts very high acceptance and recall (99.9% SQLite, 99.9% ClickHouse) but also the highest PostgreSQL false-positive rate (27.5%): it accepts SQL the reference parser rejects.
+- **sqlglot-rust** is the most conservative on PostgreSQL (54.7% recall, only 1.3% false positives) with strong PostgreSQL fidelity (94.9%), but the lowest SQLite fidelity (73.4%) - its SQLite reprints often diverge from the original. Because its parser is dialect-agnostic in this version, its acceptance is uniform across dialects rather than tuned per dialect.
 - **databend-common-ast** has moderate recall and a low false-positive rate, reflecting its Databend/ClickHouse focus rather than broad PostgreSQL coverage.
-- **bigquery acceptance is low for everyone** (around 3 to 4%) because the BiomedSQL portion of that corpus is dominated by BigQuery-proprietary syntax that none of these parsers model.
+- **The hardest provenance dialects are the mixed `multi` fixtures (~46%, intentionally cross-dialect) and Oracle (~59%)** for the general-purpose parsers, reflecting cross-dialect and SQL\*Plus syntax; BigQuery, Trino and Redshift are well-supported (90%+ by sqlparser-rs and polyglot-sql), with MySQL and T-SQL in the low-to-mid 70s.
 - **senax-mysql-parser** reads 7.0% on the MySQL corpus, consistent with it being a CREATE TABLE-only parser on a SELECT-heavy corpus.
 
 ## Coverage Results
@@ -166,32 +168,34 @@ cargo run --release --bin sqlbench correctness --per-file
 
 `cargo bench` times every accepted statement in every dialect (full corpus, no sampling) and writes raw per-statement times + percentiles to `target/bench_dist/`. `cargo run --release --bin sqlbench plot` renders two views of the same data.
 
-The eCDF view (one subplot per dialect) shows, for each parser, the empirical CDF of per-statement parse time: x = ns per statement (log), y = fraction of that parser's accepted statements parsed within that time, so a curve further to the left is faster. A triangle on the x-axis marks the concatenated-body time normalized by statement count.
+Each subplot is titled with the dialect and its total statement count, and carries its own legend listing only the parsers run in that dialect. Every legend entry pairs the parser with two quality metrics so speed can be read against coverage and correctness at a glance: `fail%` (share of the dialect corpus the parser did not accept) and `RT%` (Display round-trip rate among the statements it accepted, i.e. how often pretty-printing is stable, shown as `n/a` for parsers without a pretty-printer).
+
+The eCDF view (one subplot per dialect) shows, for each parser, the empirical CDF of per-statement parse time: x = ns per statement (log), y = fraction of that parser's accepted statements parsed within that time, so a curve further to the left is faster.
 
 ![Benchmark results (eCDF)](benchmark_results.svg)
 
-The box-plot view summarises the same per-statement distributions (box = p25/median/p75, whiskers = p10/p90, log-y) with a black tick at the concatenated-normalized time.
+The box-plot view summarises the same per-statement distributions (box = p25/median/p75, whiskers = p10/p90, log-y).
 
 ![Benchmark results (box plots)](benchmark_results_boxplot.svg)
 
-PostgreSQL example (ns per statement, on the 27,844 statements pg_query accepts; `concat/n` = full accepted body parsed once, divided by n):
+PostgreSQL example (ns per statement; `n` is each parser's own accepted count, so the rows are not directly comparable on volume; `fail%` = share of the corpus the parser rejected; `RT%` = Display round-trip rate among accepted, N/A without a pretty-printer):
 
-| Parser | median | p90 | concat / n |
-| --- | ---: | ---: | ---: |
-| qusql-parse | 474 | 1,235 | 162 |
-| sqlglot-rust | 1,442 | 3,397 | 531 |
-| pg_query (summary) | 1,824 | 3,596 | 628 |
-| sqlparser-rs | 5,595 | 20,439 | 877 |
-| databend-common-ast | 6,635 | 17,497 | 2,139 |
-| pg_query.rs (full) | 8,236 | 23,651 | 1,694 |
-| polyglot-sql | 12,128 | 16,838 | 1,037 |
+| Parser | median | p90 | fail% | RT% |
+| --- | ---: | ---: | ---: | ---: |
+| qusql-parse | 509 | 1,273 | 27% | N/A |
+| sqlglot-rust | 1,455 | 3,494 | 48% | 100% |
+| pg_query (summary) | 1,881 | 3,808 | 5% | N/A |
+| sqlparser-rs | 4,254 | 12,034 | 15% | 100% |
+| databend-common-ast | 6,949 | 18,168 | 56% | 100% |
+| pg_query.rs (full) | 8,962 | 25,692 | 5% | 100% |
+| polyglot-sql | 12,502 | 17,844 | 18% | 99% |
 
 Key observations:
 
-- **Bulk amortizes strongly.** For most dialects `concat/n` is far below the per-statement median (sqlparser-rs PostgreSQL: 877 ns amortized vs 5,595 ns per call), because parsing one big body amortizes per-call setup and allocation. The exceptions are Redshift, BigQuery, and Trino, whose corpora are dominated by a few very large analytical queries, so `concat/n` is at or above the median.
-- **polyglot-sql has a high, flat per-statement floor** (~9-15 us in every dialect, visible as boxes that never drop low) from fixed per-call overhead, but it amortizes well in bulk.
-- **qusql-parse and sqlglot-rust are the fastest per statement**; the libpg_query FFI (`pg_query.rs`) is the slowest full parser per call but competitive in bulk, and `pg_query (summary)` is much faster than full parsing because it skips AST deserialization.
-- **senax-mysql** is CREATE-TABLE-only, so its `concat/n` is meaningless (the parser consumes only the first statement of a concatenated body); read only its per-statement distribution.
+- **qusql-parse and sqlglot-rust are the fastest per statement**; the libpg_query FFI (`pg_query.rs`) is the slowest full parser per call, and `pg_query (summary)` is much faster than full parsing because it skips AST deserialization.
+- **polyglot-sql has a high, flat per-statement floor** (~9-15 us in every dialect, visible as boxes that never drop low) from fixed per-call overhead.
+- **Speed trades off against coverage.** The fastest parsers also reject the most: qusql-parse and sqlglot-rust are quickest but reject 27% and 48% of the PostgreSQL corpus, while sqlparser-rs and the pg_query family accept far more at a higher per-statement cost.
+- **Round-trip is stable where a printer exists.** Among parsers that pretty-print, Display round-trip rates are ~99-100% in most dialects (BigQuery polyglot-sql is a low outlier); parsers without a printer (qusql-parse, pg_query summary, orql, senax) are N/A.
 
 ## Running
 

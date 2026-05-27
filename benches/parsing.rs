@@ -4,17 +4,15 @@
 //!   1. builds the parser's accepted set (statements it parses in that dialect),
 //!   2. times each accepted statement individually to produce a per-statement
 //!      time distribution, and
-//!   3. times the whole accepted body concatenated, normalized by n.
+//!   3. records the Display round-trip rate among accepted statements.
 //!
-//! Keying on the accepted set means the concatenated parse never stops early on
-//! a statement the parser would reject. Timing uses `parse_once` (no
-//! `catch_unwind`) for overhead-free, fair measurement; accepted statements are
-//! known not to panic.
+//! Timing uses `parse_once` (no `catch_unwind`) for overhead-free, fair
+//! measurement; accepted statements are known not to panic.
 //!
 //! Outputs (under `target/bench_dist/`):
 //!   - `{dialect}__{parser}.txt` : raw per-statement times (ns, one per line),
 //!     so any plot can be regenerated without re-running.
-//!   - `summary.csv`             : per-pair percentiles + normalized concat time.
+//!   - `summary.csv`             : per-pair percentiles + round-trip rate.
 //!
 //! Full benchmark (long; intended for a dedicated run):  cargo bench
 //! Quick smoke check (used by the pre-commit hook):       cargo bench -- --test
@@ -33,7 +31,8 @@ use std::time::Instant;
 
 /// Deep statements can exhaust the default stack inside recursive-descent
 /// parsers; a stack overflow aborts the process, so time on a large stack.
-const WORKER_STACK: usize = 512 * 1024 * 1024;
+const WORKER_STACK: usize = 1024 * 1024 * 1024;
+
 const OUT_DIR: &str = "target/bench_dist";
 
 const DIALECTS: &[Dialect] = &[
@@ -72,18 +71,6 @@ fn time_stmt(mut f: impl FnMut() -> bool) -> f64 {
         }
         let per = start.elapsed().as_nanos() as f64 / iters as f64;
         best = best.min(per);
-    }
-    best
-}
-
-/// Total ns for one parse of a (large) input: best of 3 single timed runs.
-fn time_once(mut f: impl FnMut() -> bool) -> f64 {
-    black_box(f()); // warm up
-    let mut best = f64::MAX;
-    for _ in 0..3 {
-        let start = Instant::now();
-        black_box(f());
-        best = best.min(start.elapsed().as_nanos() as f64);
     }
     best
 }
@@ -127,11 +114,13 @@ struct Row {
     p99: f64,
     max: f64,
     mean: f64,
-    concat_per_stmt: f64,
+    /// Display round-trip rate (%) among accepted statements, or -1 if the
+    /// parser has no pretty-printer in this dialect (N/A).
+    roundtrip_pct: f64,
 }
 
 /// Time one (parser, dialect) pair: accepted set, per-statement distribution
-/// (written raw to disk), and normalized concatenated parse.
+/// (written raw to disk), and Display round-trip rate.
 fn run_pair(parser: BenchParser, dialect: Dialect, stmts: &[String]) -> Row {
     let accepted: Vec<&str> = stmts
         .iter()
@@ -153,10 +142,29 @@ fn run_pair(parser: BenchParser, dialect: Dialect, stmts: &[String]) -> Row {
         p99: 0.0,
         max: 0.0,
         mean: 0.0,
-        concat_per_stmt: 0.0,
+        roundtrip_pct: -1.0,
     };
     if accepted.is_empty() {
         return row;
+    }
+
+    // Display round-trip rate among accepted statements: a quality companion to
+    // the timing, so a reader can weigh speed against at least one correctness
+    // signal. Only meaningful where the parser can pretty-print; left N/A (-1)
+    // otherwise. Each check is panic-guarded (a printer can panic on an edge
+    // case even when the parse succeeded). This runs outside the timed paths, so
+    // it does not affect any reported time.
+    if parser.can_reprint(dialect) {
+        let ok = accepted
+            .iter()
+            .filter(|s| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    parser.roundtrips(s, dialect) == Some(true)
+                }))
+                .unwrap_or(false)
+            })
+            .count();
+        row.roundtrip_pct = 100.0 * ok as f64 / accepted.len() as f64;
     }
 
     // Per-statement distribution.
@@ -178,11 +186,6 @@ fn run_pair(parser: BenchParser, dialect: Dialect, stmts: &[String]) -> Row {
         }
         let _ = file.write_all(buf.as_bytes());
     }
-
-    // Normalized concatenated parse.
-    let joined = accepted.join("; ");
-    let concat_total = time_once(|| parser.parse_once(&joined, dialect));
-    row.concat_per_stmt = concat_total / accepted.len() as f64;
 
     // Distribution stats.
     let mut sorted = times.clone();
@@ -229,6 +232,10 @@ fn main() {
         return;
     }
 
+    // Round-trip checks are guarded with catch_unwind; suppress the default
+    // panic message so a caught panic does not spam stderr.
+    std::panic::set_hook(Box::new(|_| {}));
+
     if !Path::new("datasets").exists() {
         eprintln!("ERROR: datasets/ not found. Run `tar --zstd -xf datasets.tar.zst` first.");
         std::process::exit(1);
@@ -238,7 +245,7 @@ fn main() {
     let mut summary = fs::File::create(format!("{OUT_DIR}/summary.csv")).expect("summary.csv");
     writeln!(
         summary,
-        "dialect,parser,n_total,n_accepted,min_ns,p10_ns,p25_ns,median_ns,p75_ns,p90_ns,p99_ns,max_ns,mean_ns,concat_ns_per_stmt"
+        "dialect,parser,n_total,n_accepted,min_ns,p10_ns,p25_ns,median_ns,p75_ns,p90_ns,p99_ns,max_ns,mean_ns,roundtrip_pct"
     )
     .unwrap();
 
@@ -258,14 +265,21 @@ fn main() {
             let job_start = Instant::now();
             // Run on a large stack: deeply nested accepted statements can
             // otherwise overflow the default stack and abort the process.
-            let row = std::thread::scope(|scope| {
+            let result = std::thread::scope(|scope| {
                 std::thread::Builder::new()
                     .stack_size(WORKER_STACK)
                     .spawn_scoped(scope, || run_pair(parser, dialect, &stmts))
                     .expect("spawn worker")
                     .join()
-                    .expect("pair thread panicked")
             });
+            let Ok(row) = result else {
+                eprintln!(
+                    "  [warn] {}/{} panicked, skipping pair",
+                    dialect.dir_name(),
+                    parser.name()
+                );
+                continue;
+            };
 
             writeln!(
                 summary,
@@ -283,20 +297,25 @@ fn main() {
                 row.p99,
                 row.max,
                 row.mean,
-                row.concat_per_stmt,
+                row.roundtrip_pct,
             )
             .unwrap();
             summary.flush().unwrap();
 
+            let rt = if row.roundtrip_pct < 0.0 {
+                "  n/a".to_string()
+            } else {
+                format!("{:>4.0}%", row.roundtrip_pct)
+            };
             println!(
-                "{:<11} {:<24} n={:>6}/{:<6} median={:>8.0}ns p90={:>9.0}ns concat/n={:>8.0}ns  ({:.1}s)",
+                "{:<11} {:<24} n={:>6}/{:<6} median={:>8.0}ns p90={:>9.0}ns rt={}  ({:.1}s)",
                 row.dialect,
                 row.parser,
                 row.n_accepted,
                 row.n_total,
                 row.median,
                 row.p90,
-                row.concat_per_stmt,
+                rt,
                 job_start.elapsed().as_secs_f64(),
             );
         }

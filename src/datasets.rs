@@ -46,6 +46,27 @@ impl Dialect {
         }
     }
 
+    /// Human-facing dialect name with conventional capitalization (for chart
+    /// titles and legends), as opposed to the lowercase [`Self::dir_name`].
+    #[must_use]
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Postgresql => "PostgreSQL",
+            Self::Mysql => "MySQL",
+            Self::Sqlite => "SQLite",
+            Self::Clickhouse => "ClickHouse",
+            Self::Hive => "Hive",
+            Self::Trino => "Trino",
+            Self::Duckdb => "DuckDB",
+            Self::SparkSql => "Spark SQL",
+            Self::Tsql => "T-SQL",
+            Self::Oracle => "Oracle",
+            Self::Bigquery => "BigQuery",
+            Self::Redshift => "Redshift",
+            Self::Multi => "Multi-dialect",
+        }
+    }
+
     /// Inverse of [`Self::dir_name`]: resolve a `datasets/` subdirectory name.
     #[must_use]
     pub fn from_dir_name(name: &str) -> Option<Self> {
@@ -113,5 +134,15 @@ mod tests {
         assert_eq!(Dialect::from_dir_name("nope"), None);
         assert_eq!(Dialect::from_dir_name(""), None);
         assert_eq!(Dialect::from_dir_name("POSTGRESQL"), None);
+    }
+
+    #[test]
+    fn display_names_are_nonempty_and_unique() {
+        let mut names: Vec<&str> = ALL.iter().map(|d| d.display_name()).collect();
+        assert!(names.iter().all(|n| !n.is_empty()));
+        let len = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), len, "duplicate display_name across dialects");
     }
 }
