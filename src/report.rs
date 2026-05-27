@@ -4,9 +4,9 @@
 //!
 //! Shared by the `sqlbench` tool and unit-tested here. `grade_chunk` is the
 //! correctness core: it splits a dialect's statements by oracle verdict (where
-//! an oracle exists) and tallies, per parser, recall / false-positive /
-//! round-trip / fidelity. It is single-threaded and deterministic; callers may
-//! chunk the corpus and `merge` partial reports for speed.
+//! one exists) and tallies per parser recall, false-positive, round-trip and
+//! fidelity. It is deterministic, so callers may chunk the corpus and `merge`
+//! partial reports for speed.
 
 use crate::datasets::Dialect;
 use crate::{has_oracle, oracle_accepts, BenchParser};
@@ -80,8 +80,8 @@ impl DialectReport {
 }
 
 /// Grade a chunk of statements for one dialect. Oracle dialects (PostgreSQL,
-/// SQLite) split valid/invalid by the oracle; provenance dialects treat every
-/// statement as valid.
+/// SQLite) split valid/invalid by the oracle, while provenance dialects treat
+/// every statement as valid.
 #[must_use]
 pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[BenchParser]) -> DialectReport {
     let oracle = has_oracle(dialect);

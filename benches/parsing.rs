@@ -7,7 +7,7 @@
 //!   3. records the Display round-trip rate among accepted statements.
 //!
 //! Timing uses `parse_once` (no `catch_unwind`) for overhead-free, fair
-//! measurement; accepted statements are known not to panic.
+//! measurement. Accepted statements are known not to panic.
 //!
 //! Outputs (under `target/bench_dist/`):
 //!   - `{dialect}__{parser}.txt` : raw per-statement times (ns, one per line),
@@ -32,7 +32,7 @@ use std::path::Path;
 use std::time::Instant;
 
 /// Deep statements can exhaust the default stack inside recursive-descent
-/// parsers; a stack overflow aborts the process, so time on a large stack.
+/// parsers, and a stack overflow aborts the process, so time on a large stack.
 const WORKER_STACK: usize = 1024 * 1024 * 1024;
 
 const OUT_DIR: &str = "target/bench_dist";
@@ -152,7 +152,7 @@ fn run_pair(parser: BenchParser, dialect: Dialect, stmts: &[String]) -> Row {
 
     // Display round-trip rate among accepted statements: a quality companion to
     // the timing, so a reader can weigh speed against at least one correctness
-    // signal. Only meaningful where the parser can pretty-print; left N/A (-1)
+    // signal. Only meaningful where the parser can pretty-print, left N/A (-1)
     // otherwise. Each check is panic-guarded (a printer can panic on an edge
     // case even when the parse succeeded). This runs outside the timed paths, so
     // it does not affect any reported time.
@@ -229,7 +229,7 @@ fn smoke() {
 }
 
 fn main() {
-    // `cargo bench` passes `--bench`; `cargo test` (including `--all-targets`)
+    // `cargo bench` passes `--bench`, while `cargo test` (including `--all-targets`)
     // passes neither `--bench` nor `--test`. Only do the full, datasets-backed
     // run for an explicit `cargo bench`. Anything else (cargo test, a bare run,
     // or an explicit `--test`) takes the fast smoke path, which is a no-op when
@@ -242,7 +242,7 @@ fn main() {
         return;
     }
 
-    // Round-trip checks are guarded with catch_unwind; suppress the default
+    // Round-trip checks are guarded with catch_unwind, so suppress the default
     // panic message so a caught panic does not spam stderr.
     std::panic::set_hook(Box::new(|_| {}));
 

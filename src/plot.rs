@@ -95,7 +95,7 @@ struct SummaryRow {
 }
 
 /// Rows from summary.csv (parsers that accepted nothing are dropped). The
-/// `roundtrip_pct` column is the last (14th) field; a row missing it reads as
+/// `roundtrip_pct` column is the last (14th) field, and a row missing it reads as
 /// N/A.
 fn load_summary(path: &Path) -> Vec<SummaryRow> {
     let Ok(content) = fs::read_to_string(path) else {
@@ -164,7 +164,7 @@ fn commas(n: usize) -> String {
 
 /// Per-subplot legend listing only the parsers in this dialect, each with its
 /// color, name, and the two quality metrics (fail% = share of the corpus the
-/// parser rejected; RT% = Display round-trip rate among accepted statements, or
+/// parser rejected, RT% = Display round-trip rate among accepted statements, or
 /// "n/a" for parsers without a pretty-printer). Drawn at pixel coordinates in
 /// the legend sub-area to the right of each chart.
 fn draw_subplot_legend(area: &Svg, series: &[Series]) -> Result<(), Box<dyn std::error::Error>> {
@@ -187,7 +187,7 @@ fn draw_subplot_legend(area: &Svg, series: &[Series]) -> Result<(), Box<dyn std:
         } else {
             format!("RT {:.0}%", s.rt_pct)
         };
-        // Only a parser that accepted nothing should read as 100% fail; otherwise
+        // Only a parser that accepted nothing should read as 100% fail. Otherwise
         // a value that rounds up to 100 (e.g. orql 99.68%) is shown as ">99" so it
         // is not mistaken for total failure beside its drawn curve.
         let fail = if s.fail_pct >= 100.0 {
@@ -375,7 +375,7 @@ pub fn render() -> Result<(), Box<dyn std::error::Error>> {
                 .iter()
                 .filter(|r| r.dialect == d.dir_name())
                 .collect();
-            // The corpus size is the same across this dialect's parsers; take it
+            // The corpus size is the same across this dialect's parsers, so take it
             // from any row (max guards against a stray short row).
             let total = rows.iter().map(|r| r.n_total).max().unwrap_or(0);
             let mut series: Vec<Series> = rows

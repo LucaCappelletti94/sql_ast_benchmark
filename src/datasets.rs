@@ -2,10 +2,10 @@
 
 //! SQL dialects represented in the `datasets/` corpus.
 //!
-//! The corpus is shipped pre-built and compressed as `datasets.tar.zst` and is
-//! organised as `datasets/{dialect}/{name}.txt`. This module only models the
-//! dialect of each subdirectory; the fetching/extraction machinery that
-//! originally produced the corpus has been removed (see git history).
+//! The corpus ships as `datasets.tar.zst`, organised as
+//! `datasets/{dialect}/{name}.txt`. This module only models each subdirectory's
+//! dialect. The original fetch/extraction machinery has been removed (see git
+//! history).
 
 /// A SQL dialect, matching a subdirectory of `datasets/`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

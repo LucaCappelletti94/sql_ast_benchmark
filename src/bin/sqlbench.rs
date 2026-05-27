@@ -14,7 +14,7 @@
 //!   plot                       render `benchmark_results*.svg` from the data
 //!                              `cargo bench` wrote to `target/bench_dist/`.
 //!
-//! The grading and chart logic live in the library (`report`, `plot`); this
+//! The grading and chart logic live in the library (`report`, `plot`). This
 //! binary is argument dispatch plus table formatting.
 
 use sql_ast_benchmark::datasets::Dialect;
@@ -300,7 +300,7 @@ fn usage() -> ! {
 }
 
 fn main() {
-    // Several parsers panic on edge-case SQL; the is_valid_*/accepts paths use
+    // Several parsers panic on edge-case SQL, and the is_valid_*/accepts paths use
     // catch_unwind, so suppress the default hook's noise.
     std::panic::set_hook(Box::new(|_| {}));
 

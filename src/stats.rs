@@ -18,7 +18,7 @@ pub fn quantile(sorted: &[f64], q: f64) -> f64 {
 /// Points `(value, cumulative fraction)` tracing the empirical CDF of an
 /// ascending-sorted slice.
 ///
-/// For `n <= max_pts` every point is returned (`y = (i + 1) / n`); otherwise the
+/// For `n <= max_pts` every point is returned (`y = (i + 1) / n`), otherwise the
 /// curve is sampled at `max_pts + 1` evenly spaced fractions. Empty input yields
 /// no points.
 #[must_use]

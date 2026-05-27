@@ -21,17 +21,14 @@ fn pg_query_canonical(sql: &str) -> Option<String> {
     pg_query::parse(sql).ok()?.deparse().ok()
 }
 
-// Multi-dialect benchmark layer.
-//
-// Each parser is run in its best-matching dialect for a given corpus. Parsers
-// that do not model a dialect return `None` (reported as N/A). "Correct" is
-// graded against an oracle where one exists (pg_query for PostgreSQL, lemon-rs
-// for SQLite) and otherwise by acceptance rate over a dialect's own corpus.
+// Multi-dialect benchmark layer. Each parser runs in its best-matching dialect.
+// One it does not model returns `None` (N/A). Correctness uses an oracle where
+// one exists (pg_query for PostgreSQL, lemon-rs for SQLite), else acceptance rate.
 
 // Dialect mappings.
 
 /// Best-matching sqlparser-rs dialect for a corpus dialect (always available).
-/// Trino has no dedicated dialect (uses Generic); Spark SQL maps to Databricks.
+/// Trino has no dedicated dialect (uses Generic), and Spark SQL maps to Databricks.
 fn sqlparser_dialect(d: Dialect) -> Box<dyn SqlparserDialect> {
     match d {
         Dialect::Postgresql => Box::new(PostgreSqlDialect {}),
@@ -89,7 +86,7 @@ const fn sqlglot_dialect(d: Dialect) -> SqlglotDialect {
     }
 }
 
-/// qusql-parse dialect; `None` for dialects it does not model.
+/// qusql-parse dialect, or `None` for dialects it does not model.
 const fn qusql_dialect(d: Dialect) -> Option<SQLDialect> {
     match d {
         Dialect::Postgresql => Some(SQLDialect::PostgreSQL),
@@ -99,7 +96,7 @@ const fn qusql_dialect(d: Dialect) -> Option<SQLDialect> {
     }
 }
 
-/// databend dialect; `None` for dialects it does not model.
+/// databend dialect, or `None` for dialects it does not model.
 const fn databend_dialect_of(d: Dialect) -> Option<DatabendDialect> {
     match d {
         Dialect::Postgresql => Some(DatabendDialect::PostgreSQL),
@@ -112,7 +109,7 @@ const fn databend_dialect_of(d: Dialect) -> Option<DatabendDialect> {
 // Per-parser primitives (acceptance + reprint).
 
 fn qusql_accepts_dialect(sql: &str, d: SQLDialect) -> bool {
-    // qusql-parse uses todo!()/panic in some unimplemented paths; treat those
+    // qusql-parse uses todo!()/panic in some unimplemented paths, so treat those
     // as parse failures rather than letting them abort the worker thread.
     std::panic::catch_unwind(|| {
         let opts = ParseOptions::new()
@@ -361,9 +358,9 @@ impl BenchParser {
 
     /// Parse `sql` once in `dialect` for timing, WITHOUT panic protection.
     /// Returns whether the parse succeeded. Intended only for statements already
-    /// known to be in the accepted set (so re-parsing cannot panic); calling it
-    /// on rejected/edge-case input may abort the process. Avoiding `catch_unwind`
-    /// keeps the timing free of landing-pad overhead and fair across parsers.
+    /// in the accepted set (re-parsing cannot panic). On rejected or edge-case
+    /// input it may abort the process. Avoiding `catch_unwind` keeps the timing
+    /// free of landing-pad overhead and fair across parsers.
     #[must_use]
     pub fn parse_once(self, sql: &str, dialect: Dialect) -> bool {
         match self {
@@ -408,7 +405,7 @@ impl BenchParser {
         }
     }
 
-    /// Parse and pretty-print; `None` if the parser has no printer, does not
+    /// Parse and pretty-print, returning `None` if the parser has no printer, does not
     /// model `dialect`, or fails to parse `sql`.
     #[must_use]
     pub fn reprint(self, sql: &str, dialect: Dialect) -> Option<String> {
