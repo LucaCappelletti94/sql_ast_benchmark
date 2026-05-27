@@ -21,20 +21,24 @@ See [CHANGELOG.md](CHANGELOG.md) for the project history.
 | **[databend-common-ast](https://github.com/datafuselabs/databend)** | 0.2.5 | crates.io | Pure Rust, zero-copy, Pratt | PostgreSQL, MySQL, Hive |
 | **[sqlite3-parser](https://crates.io/crates/sqlite3-parser)** (lemon-rs) | 0.16.0 | crates.io | Generated from SQLite's Lemon grammar | SQLite (the SQLite oracle) |
 | **[orql](https://codeberg.org/xitep/orql)** | 0.1.0 | git [`6a5391b`](https://codeberg.org/xitep/orql/commit/6a5391b1b11f5771ab15e4ba519bdf00fdacc021) | Pure Rust, early-stage | Oracle (SELECT only) |
-| **[senax-mysql-parser](https://crates.io/crates/senax-mysql-parser)** | 0.1.10 | crates.io | Pure Rust, nom | MySQL **CREATE TABLE only** |
 
 ### Parser notes
 
-- **sqlparser-rs**: the most widely adopted Rust SQL parser (part of Apache DataFusion), with dedicated dialects for most engines. Here Trino maps to its Generic dialect and Spark SQL to Databricks.
-- **sqlglot-rust**: a from-scratch Rust port of Python's sqlglot with a full AST, SQL generator and optimizer. Its parser is dialect-agnostic in this version (the dialect only affects generation), so acceptance does not vary by dialect.
-- **polyglot-sql**: a parsing/formatting/transpilation library covering 32 dialects. Very permissive, so its high acceptance comes with a high false-positive rate on oracle-backed dialects. Read the two together.
-- **pg_query.rs**: Rust bindings to libpg_query, which embeds PostgreSQL's actual parser. The **ground-truth oracle for the PostgreSQL corpus**.
-- **pg_query.rs (summary)**: `pg_query::summary()` extracts metadata without deserializing the full AST. Same accept/reject decisions as a full parse, much faster.
-- **qusql-parse**: a zero-copy hand-coded parser for MySQL/MariaDB, PostgreSQL and (since 0.8) SQLite. Can `todo!()`-panic on unimplemented paths, treated as a parse failure.
-- **databend-common-ast**: a custom parser built by the Databend team for speed, exercised here in PostgreSQL, MySQL and Hive modes.
-- **sqlite3-parser (lemon-rs)**: generated from SQLite's own Lemon grammar. The **ground-truth oracle for the SQLite corpus**.
-- **orql**: an early-stage Oracle-dialect parser, SELECT only, included at its [author's request](https://github.com/LucaCappelletti94/sql_ast_benchmark/issues/1). No pretty-printer, so round-trip and fidelity are N/A.
-- **senax-mysql-parser**: the only maintained descendant of nom-sql, but it parses **CREATE TABLE only**, so it reads near 0% on SELECT-heavy corpora. Included as a DDL-only data point, labeled as such throughout.
+sqlparser-rs is the most widely adopted Rust SQL parser (part of Apache DataFusion), with dedicated dialects for most engines. Here Trino maps to its Generic dialect and Spark SQL to Databricks.
+
+sqlglot-rust is a from-scratch Rust port of Python's sqlglot with a full AST, SQL generator and optimizer. Its parser is dialect-agnostic in this version (the dialect only affects generation), so acceptance does not vary by dialect.
+
+polyglot-sql is a parsing/formatting/transpilation library covering 32 dialects. It is very permissive, so its high acceptance comes with a high false-positive rate on oracle-backed dialects, and the two should be read together.
+
+pg_query.rs provides Rust bindings to libpg_query, which embeds PostgreSQL's actual parser, making it the ground-truth oracle for the PostgreSQL corpus. Its summary mode (`pg_query::summary()`) extracts metadata without deserializing the full AST, giving the same accept/reject decisions as a full parse but much faster.
+
+qusql-parse is a zero-copy hand-coded parser for MySQL/MariaDB, PostgreSQL and (since 0.8) SQLite. It can `todo!()`-panic on unimplemented paths, which the benchmark treats as a parse failure.
+
+databend-common-ast is a custom parser built by the Databend team for speed, exercised here in PostgreSQL, MySQL and Hive modes.
+
+sqlite3-parser (lemon-rs) is generated from SQLite's own Lemon grammar, making it the ground-truth oracle for the SQLite corpus.
+
+orql is an early-stage Oracle-dialect parser, SELECT only, included at its [author's request](https://github.com/LucaCappelletti94/sql_ast_benchmark/issues/1). It has no pretty-printer, so round-trip and fidelity are N/A.
 
 ## Methodology
 
@@ -44,14 +48,11 @@ The corpus is organised as `datasets/{dialect}/{name}.txt`, one statement per li
 
 ### Defining "correct"
 
-There is no universal oracle across dialects, so correctness is defined per dialect:
+There is no universal oracle across dialects, so correctness is defined per dialect.
 
-- **Oracle-backed dialects.** PostgreSQL is graded against **pg_query** (libpg_query, the actual PostgreSQL parser) and SQLite against **sqlite3-parser / lemon-rs** (SQLite's real grammar). The oracle splits the corpus into valid (oracle accepts) and invalid (oracle rejects), and every parser is scored on four metrics:
-  - **Recall**: of oracle-valid statements, how many the parser accepts. Higher is better.
-  - **False positives**: of oracle-invalid statements, how many the parser wrongly accepts. Lower is better.
-  - **Round-trip**: of accepted-valid statements, whether parse, print, re-parse, re-print is stable. Higher is better. N/A without a printer.
-  - **Fidelity**: of accepted-valid statements, whether the oracle's canonical form of the parser's output equals the oracle's canonical form of the input (semantic preservation, not just self-consistency). Higher is better. N/A without a printer.
-- **Provenance dialects.** The other 11 dialects have no oracle. Statements are drawn from each dialect's own test suites and official samples, so they are treated as provenance-valid and the metric is **acceptance rate** (fraction of the corpus the parser accepts in its matching dialect) plus **round-trip** stability.
+For the two oracle-backed dialects, PostgreSQL is graded against pg_query (libpg_query, the actual PostgreSQL parser) and SQLite against sqlite3-parser / lemon-rs (SQLite's real grammar). The oracle splits the corpus into valid (oracle accepts) and invalid (oracle rejects), and every parser is scored on four metrics. Recall is the fraction of oracle-valid statements the parser accepts, where higher is better. False positives is the fraction of oracle-invalid statements it wrongly accepts, where lower is better. Round-trip is whether parse, print, re-parse and re-print is stable on accepted-valid statements, where higher is better and the metric is N/A without a printer. Fidelity is whether the oracle's canonical form of the parser's output equals that of the input, capturing semantic preservation rather than mere self-consistency, again higher is better and N/A without a printer.
+
+The other 11 dialects have no oracle. Their statements come from each dialect's own test suites and official samples, so they are treated as provenance-valid, and the metric is acceptance rate (the fraction of the corpus the parser accepts in its matching dialect) plus round-trip stability.
 
 ### Performance
 
@@ -130,7 +131,7 @@ Acceptance rate = fraction of each dialect's own corpus accepted, with the parse
 | clickhouse (92,268) | 79.5% (100%) | 99.9% (98%) | 56.0% (99%) | -- |
 | hive (41,294) | 80.5% (100%) | 84.3% (97%) | 45.6% (100%) | databend 51.7% |
 | duckdb (41,148) | 92.1% (100%) | 93.6% (99%) | 63.0% (99%) | -- |
-| mysql (30,220) | 75.8% (99%) | 76.1% (98%) | 46.7% (100%) | qusql 64.2%, databend 54.9%, senax 7.0% (DDL only) |
+| mysql (30,220) | 75.8% (99%) | 76.1% (98%) | 46.7% (100%) | qusql 64.2%, databend 54.9% |
 | oracle (21,648) | 59.2% (100%) | 59.6% (100%) | 54.3% (100%) | orql 0.3% (SELECT only) |
 | tsql (14,782) | 72.1% (100%) | 74.8% (99%) | 53.9% (99%) | -- |
 | spark_sql (14,464) | 85.1% (100%) | 91.7% (96%) | 58.9% (100%) | -- |
@@ -141,13 +142,17 @@ Acceptance rate = fraction of each dialect's own corpus accepted, with the parse
 
 ### Key correctness findings
 
-- **pg_query and sqlite3-parser are the oracles** and score 100% by construction. They are the right choice when correctness must equal "what the database actually accepts."
-- **sqlparser-rs** has the best balance among the general-purpose parsers: high recall (88.6% PostgreSQL, 99.9% SQLite) with the highest fidelity of the pure-Rust parsers (98.8% PostgreSQL, 100% SQLite). Its false-positive rate is moderate (11.0% PostgreSQL, 25.3% SQLite): its dialects are looser than the real databases.
-- **polyglot-sql** is the most permissive parser. It posts very high acceptance and recall (99.9% SQLite, 99.9% ClickHouse) but also the highest PostgreSQL false-positive rate (27.5%): it accepts SQL the reference parser rejects.
-- **sqlglot-rust** is the most conservative on PostgreSQL (54.7% recall, only 1.3% false positives) with strong PostgreSQL fidelity (94.9%), but the lowest SQLite fidelity (73.4%) - its SQLite reprints often diverge from the original. Because its parser is dialect-agnostic in this version, its acceptance is uniform across dialects rather than tuned per dialect.
-- **databend-common-ast** has moderate recall and a low false-positive rate, reflecting its Databend/ClickHouse focus rather than broad PostgreSQL coverage.
-- **The hardest provenance dialects** for the general-purpose parsers are the mixed `multi` fixtures (~46%, intentionally cross-dialect) and Oracle (~59%, SQL\*Plus syntax). BigQuery, Trino and Redshift sit above 90% (sqlparser-rs and polyglot-sql), with MySQL and T-SQL in the low-to-mid 70s.
-- **senax-mysql-parser** reads 7.0% on the MySQL corpus, consistent with it being a CREATE TABLE-only parser on a SELECT-heavy corpus.
+pg_query and sqlite3-parser are the oracles and score 100% by construction. They are the right choice when correctness must equal what the database actually accepts.
+
+sqlparser-rs has the best balance among the general-purpose parsers, with high recall (88.6% PostgreSQL, 99.9% SQLite) and the highest fidelity of the pure-Rust parsers (98.8% PostgreSQL, 100% SQLite). Its false-positive rate is moderate (11.0% PostgreSQL, 25.3% SQLite) because its dialects are looser than the real databases.
+
+polyglot-sql is the most permissive parser, posting very high acceptance and recall (99.9% SQLite, 99.9% ClickHouse) but also the highest PostgreSQL false-positive rate (27.5%), accepting SQL the reference parser rejects.
+
+sqlglot-rust is the most conservative on PostgreSQL (54.7% recall, only 1.3% false positives) with strong PostgreSQL fidelity (94.9%), but the lowest SQLite fidelity (73.4%) as its SQLite reprints often diverge from the original. Because its parser is dialect-agnostic in this version, acceptance is uniform across dialects rather than tuned per dialect.
+
+databend-common-ast has moderate recall and a low false-positive rate, reflecting its Databend/ClickHouse focus rather than broad PostgreSQL coverage.
+
+The hardest provenance dialects for the general-purpose parsers are the mixed `multi` fixtures (~46%, intentionally cross-dialect) and Oracle (~59%, SQL\*Plus syntax), while BigQuery, Trino and Redshift sit above 90% (sqlparser-rs and polyglot-sql) and MySQL and T-SQL land in the low-to-mid 70s.
 
 ## Coverage Results
 
@@ -181,12 +186,9 @@ PostgreSQL example (ns per statement). Each parser's `fail%`/`RT%` is over its o
 | pg_query.rs (full) | 8,962 | 25,692 | 5% | 100% |
 | polyglot-sql | 12,502 | 17,844 | 18% | 99% |
 
-Key observations:
+qusql-parse and sqlglot-rust are the fastest per statement. The libpg_query FFI (`pg_query.rs`) is the slowest full parser per call, and `pg_query (summary)` is much faster because it skips AST deserialization, while polyglot-sql shows a high, flat per-statement floor (~9-15 us in every dialect) from fixed per-call overhead.
 
-- **qusql-parse and sqlglot-rust are the fastest per statement.** The libpg_query FFI (`pg_query.rs`) is the slowest full parser per call, and `pg_query (summary)` is much faster because it skips AST deserialization.
-- **polyglot-sql has a high, flat per-statement floor** (~9-15 us in every dialect) from fixed per-call overhead.
-- **Speed trades off against coverage.** qusql-parse and sqlglot-rust are quickest but reject 27% and 48% of the PostgreSQL corpus, while sqlparser-rs and the pg_query family accept far more at a higher per-statement cost.
-- **Round-trip is stable where a printer exists** (~99-100% in most dialects, BigQuery polyglot-sql the low outlier). Parsers without a printer (qusql-parse, pg_query summary, orql, senax) are N/A.
+Speed trades off against coverage: qusql-parse and sqlglot-rust are quickest but reject 27% and 48% of the PostgreSQL corpus, while sqlparser-rs and the pg_query family accept far more at a higher per-statement cost. Round-trip is stable wherever a printer exists (~99-100% in most dialects, with BigQuery polyglot-sql the low outlier), and parsers without a printer (qusql-parse, pg_query summary, orql) are N/A.
 
 ## Running
 
@@ -205,9 +207,7 @@ cargo run --release --no-default-features --features pg_parse_parser --bin sqlbe
 
 ## Environment
 
-- **CPU**: AMD Ryzen Threadripper PRO 5975WX (32 cores, 64 threads)
-- **OS**: Ubuntu 24.04 (Linux 6.17)
-- **Rust**: 2021 edition (stable)
+Results were produced on an AMD Ryzen Threadripper PRO 5975WX (32 cores, 64 threads) running Ubuntu 24.04 (Linux 6.17), with stable Rust (2021 edition).
 
 ### System requirements
 
@@ -222,30 +222,15 @@ sudo apt install build-essential libclang-dev
 
 ## Notes on robustness
 
-Several recursive-descent parsers can overflow the stack on deeply nested SQL, and a stack overflow aborts the process (it is not catchable by `catch_unwind`). The coverage and correctness runners therefore execute parsing on worker threads with a 512 MiB stack. Parsers that panic on edge cases (qusql-parse, polyglot-sql, databend, sqlite3-parser, sqlglot-rust, orql, senax) are wrapped in `catch_unwind`, which treats a panic as a parse failure.
+Several recursive-descent parsers can overflow the stack on deeply nested SQL, and a stack overflow aborts the process (it is not catchable by `catch_unwind`). The coverage and correctness runners therefore execute parsing on worker threads with a 512 MiB stack. Parsers that panic on edge cases (qusql-parse, polyglot-sql, databend, sqlite3-parser, sqlglot-rust, orql) are wrapped in `catch_unwind`, which treats a panic as a parse failure.
 
 ## Reproducibility
 
 Git dependencies track each parser's latest commit. The hashes in the Parsers Under Test table identify the exact versions benchmarked. To pin them, replace the git dependencies in `Cargo.toml` with crates.io versions.
 
-## Development
+## Contributing
 
-```bash
-git config core.hooksPath .githooks   # enable fmt + clippy pre-commit hooks
-cargo fmt --all
-cargo clippy --all-targets
-```
-
-No unsafe code is allowed (`unsafe_code = "forbid"`). Clippy runs with pedantic and nursery lints enabled.
-
-### Coverage
-
-```bash
-tar --zstd -xf datasets.tar.zst   # the bench needs datasets/ present
-cargo tarpaulin                    # LLVM engine, includes the bench
-```
-
-`tarpaulin.toml` uses the LLVM engine and runs the benchmark in verify-only mode (`--test`), since it is the main exercise of the multi-dialect `BenchParser` layer. With the corpus present this covers `benches/parsing.rs` and the dialect-mapping / accept / reprint paths in `src/lib.rs`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow (hooks, formatting, lints, coverage).
 
 ## License
 

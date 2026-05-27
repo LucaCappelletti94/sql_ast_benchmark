@@ -446,7 +446,7 @@ mod tests {
         writeln!(f, "dialect,parser,n_total,n_accepted,min_ns,p10_ns,p25_ns,median_ns,p75_ns,p90_ns,p99_ns,max_ns,mean_ns,roundtrip_pct").unwrap();
         writeln!(f, "postgresql,sqlparser-rs,100,80,1,2,3,4,5,6,7,8,9,95.0").unwrap();
         writeln!(f, "mysql,qusql-parse,50,40,1,2,3,4,5,6,7,8,9").unwrap(); // no rt col -> N/A
-        writeln!(f, "mysql,senax,10,0,0,0,0,0,0,0,0,0,0,0").unwrap(); // n_accepted=0 -> skipped
+        writeln!(f, "mysql,orql,10,0,0,0,0,0,0,0,0,0,0,0").unwrap(); // n_accepted=0 -> skipped
         writeln!(f, "too,short,line").unwrap(); // < 13 columns -> skipped
         drop(f);
 

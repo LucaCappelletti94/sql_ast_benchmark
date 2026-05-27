@@ -149,18 +149,6 @@ fn sqlite3_accepts(sql: &str) -> bool {
     .unwrap_or(false)
 }
 
-/// senax-mysql-parser only parses CREATE TABLE; accepts iff the whole input is
-/// a single CREATE TABLE (trailing whitespace / `;` allowed).
-fn senax_accepts(sql: &str) -> bool {
-    std::panic::catch_unwind(
-        || match senax_mysql_parser::create::creation(sql.as_bytes()) {
-            Ok((rest, _)) => rest.iter().all(|b| b.is_ascii_whitespace() || *b == b';'),
-            Err(_) => false,
-        },
-    )
-    .unwrap_or(false)
-}
-
 fn sqlite3_reprint(sql: &str) -> Option<String> {
     std::panic::catch_unwind(|| {
         let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
@@ -288,7 +276,6 @@ pub enum BenchParser {
     Orql,
     Sqlglot,
     Sqlite3,
-    Senax,
 }
 
 impl BenchParser {
@@ -309,7 +296,6 @@ impl BenchParser {
             Self::Orql,
             Self::Sqlglot,
             Self::Sqlite3,
-            Self::Senax,
         ]
     }
 
@@ -330,7 +316,6 @@ impl BenchParser {
             Self::Orql => "orql",
             Self::Sqlglot => "sqlglot-rust",
             Self::Sqlite3 => "sqlite3-parser",
-            Self::Senax => "senax-mysql (DDL only)",
         }
     }
 
@@ -371,7 +356,6 @@ impl BenchParser {
                 .unwrap_or(false),
             ),
             Self::Sqlite3 => (dialect == Dialect::Sqlite).then(|| sqlite3_accepts(sql)),
-            Self::Senax => (dialect == Dialect::Mysql).then(|| senax_accepts(sql)),
         }
     }
 
@@ -421,7 +405,6 @@ impl BenchParser {
                     }
                 }
             }
-            Self::Senax => senax_mysql_parser::create::creation(sql.as_bytes()).is_ok(),
         }
     }
 
@@ -571,7 +554,6 @@ mod tests {
             vec![Dialect::Postgresql, Dialect::Mysql, Dialect::Hive]
         );
         assert_eq!(supported(BenchParser::Sqlite3), vec![Dialect::Sqlite]);
-        assert_eq!(supported(BenchParser::Senax), vec![Dialect::Mysql]);
         assert_eq!(supported(BenchParser::Orql), vec![Dialect::Oracle]);
     }
 
