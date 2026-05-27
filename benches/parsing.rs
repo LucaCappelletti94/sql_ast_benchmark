@@ -14,10 +14,12 @@
 //!     so any plot can be regenerated without re-running.
 //!   - `summary.csv`             : per-pair percentiles + round-trip rate.
 //!
-//! Full benchmark (long; intended for a dedicated run):  cargo bench
-//! Quick smoke check (used by the pre-commit hook):       cargo bench -- --test
+//! Full benchmark (long, intended for a dedicated run):  cargo bench
+//! Quick smoke check (pre-commit hook, and `cargo test`): cargo bench -- --test
 //!
-//! Requires `tar --zstd -xf datasets.tar.zst` to have populated `datasets/`.
+//! The full run requires `tar --zstd -xf datasets.tar.zst` to have populated
+//! `datasets/`. The smoke path is a no-op without it, so `cargo test` does not
+//! need the corpus.
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::stats::{quantile, slug};
@@ -227,7 +229,15 @@ fn smoke() {
 }
 
 fn main() {
-    if std::env::args().any(|a| a == "--test") {
+    // `cargo bench` passes `--bench`; `cargo test` (including `--all-targets`)
+    // passes neither `--bench` nor `--test`. Only do the full, datasets-backed
+    // run for an explicit `cargo bench`. Anything else (cargo test, a bare run,
+    // or an explicit `--test`) takes the fast smoke path, which is a no-op when
+    // `datasets/` is absent, so `cargo test` neither needs the corpus nor kicks
+    // off the multi-minute benchmark.
+    let args: Vec<String> = std::env::args().collect();
+    let full_run = args.iter().any(|a| a == "--bench") && !args.iter().any(|a| a == "--test");
+    if !full_run {
         smoke();
         return;
     }
