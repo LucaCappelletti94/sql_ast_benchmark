@@ -50,7 +50,10 @@ fn App() -> Element {
     // <link> is emitted into the static <head> via with_static_head above.
     let _ = MAIN_CSS;
     rsx! {
+        // SVG icon for modern browsers, plus the root .ico (copied to the site
+        // root by the Pages workflow) for the /favicon.ico browsers auto-probe.
         document::Link { rel: "icon", r#type: "image/svg+xml", href: FAVICON }
+        document::Link { rel: "icon", r#type: "image/x-icon", href: "/favicon.ico" }
         Router::<Route> {}
     }
 }

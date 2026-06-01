@@ -50,10 +50,11 @@ harness = false
 name = "sqlbench"
 path = "src/bin/sqlbench.rs"
 
-# Strip debug info from release builds. The WASM viewer is built with
-# `dx build --web --release`; without this, rustc's DWARF tripped wasm-opt
-# ("unsupported version of DWARF"). Stripping removes it so wasm-opt succeeds,
-# and also shrinks the shipped wasm.
+# Strip only DWARF debug info from release builds. The WASM viewer is built with
+# `dx build --web --release`; rustc's DWARF tripped wasm-opt ("unsupported
+# version of DWARF"), so removing it lets wasm-opt succeed and shrinks the wasm.
+# Stripping debuginfo only (not symbols) keeps the wasm `name` custom section
+# valid, avoiding the browser's "bad name subsection length" validation warning.
 [profile.release]
-strip = true
+strip = "debuginfo"
 
