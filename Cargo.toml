@@ -38,7 +38,6 @@ sqlglot-rust = "0.9.37"
 sqlite3-parser = "0.16.0"
 fallible-iterator = "0.3.0"
 viz = { path = "viz" }
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [[bench]]
