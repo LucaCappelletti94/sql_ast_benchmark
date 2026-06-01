@@ -46,6 +46,9 @@ jobs:
           touch _site/.nojekyll
           echo "sql-ast-benchmark.luca.phd" > _site/CNAME   # custom Pages domain
           cp web/static/favicon.ico _site/favicon.ico       # root /favicon.ico browsers auto-probe
+          cp web/static/og-image.png _site/og-image.png     # social card image (Open Graph / Twitter)
+          cp web/static/robots.txt _site/robots.txt         # crawler directives + sitemap pointer
+          cp web/static/sitemap.xml _site/sitemap.xml       # sitemap for search engines
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
