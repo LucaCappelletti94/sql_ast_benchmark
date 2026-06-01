@@ -10,7 +10,7 @@
 
 use crate::datasets::Dialect;
 use crate::report::{self, DialectReport};
-use crate::{plot, stats, BenchParser};
+use crate::{bench_dist, stats, BenchParser};
 use std::cmp::Ordering;
 use std::path::Path;
 use viz::{Bundle, CoverageFile, CoverageMatrix, DialectData, ParserMetrics, ParserPerf};
@@ -51,7 +51,7 @@ struct PerfRow {
 }
 
 fn read_summary() -> Vec<PerfRow> {
-    let path = format!("{}/summary.csv", plot::DIST_DIR);
+    let path = format!("{}/summary.csv", bench_dist::DIST_DIR);
     let Ok(content) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
@@ -133,7 +133,7 @@ fn perf_for(dir: &str, rows: &[PerfRow]) -> Vec<ParserPerf> {
         .iter()
         .filter(|r| r.dialect == dir)
         .map(|r| {
-            let times = plot::load_times(dir, &r.parser);
+            let times = bench_dist::load_times(dir, &r.parser);
             let ecdf = stats::ecdf_points(&times, 200)
                 .into_iter()
                 .map(|(x, y)| [x, y])
@@ -224,7 +224,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     if summary.is_empty() {
         eprintln!(
             "warning: no {}/summary.csv; perf charts will be empty. Run `cargo bench` first.",
-            plot::DIST_DIR
+            bench_dist::DIST_DIR
         );
     }
 

@@ -9,9 +9,10 @@
 //! Timing uses `parse_once` (no `catch_unwind`) for overhead-free, fair
 //! measurement. Accepted statements are known not to panic.
 //!
-//! Outputs (under `target/bench_dist/`):
+//! Outputs (under `target/bench_dist/`), consumed by `sqlbench export` to build
+//! `web/assets/bench.json` for the explorer:
 //!   - `{dialect}__{parser}.txt` : raw per-statement times (ns, one per line),
-//!     so any plot can be regenerated without re-running.
+//!     downsampled into the eCDF curves without re-running the benchmark.
 //!   - `summary.csv`             : per-pair percentiles + round-trip rate.
 //!
 //! Full benchmark (long, intended for a dedicated run):  cargo bench
@@ -174,7 +175,7 @@ fn run_pair(parser: BenchParser, dialect: Dialect, stmts: &[String]) -> Row {
         times.push(time_stmt(|| parser.parse_once(s, dialect)));
     }
 
-    // Persist raw times for re-plotting.
+    // Persist raw times for the JSON export (eCDF downsampling).
     let raw_path = format!(
         "{OUT_DIR}/{}__{}.txt",
         dialect.dir_name(),
