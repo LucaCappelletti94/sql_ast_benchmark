@@ -3,30 +3,35 @@
 //! Corpus loading and per-(parser, dialect) grading.
 //!
 //! Shared by the `sqlbench` tool and unit-tested here. `grade_chunk` is the
-//! correctness core: it splits a dialect's statements by oracle verdict (where
+//! correctness core: it splits a dialect's statements by reference verdict (where
 //! one exists) and tallies per parser recall, false-positive, round-trip and
 //! fidelity. It is deterministic, so callers may chunk the corpus and `merge`
 //! partial reports for speed.
 
 use crate::datasets::Dialect;
-use crate::{has_oracle, oracle_accepts, BenchParser};
+use crate::{has_reference, reference_accepts, BenchParser};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Large worker stack: deeply nested SQL overflows recursive-descent parsers
+/// and a stack overflow aborts the process (uncatchable), so grading runs on
+/// threads with this much headroom.
+pub const WORKER_STACK: usize = 512 * 1024 * 1024;
 
 /// Per-parser tallies within one dialect.
 #[derive(Clone, Default)]
 pub struct ParserStat {
     /// Whether the parser can pretty-print in this dialect (round-trip/fidelity).
     pub can_reprint: bool,
-    /// Accepted among oracle-valid statements (recall numerator). For a
-    /// provenance dialect (no oracle) every statement is treated as valid, so
+    /// Accepted among reference-valid statements (recall numerator). For a
+    /// provenance dialect (no reference) every statement is treated as valid, so
     /// this is the plain acceptance count.
     pub accepted_valid: usize,
-    /// Accepted among oracle-invalid statements (false-positive numerator).
+    /// Accepted among reference-invalid statements (false-positive numerator).
     pub accepted_invalid: usize,
     /// Round-trip-stable among accepted-valid.
     pub roundtrip_ok: usize,
-    /// Oracle-fidelity-preserving among accepted-valid.
+    /// Reference-fidelity-preserving among accepted-valid.
     pub fidelity_ok: usize,
 }
 
@@ -42,7 +47,7 @@ impl ParserStat {
 /// Grading of one dialect's corpus across a set of parsers.
 pub struct DialectReport {
     pub dialect: Dialect,
-    pub has_oracle: bool,
+    pub has_reference: bool,
     pub valid_total: usize,
     pub invalid_total: usize,
     pub parsers: Vec<BenchParser>,
@@ -55,7 +60,7 @@ impl DialectReport {
     pub fn empty(dialect: Dialect, parsers: &[BenchParser]) -> Self {
         Self {
             dialect,
-            has_oracle: has_oracle(dialect),
+            has_reference: has_reference(dialect),
             valid_total: 0,
             invalid_total: 0,
             parsers: parsers.to_vec(),
@@ -79,17 +84,17 @@ impl DialectReport {
     }
 }
 
-/// Grade a chunk of statements for one dialect. Oracle dialects (PostgreSQL,
-/// SQLite) split valid/invalid by the oracle, while provenance dialects treat
+/// Grade a chunk of statements for one dialect. Reference dialects (PostgreSQL,
+/// SQLite) split valid/invalid by the reference, while provenance dialects treat
 /// every statement as valid.
 #[must_use]
 pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[BenchParser]) -> DialectReport {
-    let oracle = has_oracle(dialect);
+    let reference = has_reference(dialect);
     let mut report = DialectReport::empty(dialect, parsers);
 
     for sql in stmts {
-        let is_valid = if oracle {
-            oracle_accepts(sql, dialect) == Some(true)
+        let is_valid = if reference {
+            reference_accepts(sql, dialect) == Some(true)
         } else {
             true
         };
@@ -130,6 +135,126 @@ pub fn count_accepted(stmts: &[&str], dialect: Dialect, parser: BenchParser) -> 
         .count()
 }
 
+/// Grade one dialect, parallelising over statement chunks on [`WORKER_STACK`]
+/// threads. `None` if the dialect has no corpus. Used by `sqlbench correctness`
+/// and `sqlbench export`.
+///
+/// # Panics
+/// Panics if a worker thread cannot be spawned or panics while grading.
+#[must_use]
+pub fn grade_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Option<DialectReport> {
+    let stmts = load_dialect(dialect);
+    if stmts.is_empty() {
+        return None;
+    }
+    let parsers: Vec<BenchParser> = all_parsers
+        .iter()
+        .copied()
+        .filter(|p| p.supports(dialect))
+        .collect();
+
+    let n_threads = std::thread::available_parallelism()
+        .map_or(8, std::num::NonZeroUsize::get)
+        .min(32);
+    let chunk = stmts.len().div_ceil(n_threads).max(1);
+
+    let merged = std::thread::scope(|scope| {
+        let handles: Vec<_> = stmts
+            .chunks(chunk)
+            .map(|c| {
+                let parsers = &parsers;
+                std::thread::Builder::new()
+                    .stack_size(WORKER_STACK)
+                    .spawn_scoped(scope, move || grade_chunk(c, dialect, parsers))
+                    .expect("spawn worker")
+            })
+            .collect();
+        let mut acc = DialectReport::empty(dialect, &parsers);
+        for h in handles {
+            acc.merge(&h.join().expect("grade thread panicked"));
+        }
+        acc
+    });
+    Some(merged)
+}
+
+/// One dataset file's acceptance counts, aligned to a parser column order.
+pub struct FileCoverage {
+    pub name: String,
+    pub total: usize,
+    /// Accepted count per parser, in the order returned alongside this.
+    pub accepted: Vec<usize>,
+}
+
+/// Per-file acceptance for a dialect, over the parsers that support it.
+///
+/// Returns the supporting parsers (column order) and one [`FileCoverage`] per
+/// `datasets/{dir}/*.txt`, sorted by filename, each graded on a
+/// [`WORKER_STACK`] thread.
+///
+/// # Panics
+/// Panics if a worker thread cannot be spawned.
+#[allow(clippy::needless_collect)] // handles must all spawn before any join
+#[must_use]
+pub fn coverage_dialect(
+    dialect: Dialect,
+    all_parsers: &[BenchParser],
+) -> (Vec<BenchParser>, Vec<FileCoverage>) {
+    let parsers: Vec<BenchParser> = all_parsers
+        .iter()
+        .copied()
+        .filter(|p| p.supports(dialect))
+        .collect();
+
+    let dir = Path::new("datasets").join(dialect.dir_name());
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return (parsers, Vec::new());
+    };
+    let mut files: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "txt"))
+        .collect();
+    files.sort();
+
+    let stats = std::thread::scope(|scope| {
+        let handles: Vec<_> = files
+            .iter()
+            .map(|path| {
+                let parsers = &parsers;
+                std::thread::Builder::new()
+                    .stack_size(WORKER_STACK)
+                    .spawn_scoped(scope, move || eval_file(path, dialect, parsers))
+                    .expect("spawn worker")
+            })
+            .collect();
+        handles
+            .into_iter()
+            .filter_map(|h| h.join().ok().flatten())
+            .collect()
+    });
+    (parsers, stats)
+}
+
+/// Acceptance counts for one dataset file (None if unreadable or empty).
+fn eval_file(path: &Path, dialect: Dialect, parsers: &[BenchParser]) -> Option<FileCoverage> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let content = fs::read_to_string(path).ok()?;
+    let stmts: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+    if stmts.is_empty() {
+        return None;
+    }
+    let accepted = parsers
+        .iter()
+        .map(|&p| count_accepted(&stmts, dialect, p))
+        .collect();
+    Some(FileCoverage {
+        name,
+        total: stmts.len(),
+        accepted,
+    })
+}
+
 /// All non-empty statements for a dialect from `datasets/{dir}/*.txt`.
 #[must_use]
 pub fn load_dialect(dialect: Dialect) -> Vec<String> {
@@ -165,11 +290,22 @@ pub fn load_dialect_from(root: &Path, dialect: Dialect) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{count_accepted, grade_chunk, load_dialect_from, DialectReport};
+    use super::{count_accepted, eval_file, grade_chunk, load_dialect_from, DialectReport};
     use crate::datasets::Dialect;
     use crate::BenchParser;
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn eval_file_counts_nonblank_and_acceptance() {
+        let root = temp_root("evalfile");
+        let p = root.join("q.txt");
+        fs::write(&p, "SELECT 1\n\nSELECT 1 FROM\n").unwrap();
+        let fc = eval_file(&p, Dialect::Postgresql, &[BenchParser::Sqlparser]).unwrap();
+        assert_eq!(fc.total, 2); // two non-blank lines
+        assert_eq!(fc.accepted[0], 1); // sqlparser accepts "SELECT 1", rejects truncated
+        let _ = fs::remove_dir_all(&root);
+    }
 
     /// Unique scratch directory under the system temp dir.
     fn temp_root(tag: &str) -> PathBuf {
@@ -182,18 +318,17 @@ mod tests {
         p
     }
 
-    #[cfg(feature = "pg_query_parser")]
     #[test]
-    fn grades_postgresql_oracle_split() {
+    fn grades_postgresql_reference_split() {
         let stmts = vec!["SELECT 1".to_string(), "SELECT 1 FROM".to_string()];
         let parsers = vec![BenchParser::Sqlparser, BenchParser::PgQuery];
         let r = grade_chunk(&stmts, Dialect::Postgresql, &parsers);
 
-        assert!(r.has_oracle);
+        assert!(r.has_reference);
         // pg_query accepts "SELECT 1", rejects the truncated one.
         assert_eq!(r.valid_total, 1);
         assert_eq!(r.invalid_total, 1);
-        // pg_query is the oracle: full recall, no false positives.
+        // pg_query is the reference: full recall, no false positives.
         assert_eq!(r.stats[1].accepted_valid, 1);
         assert_eq!(r.stats[1].accepted_invalid, 0);
         // sqlparser accepts the valid statement.
@@ -206,7 +341,7 @@ mod tests {
         let parsers = vec![BenchParser::Sqlparser];
         let r = grade_chunk(&stmts, Dialect::Clickhouse, &parsers);
 
-        assert!(!r.has_oracle);
+        assert!(!r.has_reference);
         assert_eq!(r.valid_total, 1);
         assert_eq!(r.invalid_total, 0);
         assert_eq!(r.stats[0].accepted_valid, 1);

@@ -28,3 +28,6 @@ Thumbs.db
 # Extracted SQL corpus. Committed compressed as datasets.tar.zst (tracked) and
 # auto-extracted on first use. The extracted tree is ignored.
 datasets/
+
+# Playwright MCP scratch output (screenshots, console logs, downloads)
+.playwright-mcp/

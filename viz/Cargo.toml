@@ -1,0 +1,14 @@
+[package]
+name = "viz"
+version = "0.1.0"
+edition = "2021"
+description = "Shared, wasm-clean data schema and plotters SVG renderers for the sql_ast_benchmark site"
+license = "MIT"
+publish = false
+
+[lints.clippy]
+all = "warn"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+plotters = { version = "0.3", default-features = false, features = ["svg_backend", "line_series"] }

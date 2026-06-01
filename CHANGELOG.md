@@ -2,7 +2,8 @@
 
 ## May 2026 refresh
 
-- All benchmarked crates were updated to their latest versions (sqlparser 0.62, polyglot-sql 0.4.1, qusql-parse 0.8, databend-common-ast 0.2.5, pg_parse 0.14, pg_query and orql to latest commits).
+- All benchmarked crates were updated to their latest versions (sqlparser 0.62, polyglot-sql 0.4.1, qusql-parse 0.8, databend-common-ast 0.2.5, sqlglot-rust 0.9.37, pg_query and orql to latest commits).
+- Removed pg_parse and the pg_query_parser/pg_parse_parser Cargo features. pg_query.rs (libpg_query) is now an unconditional dependency and the sole PostgreSQL reference.
 - Two parsers were added: **sqlglot-rust** (standalone 30-dialect parser) and **sqlite3-parser / lemon-rs** (SQLite's real Lemon grammar).
 - The benchmark went from PostgreSQL-only to **multi-dialect**: every parser is now run in the dialect that matches the corpus it is being tested against.
 - The corpus was expanded from a few thousand PostgreSQL statements to 311,594 statements over 13 dialects, now shipped pre-built and compressed as `datasets.tar.zst`.

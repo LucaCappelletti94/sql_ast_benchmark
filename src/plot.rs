@@ -27,7 +27,8 @@ use plotters::style::RGBColor;
 use std::fs;
 use std::path::Path;
 
-const DIST_DIR: &str = "target/bench_dist";
+/// Directory the benchmark writes its raw timings and `summary.csv` to.
+pub const DIST_DIR: &str = "target/bench_dist";
 const ECDF_FILE: &str = "benchmark_results.svg";
 const BOX_FILE: &str = "benchmark_results_boxplot.svg";
 
@@ -53,19 +54,10 @@ const DIALECT_ORDER: [Dialect; 13] = [
     Dialect::Multi,
 ];
 
-fn parser_color(name: &str) -> RGBColor {
-    match name {
-        "sqlparser-rs" => RGBColor(15, 76, 129),
-        "pg_query.rs" => RGBColor(255, 111, 97),
-        "pg_query (summary)" => RGBColor(214, 153, 150),
-        "polyglot-sql" => RGBColor(230, 200, 40),
-        "qusql-parse" => RGBColor(95, 75, 139),
-        "databend-common-ast" => RGBColor(0, 155, 119),
-        "sqlglot-rust" => RGBColor(237, 135, 45),
-        "sqlite3-parser" => RGBColor(0, 128, 128),
-        "orql" => RGBColor(139, 69, 19),
-        _ => RGBColor(120, 120, 120),
-    }
+/// Parser color, shared with the web viewer via the `viz` palette.
+const fn parser_color(name: &str) -> RGBColor {
+    let (r, g, b) = viz::parser_rgb(name);
+    RGBColor(r, g, b)
 }
 
 /// A parser's per-statement timing data and quality metrics within one dialect.
@@ -129,7 +121,10 @@ fn load_summary(path: &Path) -> Vec<SummaryRow> {
         .collect()
 }
 
-fn load_times(dialect: &str, parser: &str) -> Vec<f64> {
+/// Sorted ascending per-statement times (ns) for one (dialect, parser) from the
+/// raw `target/bench_dist/{dialect}__{slug}.txt` file (empty if absent).
+#[must_use]
+pub fn load_times(dialect: &str, parser: &str) -> Vec<f64> {
     let path = format!("{DIST_DIR}/{dialect}__{}.txt", slug(parser));
     fs::read_to_string(path)
         .map(|c| parse_times(&c))

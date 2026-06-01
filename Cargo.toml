@@ -1,3 +1,8 @@
+[workspace]
+members = [".", "viz", "web"]
+default-members = ["."]
+resolver = "2"
+
 [package]
 name = "sql_ast_benchmark"
 version = "0.1.0"
@@ -21,25 +26,21 @@ cast_possible_truncation = { level = "allow", priority = 1 }
 cast_precision_loss = { level = "allow", priority = 1 }
 cast_sign_loss = { level = "allow", priority = 1 }
 
-[features]
-default = ["pg_query_parser"]
-# Use pg_query.rs for FFI parsing (cannot be combined with pg_parse_parser)
-pg_query_parser = ["pg_query"]
-# Use pg_parse for FFI parsing (cannot be combined with pg_query_parser)
-pg_parse_parser = ["pg_parse"]
-
 [dependencies]
 sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
-pg_query = { git = "https://github.com/pganalyze/pg_query.rs", optional = true }
-pg_parse = { git = "https://github.com/paupino/pg_parse", optional = true }
+# libpg_query, the PostgreSQL server's own parser, the reference for PostgreSQL.
+pg_query = { git = "https://github.com/pganalyze/pg_query.rs" }
 qusql-parse = "0.8.0"
 polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
 databend-common-ast = "0.2.5"
 orql = { git = "https://codeberg.org/xitep/orql" }
-sqlglot-rust = "0.9.28"
+sqlglot-rust = "0.9.37"
 sqlite3-parser = "0.16.0"
 fallible-iterator = "0.3.0"
 plotters = "0.3"
+viz = { path = "viz" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [[bench]]
 name = "parsing"
@@ -48,4 +49,11 @@ harness = false
 [[bin]]
 name = "sqlbench"
 path = "src/bin/sqlbench.rs"
+
+# Strip debug info from release builds. The WASM viewer is built with
+# `dx build --web --release`; without this, rustc's DWARF tripped wasm-opt
+# ("unsupported version of DWARF"). Stripping removes it so wasm-opt succeeds,
+# and also shrinks the shipped wasm.
+[profile.release]
+strip = true
 

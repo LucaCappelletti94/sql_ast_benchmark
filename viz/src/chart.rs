@@ -1,0 +1,362 @@
+//! Chart rendering to SVG strings, reused by the native exporter and the wasm
+//! viewer. A generic line/box renderer ([`ecdf_lines`], [`box_lines`]) draws a
+//! set of [`Line`]s, so the same code serves both the per-dialect view (one line
+//! per parser) and the per-parser view (one line per dialect). Output is an SVG
+//! `String` via plotters' `SVGBackend::with_string`, so the browser renders
+//! charts on demand from the JSON.
+
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
+use crate::color::parser_rgb;
+use crate::schema::{DialectData, ParserMetrics, ParserPerf};
+use plotters::prelude::*;
+use plotters::style::RGBColor;
+
+type Res = Result<(), Box<dyn std::error::Error>>;
+
+/// Pixels reserved on the right of each chart for the legend, sized to the
+/// widest label so short-label charts (e.g. a single-dialect parser page) do
+/// not get a wide empty band while long-label charts still fit. The 34px swatch
+/// indent precedes the text; ~5px/char approximates 11px sans-serif, plus a
+/// 16px right margin. Clamped so even one short label keeps a sane band.
+fn legend_width(lines: &[Line]) -> i32 {
+    let max_chars = lines
+        .iter()
+        .map(|l| l.label.chars().count())
+        .max()
+        .unwrap_or(0) as i32;
+    (34 + max_chars * 5 + 16).clamp(100, 220)
+}
+
+/// One series: a labelled distribution with a color, percentiles, and eCDF.
+pub struct Line {
+    pub label: String,
+    pub rgb: (u8, u8, u8),
+    /// Optional grey second legend line (e.g. "missed 12%  RT 100%").
+    pub sub: Option<String>,
+    pub min: f64,
+    pub p10: f64,
+    pub p25: f64,
+    pub median: f64,
+    pub p75: f64,
+    pub p90: f64,
+    pub p99: f64,
+    /// `[ns, fraction]` eCDF points, ascending.
+    pub ecdf: Vec<[f64; 2]>,
+}
+
+fn rgb(c: (u8, u8, u8)) -> RGBColor {
+    RGBColor(c.0, c.1, c.2)
+}
+
+fn commas(n: usize) -> String {
+    let s = n.to_string();
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (bytes.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    out
+}
+
+fn draw_legend<DB>(area: &DrawingArea<DB, plotters::coord::Shift>, lines: &[Line]) -> Res
+where
+    DB: DrawingBackend,
+    DB::ErrorType: std::error::Error + 'static,
+{
+    let grey = RGBColor(90, 90, 90);
+    let line_h = if lines.len() > 9 { 24 } else { 30 };
+    for (i, l) in lines.iter().enumerate() {
+        let y = 14 + i as i32 * line_h;
+        area.draw(&PathElement::new(
+            vec![(6, y + 6), (30, y + 6)],
+            rgb(l.rgb).stroke_width(3),
+        ))?;
+        area.draw(&Text::new(
+            l.label.clone(),
+            (34, y),
+            ("sans-serif", 11).into_font(),
+        ))?;
+        if let Some(sub) = &l.sub {
+            area.draw(&Text::new(
+                sub.clone(),
+                (34, y + 13),
+                ("sans-serif", 9).into_font().color(&grey),
+            ))?;
+        }
+    }
+    Ok(())
+}
+
+/// eCDF chart: x = ns (log), y = fraction within t. One curve per [`Line`].
+#[must_use]
+pub fn ecdf_lines(title: &str, lines: &[Line], w: u32, h: u32) -> String {
+    let mut buf = String::new();
+    {
+        let root = SVGBackend::with_string(&mut buf, (w, h)).into_drawing_area();
+        let _: Res = (|| {
+            root.fill(&WHITE)?;
+            let (plot, legend) = root.split_horizontally(w as i32 - legend_width(lines));
+
+            let mut xmin = f64::MAX;
+            let mut xmax = 0.0_f64;
+            for l in lines {
+                if l.min > 0.0 {
+                    xmin = xmin.min(l.min);
+                }
+                xmax = xmax.max(l.p99);
+            }
+            if !xmin.is_finite() || xmin <= 0.0 {
+                xmin = 1.0;
+            }
+            let xmin = (xmin * 0.8).max(1.0);
+            let xmax = (xmax * 1.3).max(xmin * 10.0);
+
+            let mut chart = ChartBuilder::on(&plot)
+                .caption(title, ("sans-serif", 16))
+                .margin(10)
+                .x_label_area_size(34)
+                .y_label_area_size(44)
+                .build_cartesian_2d((xmin..xmax).log_scale(), 0f64..1.02f64)?;
+            chart
+                .configure_mesh()
+                .x_desc("ns / statement")
+                .y_desc("frac <= t")
+                .x_label_style(("sans-serif", 11))
+                .y_label_style(("sans-serif", 11))
+                .draw()?;
+            for l in lines {
+                chart.draw_series(LineSeries::new(
+                    l.ecdf.iter().map(|pt| (pt[0], pt[1])),
+                    rgb(l.rgb).stroke_width(2),
+                ))?;
+            }
+            draw_legend(&legend, lines)?;
+            root.present()?;
+            Ok(())
+        })();
+    }
+    buf
+}
+
+/// Box plot: box = p25/median/p75, whiskers = p10/p90, log-y. One box per line.
+#[must_use]
+pub fn box_lines(title: &str, lines: &[Line], w: u32, h: u32) -> String {
+    let mut buf = String::new();
+    {
+        let root = SVGBackend::with_string(&mut buf, (w, h)).into_drawing_area();
+        let _: Res = (|| {
+            root.fill(&WHITE)?;
+            let (plot, legend) = root.split_horizontally(w as i32 - legend_width(lines));
+
+            let mut ymin = f64::MAX;
+            let mut ymax = 0.0_f64;
+            for l in lines {
+                if l.p10 > 0.0 {
+                    ymin = ymin.min(l.p10);
+                }
+                ymax = ymax.max(l.p90);
+            }
+            if !ymin.is_finite() || ymin <= 0.0 {
+                ymin = 1.0;
+            }
+            let ymin = (ymin * 0.7).max(1.0);
+            let ymax = (ymax * 1.5).max(ymin * 10.0);
+            let cnt = lines.len().max(1);
+
+            let mut chart = ChartBuilder::on(&plot)
+                .caption(title, ("sans-serif", 16))
+                .margin(10)
+                .x_label_area_size(18)
+                .y_label_area_size(52)
+                .build_cartesian_2d(0f64..(cnt as f64), (ymin..ymax).log_scale())?;
+            chart
+                .configure_mesh()
+                .disable_x_mesh()
+                .x_labels(0)
+                .y_desc("ns / statement")
+                .y_label_style(("sans-serif", 11))
+                .draw()?;
+
+            for (i, l) in lines.iter().enumerate() {
+                let x = i as f64 + 0.5;
+                let (lo, hi) = (x - 0.32, x + 0.32);
+                let c = rgb(l.rgb);
+                chart.draw_series(std::iter::once(Rectangle::new(
+                    [(lo, l.p25), (hi, l.p75)],
+                    c.mix(0.45).filled(),
+                )))?;
+                chart.draw_series(std::iter::once(Rectangle::new(
+                    [(lo, l.p25), (hi, l.p75)],
+                    c.stroke_width(1),
+                )))?;
+                chart.draw_series(std::iter::once(PathElement::new(
+                    vec![(lo, l.median), (hi, l.median)],
+                    c.stroke_width(2),
+                )))?;
+                for (a, b) in [(l.p10, l.p25), (l.p75, l.p90)] {
+                    chart.draw_series(std::iter::once(PathElement::new(
+                        vec![(x, a), (x, b)],
+                        c.stroke_width(1),
+                    )))?;
+                }
+                for y in [l.p10, l.p90] {
+                    chart.draw_series(std::iter::once(PathElement::new(
+                        vec![(x - 0.15, y), (x + 0.15, y)],
+                        c.stroke_width(1),
+                    )))?;
+                }
+            }
+            draw_legend(&legend, lines)?;
+            root.present()?;
+            Ok(())
+        })();
+    }
+    buf
+}
+
+// ---- per-dialect convenience wrappers (series = parsers) ----
+
+/// Fraction of valid statements the parser failed to accept (false negatives,
+/// `1 - recall`). Prefers the reference-graded recall (or, on provenance dialects,
+/// the acceptance rate) from `metrics`, falling back to the raw unaccepted
+/// fraction when no correctness row exists. Excludes true negatives the parser
+/// correctly rejected, so it matches the "missed %" column in the tables.
+fn missed_pct(p: &ParserPerf, metrics: Option<&ParserMetrics>, has_reference: bool) -> f64 {
+    let graded = metrics.and_then(|m| {
+        if has_reference {
+            m.recall_pct
+        } else {
+            m.accept_pct
+        }
+    });
+    match graded {
+        Some(r) => (100.0 - r).max(0.0),
+        None if p.n_total == 0 => 0.0,
+        None => 100.0 * (p.n_total - p.n_accepted) as f64 / p.n_total as f64,
+    }
+}
+
+fn parser_sub(p: &ParserPerf, metrics: Option<&ParserMetrics>, has_reference: bool) -> String {
+    let m = missed_pct(p, metrics, has_reference);
+    let missed = if m >= 100.0 {
+        "100".to_string()
+    } else if m.round() >= 100.0 {
+        ">99".to_string()
+    } else {
+        format!("{m:.0}")
+    };
+    let rt = match p.roundtrip_pct {
+        Some(v) => format!("RT {v:.0}%"),
+        None => "RT n/a".to_string(),
+    };
+    format!("missed {missed}%   {rt}")
+}
+
+fn lines_from_dialect(d: &DialectData) -> Vec<Line> {
+    d.perf
+        .iter()
+        .map(|p| Line {
+            label: p.parser.clone(),
+            rgb: parser_rgb(&p.parser),
+            sub: Some(parser_sub(
+                p,
+                d.correctness.iter().find(|m| m.parser == p.parser),
+                d.has_reference,
+            )),
+            min: p.min,
+            p10: p.p10,
+            p25: p.p25,
+            median: p.median,
+            p75: p.p75,
+            p90: p.p90,
+            p99: p.p99,
+            ecdf: p.ecdf.clone(),
+        })
+        .collect()
+}
+
+fn dialect_title(d: &DialectData) -> String {
+    format!(
+        "{} (n={})",
+        d.display_name,
+        commas(d.valid_total + d.invalid_total)
+    )
+}
+
+/// eCDF chart for one dialect (one curve per parser).
+#[must_use]
+pub fn ecdf_svg(d: &DialectData, w: u32, h: u32) -> String {
+    ecdf_lines(&dialect_title(d), &lines_from_dialect(d), w, h)
+}
+
+/// Box plot for one dialect (one box per parser).
+#[must_use]
+pub fn box_svg(d: &DialectData, w: u32, h: u32) -> String {
+    box_lines(&dialect_title(d), &lines_from_dialect(d), w, h)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{box_svg, ecdf_svg};
+    use crate::schema::{CoverageMatrix, DialectData, ParserPerf};
+
+    fn sample() -> DialectData {
+        let perf = ParserPerf {
+            parser: "sqlparser-rs".to_string(),
+            n_total: 100,
+            n_accepted: 80,
+            min: 300.0,
+            p10: 400.0,
+            p25: 500.0,
+            median: 700.0,
+            p75: 1200.0,
+            p90: 3000.0,
+            p99: 9000.0,
+            max: 50000.0,
+            mean: 1500.0,
+            roundtrip_pct: Some(100.0),
+            ecdf: (0..50)
+                .map(|i| [300.0 + f64::from(i) * 100.0, f64::from(i) / 49.0])
+                .collect(),
+        };
+        DialectData {
+            dir_name: "postgresql".to_string(),
+            display_name: "PostgreSQL".to_string(),
+            has_reference: true,
+            valid_total: 90,
+            invalid_total: 10,
+            correctness: vec![],
+            perf: vec![perf],
+            coverage: CoverageMatrix {
+                parsers: vec![],
+                files: vec![],
+                subtotal_total: 0,
+                subtotal_accepted: vec![],
+            },
+        }
+    }
+
+    #[test]
+    fn renders_valid_svg() {
+        let d = sample();
+        for svg in [ecdf_svg(&d, 760, 420), box_svg(&d, 760, 420)] {
+            assert!(
+                svg.starts_with("<?xml") || svg.contains("<svg"),
+                "not svg: {}",
+                &svg[..svg.len().min(40)]
+            );
+            assert!(svg.contains("</svg>"));
+            assert!(svg.contains("PostgreSQL"));
+            assert!(svg.len() > 500);
+        }
+    }
+}

@@ -1,0 +1,525 @@
+:root {
+  --fg: #16161a;
+  --muted: #5c5c66;
+  --line: #e4e4ea;
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --accent: #0f4c81;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 4px 16px rgba(20, 20, 30, 0.06);
+  --maxw: 1080px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); }
+
+/* Keyboard focus visibility (accessibility) */
+a:focus-visible,
+.card:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Skip link */
+.skip {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--fg);
+  color: #fff;
+  padding: 0.6em 1em;
+  z-index: 10;
+  border-radius: 0 0 8px 0;
+}
+.skip:focus { left: 0; }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0;
+}
+
+/* Site header */
+header.site {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1.2rem;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--fg);
+  font-size: 1.05rem;
+}
+.brand-logo { display: block; width: 26px; height: 26px; border-radius: 6px; }
+.ghlink { color: var(--muted); display: inline-flex; }
+.ghlink:hover { color: var(--fg); }
+
+main { display: block; }
+
+.intro, .hero, .block, .cards { max-width: var(--maxw); margin-inline: auto; }
+
+.intro { padding: 2rem 1.2rem 0.5rem; }
+.intro h1 { font-size: 1.9rem; margin: 0 0 0.3em; letter-spacing: -0.01em; }
+
+/* Landing-page abstract */
+.abstract {
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding: 0.6rem 1.2rem 0.4rem;
+}
+/* When the abstract directly follows the intro title, tighten the top gap. */
+.intro-abstract { padding-top: 0; }
+.abstract h2 {
+  font-size: 1.1rem;
+  margin: 0.6rem 0 0.5rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid var(--line);
+}
+.abstract p {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+  color: #33333a;
+  text-align: justify;
+  text-justify: inter-word;
+}
+.lead { font-size: 1.05rem; margin: 0.2em 0 0.5em; width: 100%; max-width: none; text-align: justify; text-justify: inter-word; }
+.meta { color: var(--muted); font-size: 0.85rem; margin: 0; }
+
+/* Dialect cards */
+.cards {
+  list-style: none;
+  padding: 1.2rem;
+  margin-inline: auto;
+  margin-block: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Equal-height rows so cards with wrapped (two-line) titles match the rest. */
+  grid-auto-rows: 1fr;
+  gap: 0.9rem;
+}
+/* Parser cards carry extra pills, so give them more room: fixed 3 columns
+   (collapsing to fewer when the viewport is too narrow for 220px each). */
+.cards-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.section-head {
+  max-width: var(--maxw);
+  margin: 1.4rem auto 0;
+  padding: 0 1.4rem;
+}
+.section-head h2 {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 1.15rem; margin: 0;
+}
+.cards li { margin: 0; }
+.card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.85rem 0.95rem;
+  box-shadow: var(--shadow);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.card:hover { transform: translateY(-3px); box-shadow: 0 6px 22px rgba(20, 20, 30, 0.12); }
+.chip {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px; height: 38px;
+  border-radius: 9px;
+}
+.chip.lg { width: 52px; height: 52px; border-radius: 12px; }
+.chip-light { background: #fff; border: 1px solid var(--line); }
+.logo-img { width: 74%; height: 74%; object-fit: contain; display: block; }
+.mono { font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+.card-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.card-title { font-weight: 700; line-height: 1.2; }
+.card-meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.15rem; }
+.card-n { color: var(--muted); font-size: 0.85rem; }
+
+/* Compact primary-fact pills on a parser card. */
+.card-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+.mini-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  max-width: 100%;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: #f3f4f6;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-ico { flex: none; display: inline-flex; color: var(--accent); }
+.mini-ico svg { width: 10px; height: 10px; display: block; }
+.badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 1.4rem;
+  line-height: 1;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 0 0.5em;
+  border-radius: 999px;
+}
+.badge-reference { background: #e6f0fb; color: #1c4e80; }
+.badge-prov { background: #eef0f2; color: #555; }
+.badge-count { background: #eef0f2; color: #555; text-transform: none; letter-spacing: 0; }
+
+/* Dialect hero */
+.hero {
+  margin-top: 1rem;
+  padding: 1.3rem 1.2rem;
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  border-top: 3px solid var(--accent);
+  border-bottom: 1px solid var(--line);
+}
+.hero-row { display: flex; align-items: center; gap: 1rem; max-width: var(--maxw); margin-inline: auto; }
+.hero h1 { margin: 0; font-size: 1.7rem; }
+.hero-stats { margin: 0.3em 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; color: var(--muted); font-size: 0.9rem; }
+.hero-stats .stat strong { color: var(--fg); }
+
+/* Editorial blurb under a detail-page hero, with inline source links */
+.about { max-width: var(--maxw); margin-inline: auto; padding: 1.1rem 1.2rem 0.2rem; }
+.blurb { margin: 0; width: 100%; max-width: none; font-size: 1.02rem; color: #33333a; text-align: justify; text-justify: inter-word; }
+.inline-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.inline-link:hover { text-decoration-thickness: 2px; }
+.inline-link:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; border-radius: 2px; }
+
+/* Parser repository/crate metadata pills, shown in the parser hero banner,
+   right-aligned on the same row as the parser name. */
+.meta-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-content: center;
+  gap: 0.4rem 0.5rem;
+  margin-left: auto;
+  max-width: 60%;
+}
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2rem 0.6rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.78rem;
+}
+.meta-val { font-weight: 700; color: var(--fg); }
+.meta-key {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.7rem;
+}
+/* Constrain the icon so it never balloons; size is set on the SVG by the icon. */
+.meta-ico { flex: none; display: inline-flex; color: var(--accent); }
+.meta-ico svg { width: 12px; height: 12px; display: block; }
+/* A problematic fact (not fuzzed, no test suite, no benchmarks) flagged red. */
+.meta-item.bad {
+  background: #fdecec;
+  border-color: #e7a3a3;
+}
+.meta-item.bad .meta-val,
+.meta-item.bad .meta-key,
+.meta-item.bad .meta-ico {
+  color: #c0202a;
+}
+
+/* Content blocks */
+.block { padding: 0.4rem 1.2rem; }
+.block h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  margin: 1.4rem 0 0.6rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid var(--line);
+}
+.h2-ico { color: var(--accent); }
+
+/* Charts */
+.charts { display: flex; flex-wrap: wrap; gap: 1rem; }
+.chart { flex: 1 1 440px; min-width: 300px; margin: 0; }
+/* The chart-svg is a button so the chart can be clicked to enlarge. */
+.chart-svg {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  cursor: zoom-in;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.chart-svg:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+.chart-svg:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+.chart-svg svg { width: 100%; height: auto; display: block; }
+/* Positioned frame so the download tools can overlay the chart image. */
+.chart-frame { position: relative; }
+.chart figcaption {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: justify;
+  text-justify: inter-word;
+  overflow-wrap: break-word;
+}
+/* Download buttons overlaid on the bottom-right of the chart image, stacked. */
+.chart-tools {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+.dl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  padding: 0.2rem 0.5rem;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(2px);
+}
+.dl-btn:hover { background: #fff; border-color: var(--accent); }
+.dl-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+
+/* Lightbox: click a chart to enlarge it over a dimmed backdrop. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5vmin;
+  background: rgba(16, 16, 26, 0.7);
+  cursor: zoom-out;
+  outline: none;
+}
+.lightbox-inner {
+  position: relative;
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+  cursor: default;
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow: auto;
+}
+/* Size only the chart SVG, not the small icon SVGs inside the download buttons. */
+.lightbox-svg > svg {
+  display: block;
+  width: min(92vw, 1400px);
+  height: auto;
+  max-height: 86vh;
+}
+/* Download buttons stay visible while the chart is enlarged, anchored bottom-right
+   of the enlarged figure rather than stretching to fill it. */
+.lightbox-tools {
+  position: absolute;
+  bottom: 1.4rem;
+  right: 1.4rem;
+  width: auto;
+  align-items: flex-end;
+}
+.lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1.2rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.lightbox-close:hover { background: rgba(255, 255, 255, 0.25); }
+.lightbox-close:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+
+/* Tables */
+.scroll { overflow-x: auto; }
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+table.data th, table.data td {
+  text-align: right;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+table.data thead th {
+  text-align: right;
+  color: var(--muted);
+  font-weight: 600;
+  background: #fafbfc;
+  position: sticky;
+  top: 0;
+  padding: 0;
+}
+
+/* Click-to-sort column headers */
+.sort-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35em;
+  padding: 0.45rem 0.7rem;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sort-btn.first { justify-content: flex-start; }
+.sort-btn:hover { color: var(--fg); background: #eef1f5; }
+.sort-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.sort-ind { font-size: 0.78em; opacity: 0.3; }
+.sort-ind.active { opacity: 1; color: var(--accent); }
+
+table.data th[scope="col"]:first-child,
+table.data th[scope="row"],
+table.data td:first-child { text-align: left; }
+table.data tbody tr:nth-child(even) { background: #fcfcfd; }
+table.data tbody tr:hover { background: #f4f7fb; }
+th[scope="row"] { font-weight: 500; white-space: nowrap; }
+tr.subtotal th, tr.subtotal td { font-weight: 700; border-top: 2px solid var(--line); background: #f7f9fb; }
+.fname { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.82rem; }
+.dot { display: inline-block; width: 0.7em; height: 0.7em; border-radius: 3px; margin-right: 0.5em; vertical-align: middle; }
+
+/* Small inline dialect mark in per-parser table rows (logo or brand glyph). */
+.dname { white-space: nowrap; }
+.dname a { vertical-align: middle; }
+.row-ico {
+  display: inline-grid;
+  place-items: center;
+  width: 20px; height: 20px;
+  border-radius: 5px;
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+.row-ico.chip-light { background: #fff; border: 1px solid var(--line); }
+
+/* Floating back affordance: stays reachable while scrolling a detail page,
+   instead of being stranded at the foot of the content. */
+.back {
+  position: fixed;
+  left: 1.2rem;
+  bottom: 1.2rem;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.55rem 0.95rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.back:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 22px rgba(20, 20, 30, 0.14);
+}
+.back:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Footer */
+.site-foot {
+  max-width: var(--maxw);
+  margin: 2.5rem auto 0;
+  padding: 1.5rem 1.2rem 2.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+/* Collapse the fixed 3-column parser grid on narrower viewports. */
+@media (max-width: 760px) {
+  .cards-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .cards-3 { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; scroll-behavior: auto; }
+}
