@@ -3,8 +3,8 @@ name = "sql_ast_benchmark_web"
 
 [web.app]
 title = "Rust SQL Parser Benchmark"
-# GitHub Pages project site lives under /sql_ast_benchmark/.
-base_path = "sql_ast_benchmark"
+# Served at the root of the custom domain sql-ast-benchmark.luca.phd, so no
+# base_path prefix (a project-pages prefix would break asset and route URLs).
 
 [web.watcher]
 index_on_404 = true

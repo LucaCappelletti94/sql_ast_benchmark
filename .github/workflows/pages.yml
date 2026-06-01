@@ -44,6 +44,7 @@ jobs:
           cp -r "$OUT"/. _site/
           cp _site/index.html _site/404.html   # SPA client-side routing fallback
           touch _site/.nojekyll
+          echo "sql-ast-benchmark.luca.phd" > _site/CNAME   # custom Pages domain
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

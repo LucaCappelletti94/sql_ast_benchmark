@@ -7,7 +7,7 @@
 
 Benchmarking Rust SQL parsers on a real-world corpus of 311,594 statements across 13 SQL dialects. Each parser runs in its best-matching dialect, and correctness is graded against a real reference parser where one exists.
 
-An interactive explorer (every dialect's distribution charts, correctness, and per-file coverage) is published at <https://lucacappelletti94.github.io/sql_ast_benchmark/>.
+An interactive explorer (every dialect's distribution charts, correctness, and per-file coverage) is published at <https://sql-ast-benchmark.luca.phd>.
 
 See [CHANGELOG.md](CHANGELOG.md) for the project history.
 
