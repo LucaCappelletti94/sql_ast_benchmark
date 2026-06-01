@@ -7,10 +7,10 @@
 //! `sqlbench`: the multi-dialect SQL parser benchmark CLI.
 //!
 //! Subcommands:
-//!   correctness [--per-file]   grade parsers over `datasets/` (oracle where one
+//!   correctness [--per-file]   grade parsers over `datasets/` (reference where one
 //!                              exists, acceptance rate otherwise). `--per-file`
 //!                              prints the per-dataset acceptance matrix instead
-//!                              of per-dialect oracle metrics.
+//!                              of per-dialect reference metrics.
 //!   plot                       render `benchmark_results*.svg` from the data
 //!                              `cargo bench` wrote to `target/bench_dist/`.
 //!
@@ -19,15 +19,9 @@
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::report::{self, DialectReport};
-use sql_ast_benchmark::{plot, BenchParser};
-use std::fs;
-use std::path::{Path, PathBuf};
+use sql_ast_benchmark::{export, plot, BenchParser};
 
-/// Large worker stack: deeply nested SQL overflows recursive-descent parsers
-/// and stack overflow aborts the process (uncatchable), so give headroom.
-const WORKER_STACK: usize = 512 * 1024 * 1024;
-
-/// Oracle-backed dialects first, then the provenance dialects.
+/// Reference-backed dialects first, then the provenance dialects.
 const ORDER: [Dialect; 13] = [
     Dialect::Postgresql,
     Dialect::Sqlite,
@@ -57,44 +51,7 @@ fn cell(v: f64) -> String {
 }
 const NA: &str = "   N/A";
 
-// correctness (per-dialect oracle + provenance).
-
-/// Grade one dialect, parallelising over statement chunks on large stacks.
-fn process_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Option<DialectReport> {
-    let stmts = report::load_dialect(dialect);
-    if stmts.is_empty() {
-        return None;
-    }
-    let parsers: Vec<BenchParser> = all_parsers
-        .iter()
-        .copied()
-        .filter(|p| p.supports(dialect))
-        .collect();
-
-    let n_threads = std::thread::available_parallelism()
-        .map_or(8, std::num::NonZeroUsize::get)
-        .min(32);
-    let chunk = stmts.len().div_ceil(n_threads).max(1);
-
-    let merged = std::thread::scope(|scope| {
-        let handles: Vec<_> = stmts
-            .chunks(chunk)
-            .map(|c| {
-                let parsers = &parsers;
-                std::thread::Builder::new()
-                    .stack_size(WORKER_STACK)
-                    .spawn_scoped(scope, move || report::grade_chunk(c, dialect, parsers))
-                    .expect("spawn worker")
-            })
-            .collect();
-        let mut acc = DialectReport::empty(dialect, &parsers);
-        for h in handles {
-            acc.merge(&h.join().expect("grade thread panicked"));
-        }
-        acc
-    });
-    Some(merged)
-}
+// correctness (per-dialect reference + provenance).
 
 fn print_report(r: &DialectReport) {
     println!("\n=== {} ===", r.dialect.dir_name());
@@ -106,15 +63,15 @@ fn print_report(r: &DialectReport) {
         .unwrap_or(22)
         .max(22);
 
-    if r.has_oracle {
-        let oracle = if r.dialect == Dialect::Sqlite {
+    if r.has_reference {
+        let reference = if r.dialect == Dialect::Sqlite {
             "sqlite3-parser (lemon-rs)"
         } else {
             "pg_query (libpg_query)"
         };
         println!(
-            "Oracle: {}   valid: {}   invalid: {}",
-            oracle, r.valid_total, r.invalid_total
+            "Reference: {}   valid: {}   invalid: {}",
+            reference, r.valid_total, r.invalid_total
         );
         println!(
             "{:<nw$}  {:>7}  {:>7}  {:>7}  {:>8}",
@@ -142,7 +99,7 @@ fn print_report(r: &DialectReport) {
         }
     } else {
         println!(
-            "No oracle (provenance corpus). Total statements: {}",
+            "No reference (provenance corpus). Total statements: {}",
             r.valid_total
         );
         println!("{:<nw$}  {:>8}  {:>7}", "parser", "Accept", "RTrip");
@@ -161,13 +118,13 @@ fn print_report(r: &DialectReport) {
 
 fn run_correctness() {
     println!("Multi-dialect SQL parser correctness");
-    println!("Oracle-graded (PostgreSQL=pg_query, SQLite=lemon-rs), acceptance-rate elsewhere.");
+    println!("Reference-graded (PostgreSQL=pg_query, SQLite=lemon-rs), acceptance-rate elsewhere.");
     println!("Each parser run in its best-matching dialect.");
 
     let all = BenchParser::all();
     for dialect in ORDER {
         eprintln!("processing {}...", dialect.dir_name());
-        if let Some(r) = process_dialect(dialect, &all) {
+        if let Some(r) = report::grade_dialect(dialect, &all) {
             print_report(&r);
         }
     }
@@ -175,30 +132,6 @@ fn run_correctness() {
 }
 
 // coverage (per-file acceptance matrix).
-
-struct FileStat {
-    name: String,
-    total: usize,
-    accepted: Vec<usize>,
-}
-
-fn eval_file(path: &Path, dialect: Dialect, parsers: &[BenchParser]) -> Option<FileStat> {
-    let name = path.file_name()?.to_string_lossy().into_owned();
-    let content = fs::read_to_string(path).ok()?;
-    let stmts: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
-    if stmts.is_empty() {
-        return None;
-    }
-    let accepted = parsers
-        .iter()
-        .map(|&p| report::count_accepted(&stmts, dialect, p))
-        .collect();
-    Some(FileStat {
-        name,
-        total: stmts.len(),
-        accepted,
-    })
-}
 
 fn truncate(s: &str, w: usize) -> String {
     if s.len() <= w {
@@ -212,50 +145,8 @@ fn run_coverage() {
     println!("\nPer-file acceptance rate per parser (parser run in matching dialect)");
 
     let all = BenchParser::all();
-    let mut dirs: Vec<_> = fs::read_dir("datasets")
-        .expect("read datasets/")
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-        .collect();
-    dirs.sort_by_key(std::fs::DirEntry::file_name);
-
-    for dir in dirs {
-        let dir_name = dir.file_name().to_string_lossy().into_owned();
-        let Some(dialect) = Dialect::from_dir_name(&dir_name) else {
-            continue;
-        };
-        let parsers: Vec<BenchParser> = all
-            .iter()
-            .copied()
-            .filter(|p| p.supports(dialect))
-            .collect();
-        let mut files: Vec<PathBuf> = fs::read_dir(dir.path())
-            .expect("read dialect dir")
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "txt"))
-            .collect();
-        files.sort();
-        if files.is_empty() {
-            continue;
-        }
-
-        let stats: Vec<FileStat> = std::thread::scope(|scope| {
-            let handles: Vec<_> = files
-                .iter()
-                .map(|path| {
-                    let parsers = &parsers;
-                    std::thread::Builder::new()
-                        .stack_size(WORKER_STACK)
-                        .spawn_scoped(scope, move || eval_file(path, dialect, parsers))
-                        .expect("spawn worker")
-                })
-                .collect();
-            handles
-                .into_iter()
-                .filter_map(|h| h.join().ok().flatten())
-                .collect()
-        });
+    for dialect in ORDER {
+        let (parsers, stats) = report::coverage_dialect(dialect, &all);
         if stats.is_empty() {
             continue;
         }
@@ -289,13 +180,14 @@ fn run_coverage() {
         }
         println!();
     }
-    println!("\n(pg_query for PostgreSQL and sqlite3-parser for SQLite are the oracles for those dialects.)");
+    println!("\n(pg_query for PostgreSQL and sqlite3-parser for SQLite are the reference for those dialects.)");
 }
 
 fn usage() -> ! {
     eprintln!("usage: sqlbench <subcommand>");
     eprintln!("  correctness [--per-file]   grade parsers over datasets/");
     eprintln!("  plot                       render benchmark_results*.svg");
+    eprintln!("  export                     write web/assets/bench.json for the site");
     std::process::exit(2);
 }
 
@@ -323,6 +215,16 @@ fn main() {
                 run_correctness();
             }
         }
+        Some("export") => {
+            if let Err(e) = sql_ast_benchmark::datasets::ensure_corpus() {
+                eprintln!("ERROR: could not prepare datasets/: {e}");
+                std::process::exit(1);
+            }
+            if let Err(e) = export::run() {
+                eprintln!("ERROR: {e}");
+                std::process::exit(1);
+            }
+        }
         Some("-h" | "--help" | "help") => usage(),
         Some(other) => {
             eprintln!("unknown subcommand: {other}");
@@ -333,10 +235,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{eval_file, pct, truncate};
-    use sql_ast_benchmark::datasets::Dialect;
-    use sql_ast_benchmark::BenchParser;
-    use std::fs;
+    use super::{pct, truncate};
 
     #[test]
     fn pct_handles_zero_base() {
@@ -349,21 +248,5 @@ mod tests {
     fn truncate_clips_long_names() {
         assert_eq!(truncate("short", 10), "short");
         assert_eq!(truncate("verylongname", 4), "very");
-    }
-
-    #[test]
-    fn eval_file_counts_nonblank_and_acceptance() {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("sqlbench_eval_{}_{nanos}.txt", std::process::id()));
-        fs::write(&path, "SELECT 1\n\nSELECT 1 FROM\n").unwrap();
-
-        let stat = eval_file(&path, Dialect::Postgresql, &[BenchParser::Sqlparser]).unwrap();
-        assert_eq!(stat.total, 2); // two non-blank lines
-        assert_eq!(stat.accepted[0], 1); // sqlparser accepts "SELECT 1", rejects truncated
-        let _ = fs::remove_file(&path);
     }
 }

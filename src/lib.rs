@@ -16,13 +16,12 @@ use sqlparser::dialect::{
     RedshiftSqlDialect, SQLiteDialect,
 };
 
-#[cfg(feature = "pg_query_parser")]
 fn pg_query_canonical(sql: &str) -> Option<String> {
     pg_query::parse(sql).ok()?.deparse().ok()
 }
 
 // Multi-dialect benchmark layer. Each parser runs in its best-matching dialect.
-// One it does not model returns `None` (N/A). Correctness uses an oracle where
+// One it does not model returns `None` (N/A). Correctness uses reference where
 // one exists (pg_query for PostgreSQL, lemon-rs for SQLite), else acceptance rate.
 
 // Dialect mappings.
@@ -218,55 +217,44 @@ fn databend_reprint(sql: &str, d: DatabendDialect) -> Option<String> {
     .unwrap_or(None)
 }
 
-// Oracles (ground truth).
+// Reference.
 
-/// Canonical form for an oracle-backed dialect, used for fidelity checks.
-/// `None` for dialects with no oracle (or when the relevant feature is off).
-fn oracle_canonical(sql: &str, d: Dialect) -> Option<String> {
+/// Canonical form for a reference-backed dialect, used for fidelity checks.
+/// `None` for dialects with no reference (or when the relevant feature is off).
+fn reference_canonical(sql: &str, d: Dialect) -> Option<String> {
     match d {
-        #[cfg(feature = "pg_query_parser")]
         Dialect::Postgresql => pg_query_canonical(sql),
         Dialect::Sqlite => sqlite3_reprint(sql),
         _ => None,
     }
 }
 
-/// Does an oracle accept this statement? `Some(true/false)` for oracle-backed
+/// Does the reference accept this statement? `Some(true/false)` for reference-backed
 /// dialects (`PostgreSQL` via `pg_query`, `SQLite` via lemon-rs), `None` otherwise.
 #[must_use]
-pub fn oracle_accepts(sql: &str, d: Dialect) -> Option<bool> {
+pub fn reference_accepts(sql: &str, d: Dialect) -> Option<bool> {
     match d {
-        #[cfg(feature = "pg_query_parser")]
         Dialect::Postgresql => Some(pg_query::parse(sql).is_ok()),
         Dialect::Sqlite => Some(sqlite3_accepts(sql)),
         _ => None,
     }
 }
 
-/// Is `d` an oracle-backed dialect (has ground truth for recall/false-positive)?
+/// Is `d` a reference-backed dialect (has reference for recall/false-positive)?
 #[must_use]
-pub const fn has_oracle(d: Dialect) -> bool {
-    match d {
-        #[cfg(feature = "pg_query_parser")]
-        Dialect::Postgresql => true,
-        Dialect::Sqlite => true,
-        _ => false,
-    }
+pub const fn has_reference(d: Dialect) -> bool {
+    matches!(d, Dialect::Postgresql | Dialect::Sqlite)
 }
 
 // BenchParser.
 
 /// A parser under test. The single source of truth for dialect support,
-/// acceptance, round-trip stability and oracle fidelity.
+/// acceptance, round-trip stability and reference fidelity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BenchParser {
     Sqlparser,
-    #[cfg(feature = "pg_query_parser")]
     PgQuery,
-    #[cfg(feature = "pg_query_parser")]
     PgQuerySummary,
-    #[cfg(feature = "pg_parse_parser")]
-    PgParse,
     Qusql,
     Polyglot,
     Databend,
@@ -281,12 +269,8 @@ impl BenchParser {
     pub fn all() -> Vec<Self> {
         vec![
             Self::Sqlparser,
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuery,
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuerySummary,
-            #[cfg(feature = "pg_parse_parser")]
-            Self::PgParse,
             Self::Qusql,
             Self::Polyglot,
             Self::Databend,
@@ -301,12 +285,8 @@ impl BenchParser {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Sqlparser => "sqlparser-rs",
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuery => "pg_query.rs",
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuerySummary => "pg_query (summary)",
-            #[cfg(feature = "pg_parse_parser")]
-            Self::PgParse => "pg_parse",
             Self::Qusql => "qusql-parse",
             Self::Polyglot => "polyglot-sql",
             Self::Databend => "databend-common-ast",
@@ -327,14 +307,10 @@ impl BenchParser {
     pub fn accepts(self, sql: &str, dialect: Dialect) -> Option<bool> {
         match self {
             Self::Sqlparser => Some(Parser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok()),
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuery => (dialect == Dialect::Postgresql).then(|| pg_query::parse(sql).is_ok()),
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuerySummary => {
                 (dialect == Dialect::Postgresql).then(|| pg_query::summary(sql, -1).is_ok())
             }
-            #[cfg(feature = "pg_parse_parser")]
-            Self::PgParse => (dialect == Dialect::Postgresql).then(|| pg_parse::parse(sql).is_ok()),
             Self::Qusql => qusql_dialect(dialect).map(|d| qusql_accepts_dialect(sql, d)),
             Self::Polyglot => Some(
                 std::panic::catch_unwind(|| polyglot_parse(sql, polyglot_dialect(dialect)).is_ok())
@@ -365,12 +341,8 @@ impl BenchParser {
     pub fn parse_once(self, sql: &str, dialect: Dialect) -> bool {
         match self {
             Self::Sqlparser => Parser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok(),
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuery => pg_query::parse(sql).is_ok(),
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuerySummary => pg_query::summary(sql, -1).is_ok(),
-            #[cfg(feature = "pg_parse_parser")]
-            Self::PgParse => pg_parse::parse(sql).is_ok(),
             Self::Qusql => {
                 let d = qusql_dialect(dialect).unwrap_or(SQLDialect::PostgreSQL);
                 let opts = ParseOptions::new()
@@ -417,7 +389,6 @@ impl BenchParser {
             Self::Sqlite3 => (dialect == Dialect::Sqlite)
                 .then(|| sqlite3_reprint(sql))
                 .flatten(),
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuery => (dialect == Dialect::Postgresql)
                 .then(|| pg_query::parse(sql).ok().and_then(|p| p.deparse().ok()))
                 .flatten(),
@@ -433,7 +404,6 @@ impl BenchParser {
             Self::Sqlparser | Self::Polyglot | Self::Sqlglot => true,
             Self::Databend => databend_dialect_of(dialect).is_some(),
             Self::Sqlite3 => dialect == Dialect::Sqlite,
-            #[cfg(feature = "pg_query_parser")]
             Self::PgQuery => dialect == Dialect::Postgresql,
             _ => false,
         }
@@ -455,20 +425,20 @@ impl BenchParser {
         )
     }
 
-    /// Oracle fidelity: the oracle's canonical form of this parser's output
-    /// equals the oracle's canonical form of the input. `None` if the parser
-    /// cannot reprint or the dialect has no oracle.
+    /// Reference fidelity: the reference's canonical form of this parser's output
+    /// equals the reference's canonical form of the input. `None` if the parser
+    /// cannot reprint or the dialect has no reference.
     #[must_use]
     pub fn fidelity(self, sql: &str, dialect: Dialect) -> Option<bool> {
-        if !self.can_reprint(dialect) || !has_oracle(dialect) {
+        if !self.can_reprint(dialect) || !has_reference(dialect) {
             return None;
         }
         let Some(out) = self.reprint(sql, dialect) else {
             return Some(false);
         };
         match (
-            oracle_canonical(sql, dialect),
-            oracle_canonical(&out, dialect),
+            reference_canonical(sql, dialect),
+            reference_canonical(&out, dialect),
         ) {
             (Some(a), Some(b)) => Some(a == b),
             _ => Some(false),
@@ -477,13 +447,14 @@ impl BenchParser {
 }
 
 pub mod datasets;
+pub mod export;
 pub mod plot;
 pub mod report;
 pub mod stats;
 
 #[cfg(test)]
 mod tests {
-    use super::{has_oracle, oracle_accepts, BenchParser};
+    use super::{has_reference, reference_accepts, BenchParser};
     use crate::datasets::Dialect;
 
     const ALL_DIALECTS: [Dialect; 13] = [
@@ -554,7 +525,6 @@ mod tests {
         assert_eq!(supported(BenchParser::Orql), vec![Dialect::Oracle]);
     }
 
-    #[cfg(feature = "pg_query_parser")]
     #[test]
     fn pg_query_models_postgresql_only() {
         assert_eq!(supported(BenchParser::PgQuery), vec![Dialect::Postgresql]);
@@ -600,19 +570,21 @@ mod tests {
     }
 
     #[test]
-    fn oracle_only_for_postgresql_and_sqlite() {
-        assert!(has_oracle(Dialect::Sqlite));
-        assert!(!has_oracle(Dialect::Mysql));
-        assert!(!has_oracle(Dialect::Clickhouse));
-        assert_eq!(oracle_accepts("SELECT 1", Dialect::Mysql), None);
-        assert_eq!(oracle_accepts("SELECT 1", Dialect::Sqlite), Some(true));
+    fn reference_only_for_postgresql_and_sqlite() {
+        assert!(has_reference(Dialect::Sqlite));
+        assert!(!has_reference(Dialect::Mysql));
+        assert!(!has_reference(Dialect::Clickhouse));
+        assert_eq!(reference_accepts("SELECT 1", Dialect::Mysql), None);
+        assert_eq!(reference_accepts("SELECT 1", Dialect::Sqlite), Some(true));
 
-        #[cfg(feature = "pg_query_parser")]
         {
-            assert!(has_oracle(Dialect::Postgresql));
-            assert_eq!(oracle_accepts("SELECT 1", Dialect::Postgresql), Some(true));
+            assert!(has_reference(Dialect::Postgresql));
             assert_eq!(
-                oracle_accepts("SELECT 1 FROM", Dialect::Postgresql),
+                reference_accepts("SELECT 1", Dialect::Postgresql),
+                Some(true)
+            );
+            assert_eq!(
+                reference_accepts("SELECT 1 FROM", Dialect::Postgresql),
                 Some(false)
             );
         }
@@ -629,13 +601,13 @@ mod tests {
             BenchParser::Qusql.roundtrips("SELECT 1", Dialect::Postgresql),
             None
         );
-        // Fidelity needs an oracle: None on a non-oracle dialect even for a
+        // Fidelity needs reference: None on a non-reference dialect even for a
         // parser that can reprint.
         assert_eq!(
             BenchParser::Sqlparser.fidelity("SELECT 1", Dialect::Mysql),
             None
         );
-        // Reprintable parser on an oracle dialect => a verdict (Some).
+        // Reprintable parser on a reference dialect => a verdict (Some).
         assert!(BenchParser::Sqlparser
             .roundtrips("SELECT 1", Dialect::Postgresql)
             .is_some());

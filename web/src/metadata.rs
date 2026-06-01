@@ -1,0 +1,309 @@
+//! Per-parser repository and crate metadata, shown as a stats block on each
+//! parser detail page. Keyed by display name.
+//!
+//! This is a hand-recorded snapshot (see [`SNAPSHOT`]) from GitHub, crates.io,
+//! and Codeberg, not fetched at runtime, so the figures are point-in-time and
+//! the wasm build stays free of any network access. Refresh the numbers and
+//! the date together when revising.
+
+/// The date the figures below were collected (ISO 8601).
+pub const SNAPSHOT: &str = "2026-05-31";
+
+/// Whether a parser ships its own fuzzing harness.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Fuzz {
+    /// A fuzz harness lives in the repository.
+    Yes,
+    /// No harness in the binding, but it wraps libpg_query (PostgreSQL's own C
+    /// parser), which is fuzzed by its upstream maintainers.
+    Upstream,
+    /// No fuzzing.
+    No,
+}
+
+impl Fuzz {
+    /// Short label for display.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Fuzz::Yes => "yes",
+            // No harness in the binding itself, but the wrapped C parser
+            // (libpg_query) is fuzzed by its own upstream maintainers.
+            Fuzz::Upstream => "via libpg_query",
+            Fuzz::No => "no",
+        }
+    }
+
+    /// Whether this counts as fuzzed for the purpose of flagging. `Upstream`
+    /// (the wrapped C parser is fuzzed) is treated as acceptable, only `No` is
+    /// problematic.
+    #[must_use]
+    pub const fn is_ok(self) -> bool {
+        !matches!(self, Fuzz::No)
+    }
+
+    /// A full sentence describing the fuzzing status, for tooltips and screen
+    /// readers. Fuzzing feeds random or malformed input to surface crashes.
+    #[must_use]
+    pub const fn description(self) -> &'static str {
+        match self {
+            Fuzz::Yes => "Fuzz tested: the project ships a fuzzing harness that feeds random and malformed input to surface crashes and panics.",
+            Fuzz::Upstream => "Fuzz tested upstream: this binding has no harness of its own, but the wrapped C parser (libpg_query) is fuzzed by its own maintainers.",
+            Fuzz::No => "Not fuzz tested: the project ships no fuzzing harness, so crash-inducing or malformed input is less likely to have been caught.",
+        }
+    }
+}
+
+/// A full sentence describing whether the repository ships a test suite.
+#[must_use]
+pub const fn tests_description(has: bool) -> &'static str {
+    if has {
+        "Has a test suite: the repository ships automated tests that guard against regressions."
+    } else {
+        "No test suite: the repository ships no automated tests, so correctness is unguarded against regressions."
+    }
+}
+
+/// A full sentence describing whether the repository ships criterion benchmarks.
+#[must_use]
+pub const fn benches_description(has: bool) -> &'static str {
+    if has {
+        "Has a benchmark suite: the repository ships criterion performance benchmarks."
+    } else {
+        "No benchmark suite: the repository ships no criterion performance benchmarks, so its speed is not tracked over time."
+    }
+}
+
+/// The year the metadata snapshot was taken, parsed from [`SNAPSHOT`].
+const SNAPSHOT_YEAR: u16 = 2026;
+
+/// Interpretive sentence for the star count: what popularity it signals.
+#[must_use]
+pub fn stars_description(stars: u32) -> String {
+    let note = if stars >= 1000 {
+        "a widely noticed project with broad community adoption"
+    } else if stars >= 100 {
+        "a modest but real following"
+    } else {
+        "little community traction so far, so expect a smaller user base to find and report issues"
+    };
+    format!("Popularity proxy: {} GitHub stars, {note}.", commas(stars))
+}
+
+/// Interpretive sentence for the fork count.
+#[must_use]
+pub fn forks_description(forks: u32) -> String {
+    format!(
+        "{} forks, a rough measure of how many developers have copied the code to patch or contribute back.",
+        commas(forks)
+    )
+}
+
+/// Interpretive sentence for the commit count: development depth.
+#[must_use]
+pub fn commits_description(commits: u32) -> String {
+    let note = if commits >= 1000 {
+        "a long, deep development history"
+    } else if commits >= 200 {
+        "a moderate development history"
+    } else {
+        "a short history, so the parser is comparatively young and less battle-tested"
+    };
+    format!("{} commits, indicating {note}.", commas(commits))
+}
+
+/// Interpretive sentence for the contributor count, flagging bus-factor risk.
+#[must_use]
+pub fn contributors_description(contributors: u32) -> String {
+    let note = match contributors {
+        0 | 1 => "maintained by a single person, a bus-factor risk if they step away",
+        2..=3 => "a small maintainer pool, so maintenance rests on a few people",
+        _ => "a broad contributor base, spreading maintenance across many people",
+    };
+    format!("{} contributors, {note}.", commas(contributors))
+}
+
+/// Interpretive sentence for the first-release year: project maturity.
+#[must_use]
+pub fn since_description(year: u16) -> String {
+    let age = SNAPSHOT_YEAR.saturating_sub(year);
+    let note = match age {
+        0 | 1 => "brand new, so it has had little time to harden against edge cases",
+        2..=4 => "still maturing",
+        _ => "a mature, long-lived project",
+    };
+    format!("First appeared in {year}, around {age} years old, {note}.")
+}
+
+/// Interpretive sentence for the download count: real-world usage.
+#[must_use]
+pub fn downloads_description(downloads: &str) -> String {
+    format!(
+        "{downloads} all-time crates.io downloads, a proxy for how much real-world code already depends on it."
+    )
+}
+
+/// Interpretive sentence for the license, flagging non-standard or absent terms.
+#[must_use]
+pub fn license_description(license: &str) -> String {
+    match license {
+        "MIT" => "MIT license: a simple permissive license, free to use in closed or open source.".to_string(),
+        "Apache-2.0" => "Apache-2.0 license: permissive and adds an explicit patent grant, friendly for commercial use.".to_string(),
+        "Unlicense" => "Unlicense: a public-domain dedication, usable with no conditions.".to_string(),
+        "custom" => "Non-standard license: review its exact terms before depending on it, as it is not a recognised SPDX license.".to_string(),
+        "none" => "No license declared: reuse rights are legally unclear, so depending on it is risky until the author adds one.".to_string(),
+        other => format!("Distributed under the {other} license."),
+    }
+}
+
+/// Whether a license is a recognised, low-risk one. A non-standard ("custom")
+/// or absent ("none") license is flagged as problematic.
+#[must_use]
+pub fn license_ok(license: &str) -> bool {
+    !matches!(license, "custom" | "none" | "")
+}
+
+/// Comma-group an integer (e.g. `12345` to `12,345`). Local copy so this module
+/// stays self-contained.
+fn commas(n: u32) -> String {
+    let s = n.to_string();
+    let b = s.as_bytes();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    for (i, c) in b.iter().enumerate() {
+        if i > 0 && (b.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(*c as char);
+    }
+    out
+}
+
+/// Repository and crate facts for one parser.
+pub struct ParserMeta {
+    /// GitHub/Codeberg stars.
+    pub stars: u32,
+    /// Forks.
+    pub forks: u32,
+    /// Total commits on the default branch.
+    pub commits: u32,
+    /// Distinct contributors.
+    pub contributors: u32,
+    /// Year the project first appeared (repo creation or first crate release).
+    pub since: u16,
+    /// SPDX license id, or a short note where none is declared.
+    pub license: &'static str,
+    /// Whether the parser is fuzzed.
+    pub fuzz: Fuzz,
+    /// Whether the repository ships a test suite.
+    pub tests: bool,
+    /// Whether the repository ships criterion benchmarks.
+    pub benches: bool,
+    /// Human-readable all-time crates.io downloads (empty when not on crates.io).
+    pub downloads: &'static str,
+}
+
+/// Metadata for a parser by display name, if recorded.
+#[must_use]
+pub fn parser_meta(name: &str) -> Option<ParserMeta> {
+    Some(match name {
+        "sqlparser-rs" => ParserMeta {
+            stars: 3373,
+            forks: 723,
+            commits: 1958,
+            contributors: 323,
+            since: 2018,
+            license: "Apache-2.0",
+            fuzz: Fuzz::Yes,
+            tests: true,
+            benches: true,
+            downloads: "63.2M",
+        },
+        // Both libpg_query bindings: own crate has no harness, but libpg_query
+        // (PostgreSQL's own C parser) is fuzzed upstream.
+        "pg_query.rs" | "pg_query (summary)" => ParserMeta {
+            stars: 237,
+            forks: 26,
+            commits: 105,
+            contributors: 14,
+            since: 2022,
+            license: "MIT",
+            fuzz: Fuzz::Upstream,
+            tests: true,
+            benches: true,
+            downloads: "1.5M",
+        },
+        "qusql-parse" => ParserMeta {
+            stars: 17,
+            forks: 0,
+            commits: 808,
+            contributors: 8,
+            since: 2025,
+            license: "Apache-2.0",
+            fuzz: Fuzz::No,
+            tests: true,
+            benches: false,
+            downloads: "2.5k",
+        },
+        "polyglot-sql" => ParserMeta {
+            stars: 829,
+            forks: 47,
+            commits: 133,
+            contributors: 8,
+            since: 2026,
+            license: "MIT",
+            fuzz: Fuzz::Yes,
+            tests: true,
+            benches: true,
+            downloads: "8.3k",
+        },
+        "databend-common-ast" => ParserMeta {
+            stars: 9308,
+            forks: 877,
+            commits: 34277,
+            contributors: 252,
+            since: 2020,
+            license: "custom",
+            fuzz: Fuzz::Yes,
+            tests: true,
+            benches: true,
+            downloads: "26k",
+        },
+        "sqlglot-rust" => ParserMeta {
+            stars: 15,
+            forks: 2,
+            commits: 121,
+            contributors: 2,
+            since: 2026,
+            license: "MIT",
+            fuzz: Fuzz::No,
+            tests: true,
+            benches: true,
+            downloads: "1.3k",
+        },
+        "sqlite3-parser" => ParserMeta {
+            stars: 62,
+            forks: 16,
+            commits: 500,
+            contributors: 7,
+            since: 2017,
+            license: "Unlicense",
+            fuzz: Fuzz::No,
+            tests: true,
+            benches: true,
+            downloads: "3.3M",
+        },
+        "orql" => ParserMeta {
+            stars: 0,
+            forks: 1,
+            commits: 90,
+            contributors: 1,
+            since: 2025,
+            license: "none",
+            fuzz: Fuzz::No,
+            tests: true,
+            benches: true,
+            downloads: "18",
+        },
+        _ => return None,
+    })
+}

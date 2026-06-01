@@ -1,0 +1,10 @@
+[application]
+name = "sql_ast_benchmark_web"
+
+[web.app]
+title = "Rust SQL Parser Benchmark"
+# GitHub Pages project site lives under /sql_ast_benchmark/.
+base_path = "sql_ast_benchmark"
+
+[web.watcher]
+index_on_404 = true

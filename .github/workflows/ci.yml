@@ -12,27 +12,19 @@ env:
 
 jobs:
   check:
-    name: Check (${{ matrix.feature }})
+    name: Check
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        feature: [pg_query_parser, pg_parse_parser]
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.feature }}
-      - run: cargo check --all-targets --no-default-features --features ${{ matrix.feature }}
+      - run: cargo check --all-targets
 
   clippy:
-    name: Clippy (${{ matrix.feature }})
+    name: Clippy
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        feature: [pg_query_parser, pg_parse_parser]
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -41,9 +33,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.feature }}
-      - run: cargo clippy --all-targets --no-default-features --features ${{ matrix.feature }}
+      - run: cargo clippy --all-targets
 
   fmt:
     name: Format
@@ -78,36 +68,26 @@ jobs:
           echo "All SVG files are valid XML"
 
   test:
-    name: Test (${{ matrix.feature }})
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        feature: [pg_query_parser, pg_parse_parser]
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.feature }}
-      - run: cargo test --all-targets --no-default-features --features ${{ matrix.feature }}
+      - run: cargo test --all-targets
 
   bench-dry-run:
-    name: Benchmark Dry Run (${{ matrix.feature }})
+    name: Benchmark Dry Run
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        feature: [pg_query_parser, pg_parse_parser]
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.feature }}
-      - run: cargo bench --quiet --no-default-features --features ${{ matrix.feature }} -- --test
+      - run: cargo bench --quiet -- --test
 
   coverage:
     name: Coverage
