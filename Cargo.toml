@@ -37,7 +37,6 @@ orql = { git = "https://codeberg.org/xitep/orql" }
 sqlglot-rust = "0.9.37"
 sqlite3-parser = "0.16.0"
 fallible-iterator = "0.3.0"
-plotters = "0.3"
 viz = { path = "viz" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

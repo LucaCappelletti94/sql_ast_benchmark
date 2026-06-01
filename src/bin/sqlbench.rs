@@ -11,15 +11,14 @@
 //!                              exists, acceptance rate otherwise). `--per-file`
 //!                              prints the per-dataset acceptance matrix instead
 //!                              of per-dialect reference metrics.
-//!   plot                       render `benchmark_results*.svg` from the data
-//!                              `cargo bench` wrote to `target/bench_dist/`.
+//!   export                     write `web/assets/bench.json` for the explorer.
 //!
-//! The grading and chart logic live in the library (`report`, `plot`). This
-//! binary is argument dispatch plus table formatting.
+//! The grading logic lives in the library (`report`). This binary is argument
+//! dispatch plus table formatting.
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::report::{self, DialectReport};
-use sql_ast_benchmark::{export, plot, BenchParser};
+use sql_ast_benchmark::{export, BenchParser};
 
 /// Reference-backed dialects first, then the provenance dialects.
 const ORDER: [Dialect; 13] = [
@@ -186,7 +185,6 @@ fn run_coverage() {
 fn usage() -> ! {
     eprintln!("usage: sqlbench <subcommand>");
     eprintln!("  correctness [--per-file]   grade parsers over datasets/");
-    eprintln!("  plot                       render benchmark_results*.svg");
     eprintln!("  export                     write web/assets/bench.json for the site");
     std::process::exit(2);
 }
@@ -198,12 +196,6 @@ fn main() {
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
-        Some("plot") => {
-            if let Err(e) = plot::render() {
-                eprintln!("ERROR: {e}");
-                std::process::exit(1);
-            }
-        }
         Some("correctness") | None => {
             if let Err(e) = sql_ast_benchmark::datasets::ensure_corpus() {
                 eprintln!("ERROR: could not prepare datasets/: {e}");

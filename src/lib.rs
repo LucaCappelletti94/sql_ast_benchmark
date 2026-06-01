@@ -446,9 +446,9 @@ impl BenchParser {
     }
 }
 
+pub mod bench_dist;
 pub mod datasets;
 pub mod export;
-pub mod plot;
 pub mod report;
 pub mod stats;
 
