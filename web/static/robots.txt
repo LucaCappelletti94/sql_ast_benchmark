@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sql-ast-benchmark.luca.phd/sitemap.xml
