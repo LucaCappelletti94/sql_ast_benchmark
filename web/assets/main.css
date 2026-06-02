@@ -294,6 +294,9 @@ main { display: block; }
 
 /* Charts */
 .charts { display: flex; flex-wrap: wrap; gap: 1rem; }
+/* When a table follows the charts in the same section (the memory section),
+   separate them. */
+.charts + .scroll { margin-top: 1.4rem; }
 .chart { flex: 1 1 440px; min-width: 300px; margin: 0; }
 /* The chart-svg is a button so the chart can be clicked to enlarge. */
 .chart-svg {
