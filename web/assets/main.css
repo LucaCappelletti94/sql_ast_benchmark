@@ -249,6 +249,9 @@ main { display: block; }
   border-radius: 999px;
   font-size: 0.78rem;
 }
+/* The source-repository pill is a link; keep the pill look, add a hover cue. */
+.meta-link { text-decoration: none; color: inherit; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+.meta-link:hover { border-color: var(--accent); background: var(--card-hover, #eef2f7); }
 .meta-val { font-weight: 700; color: var(--fg); }
 .meta-key {
   color: var(--muted);

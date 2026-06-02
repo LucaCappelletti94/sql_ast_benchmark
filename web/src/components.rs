@@ -4,7 +4,7 @@ use crate::brand::brand;
 use crate::data::bundle;
 use crate::Route;
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_brands_icons::FaGithub;
+use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub};
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaArrowLeftLong, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork, FaCopy,
     FaCube, FaDatabase, FaDownload, FaMicrochip, FaScaleBalanced, FaStar, FaStopwatch,
@@ -930,6 +930,34 @@ fn meta_flag(icon: Element, label: &str, value: String, ok: bool, desc: &str) ->
     }
 }
 
+/// A metadata pill that links somewhere (e.g. the source repository). Same shape
+/// as [`meta_item`] but rendered as an anchor opening in a new tab.
+fn meta_link(icon: Element, label: &str, value: String, href: &str, desc: String) -> Element {
+    rsx! {
+        a {
+            class: "meta-item meta-link",
+            href: "{href}",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            title: "{desc}",
+            "aria-label": "{desc}",
+            span { class: "meta-ico", "aria-hidden": "true", {icon} }
+            span { class: "meta-val", "aria-hidden": "true", "{value}" }
+            span { class: "meta-key", "aria-hidden": "true", "{label}" }
+        }
+    }
+}
+
+/// The host's brand glyph for a repository URL: GitHub's mark where applicable,
+/// else the generic git logo (Codeberg and the like have no dedicated icon).
+fn repo_icon(url: &str) -> Element {
+    if url.contains("github.com") {
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGithub } }
+    } else {
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGit } }
+    }
+}
+
 /// Repository and crate metadata pills for a parser, shown inside the parser
 /// hero banner. Renders nothing for a parser with no recorded metadata. Figures
 /// are a dated snapshot (see `metadata::SNAPSHOT`).
@@ -942,6 +970,7 @@ fn parser_meta_pills(parser: &str) -> Element {
         div {
             class: "meta-grid",
             title: "Repository and crate figures as of {SNAPSHOT}.",
+            {meta_link(repo_icon(m.repo), "repo", crate::metadata::repo_host(m.repo).to_string(), m.repo, crate::metadata::repo_description(m.repo))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaStar } }, "stars", commas(m.stars as usize), crate::metadata::stars_description(m.stars))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCodeFork } }, "forks", commas(m.forks as usize), crate::metadata::forks_description(m.forks))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCodeCommit } }, "commits", commas(m.commits as usize), crate::metadata::commits_description(m.commits))}
