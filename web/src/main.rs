@@ -10,6 +10,7 @@ mod brand;
 mod components;
 mod data;
 mod descriptions;
+mod dialect_meta;
 mod logos;
 mod metadata;
 

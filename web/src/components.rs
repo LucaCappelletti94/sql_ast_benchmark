@@ -6,10 +6,10 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaBox, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork,
-    FaCopy, FaCube, FaDatabase, FaDownload, FaFlaskVial, FaHeartPulse, FaMicrochip,
-    FaScaleBalanced, FaShieldHalved, FaStar, FaStopwatch, FaTableCells, FaTriangleExclamation,
-    FaUsers, FaVial,
+    FaArrowLeftLong, FaBox, FaBug, FaBuilding, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit,
+    FaCodeFork, FaCopy, FaCube, FaDatabase, FaDownload, FaFlaskVial, FaHeartPulse, FaMicrochip,
+    FaScaleBalanced, FaShieldHalved, FaStar, FaStopwatch, FaTableCells, FaTag,
+    FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -535,6 +535,7 @@ pub fn DialectView(dir: String) -> Element {
                         }
                     }
                 }
+                {dialect_meta_pills(&d.dir_name)}
             }
         }
 
@@ -956,6 +957,30 @@ fn repo_icon(url: &str) -> Element {
         rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGithub } }
     } else {
         rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGit } }
+    }
+}
+
+/// Engine-fact pills for a dialect, shown inside the dialect hero banner: who
+/// makes it, its license, first release, latest version, implementation
+/// language, and whether the engine runs in wasm. Renders nothing for the
+/// cross-dialect "multi" corpus or any dir with no recorded engine. Figures are
+/// a dated snapshot (see `dialect_meta::SNAPSHOT`).
+fn dialect_meta_pills(dir: &str) -> Element {
+    use crate::dialect_meta::{self as dm, SNAPSHOT};
+    let Some(m) = dm::dialect_meta(dir) else {
+        return rsx! {};
+    };
+    rsx! {
+        div {
+            class: "meta-grid",
+            title: "Engine facts as of {SNAPSHOT}.",
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBuilding } }, "by", m.vendor.to_string(), dm::vendor_description(m.vendor_full))}
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaScaleBalanced } }, "license", m.license.to_string(), dm::license_description(m.license))}
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCalendarDays } }, "since", m.since.to_string(), dm::since_description(m.since))}
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaTag } }, "version", dm::version_value(m.version, m.released), dm::version_description(m.version, m.released))}
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCode } }, "language", m.language.to_string(), dm::language_description(m.language))}
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCube } }, "wasm", if m.wasm { "yes".to_string() } else { "no".to_string() }, dm::wasm_description(m.wasm, m.wasm_note))}
+        }
     }
 }
 
