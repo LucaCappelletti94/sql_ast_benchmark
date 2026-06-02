@@ -147,6 +147,25 @@ pub fn Shell() -> Element {
             }
         }
         main { id: "content", Outlet::<Route> {} }
+        footer { class: "site-foot",
+            div { class: "foot-inner",
+                a { class: "foot-link", href: REPO,
+                    Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaGithub }
+                    "Source on GitHub"
+                }
+                a { class: "foot-link", href: "{REPO}/blob/main/LICENSE",
+                    Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaScaleBalanced }
+                    "MIT license"
+                }
+                a { class: "foot-link", href: "{REPO}/issues",
+                    Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaBug }
+                    "Report an issue"
+                }
+                span { class: "foot-note",
+                    "Corpus statements are drawn from each engine's own suites and samples, openly licensed (Apache-2.0, MIT, BSD, public domain, or CC-BY)."
+                }
+            }
+        }
         if let Some((filename, svg)) = ZOOM() {
             // The enlarged copy carries its own id so the same download scripts
             // can target it, keeping the PNG/SVG buttons usable while zoomed.
