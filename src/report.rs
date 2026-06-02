@@ -241,6 +241,9 @@ pub struct ParserFailures {
     pub parser: BenchParser,
     /// Statements the parser failed to accept, in corpus order.
     pub rejected: Vec<String>,
+    /// The parser's error message for each rejected statement, aligned with
+    /// `rejected` (same length, same order).
+    pub reasons: Vec<String>,
     /// Total statements graded for the dialect (denominator for the count).
     pub total: usize,
 }
@@ -298,14 +301,20 @@ pub fn failures_dialect_from(
                 std::thread::Builder::new()
                     .stack_size(WORKER_STACK)
                     .spawn_scoped(scope, move || {
-                        let rejected: Vec<String> = expected
-                            .iter()
-                            .filter(|s| p.accepts(s, dialect) != Some(true))
-                            .map(|s| (*s).clone())
-                            .collect();
+                        // Parse each expected statement once, keeping the ones the
+                        // parser rejects alongside the reason it gave.
+                        let mut rejected = Vec::new();
+                        let mut reasons = Vec::new();
+                        for &s in expected {
+                            if let Some(Err(reason)) = p.try_parse(s, dialect) {
+                                rejected.push(s.clone());
+                                reasons.push(reason);
+                            }
+                        }
                         ParserFailures {
                             parser: p,
                             rejected,
+                            reasons,
                             total,
                         }
                     })

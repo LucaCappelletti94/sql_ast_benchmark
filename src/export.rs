@@ -259,6 +259,7 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
                 rejected_total: 0,
                 expected_total: f.total,
                 preview_html: Vec::new(),
+                preview_reasons: Vec::new(),
                 download: None,
             });
             continue;
@@ -269,13 +270,20 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
             .take(FAIL_PREVIEW)
             .map(|s| highlight_sql(s))
             .collect::<Vec<_>>();
+        let preview_reasons = f
+            .reasons
+            .iter()
+            .take(FAIL_PREVIEW)
+            .cloned()
+            .collect::<Vec<_>>();
         let file = format!("{dir}__{}.tsv.zst", stats::slug(name));
-        match write_failure_tsv(&file, &f.rejected) {
+        match write_failure_tsv(&file, &f.rejected, &f.reasons) {
             Ok(()) => out.push(ParserFailures {
                 parser: name.to_string(),
                 rejected_total: f.rejected.len(),
                 expected_total: f.total,
                 preview_html: preview,
+                preview_reasons,
                 download: Some(format!("failures/{file}")),
             }),
             Err(e) => {
@@ -285,6 +293,7 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
                     rejected_total: f.rejected.len(),
                     expected_total: f.total,
                     preview_html: preview,
+                    preview_reasons,
                     download: None,
                 });
             }
@@ -341,13 +350,13 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Write up to [`FAIL_CAP`] rejected statements to a zstd-compressed TSV under
-/// [`FAILURES_DIR`]. Tabs and newlines in statements are escaped to keep one
-/// statement per row.
-fn write_failure_tsv(file: &str, rejected: &[String]) -> std::io::Result<()> {
+/// Write up to [`FAIL_CAP`] rejected statements, each with the parser's error
+/// message, to a zstd-compressed two-column TSV under [`FAILURES_DIR`]. Tabs and
+/// newlines are escaped to keep one statement per row.
+fn write_failure_tsv(file: &str, rejected: &[String], reasons: &[String]) -> std::io::Result<()> {
     std::fs::create_dir_all(FAILURES_DIR)?;
     let path = Path::new(FAILURES_DIR).join(file);
-    let tsv = format_failure_tsv(rejected, FAIL_CAP);
+    let tsv = format_failure_tsv(rejected, reasons, FAIL_CAP);
 
     let raw = std::fs::File::create(&path)?;
     let mut enc = zstd::stream::Encoder::new(raw, 19)?;
@@ -356,17 +365,22 @@ fn write_failure_tsv(file: &str, rejected: &[String]) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Build the TSV body for a failure download: a `statement` header then up to
-/// `cap` rows, one rejected statement each, with backslashes, tabs, and
-/// newlines escaped so every statement stays on a single line.
-fn format_failure_tsv(rejected: &[String], cap: usize) -> String {
-    let mut tsv = String::from("statement\n");
-    for s in rejected.iter().take(cap) {
-        tsv.push_str(
-            &s.replace('\\', "\\\\")
-                .replace('\t', "\\t")
-                .replace('\n', "\\n"),
-        );
+/// Build the TSV body for a failure download: a `statement\treason` header then
+/// up to `cap` rows. Each row is the rejected statement, a tab, then the parser's
+/// error message, with backslashes, tabs, and newlines escaped in both columns so
+/// every row stays on a single line. `reasons` is aligned with `rejected`; a
+/// missing reason is written as an empty cell.
+fn format_failure_tsv(rejected: &[String], reasons: &[String], cap: usize) -> String {
+    fn escape(s: &str) -> String {
+        s.replace('\\', "\\\\")
+            .replace('\t', "\\t")
+            .replace('\n', "\\n")
+    }
+    let mut tsv = String::from("statement\treason\n");
+    for (i, s) in rejected.iter().take(cap).enumerate() {
+        tsv.push_str(&escape(s));
+        tsv.push('\t');
+        tsv.push_str(&escape(reasons.get(i).map_or("", String::as_str)));
         tsv.push('\n');
     }
     tsv
@@ -552,25 +566,35 @@ mod tests {
     #[test]
     fn tsv_has_header_and_one_row_per_statement() {
         let rows = vec!["SELECT 1".to_string(), "SELECT 2".to_string()];
-        let tsv = format_failure_tsv(&rows, 1000);
+        let reasons = vec!["boom".to_string(), "bang".to_string()];
+        let tsv = format_failure_tsv(&rows, &reasons, 1000);
         let lines: Vec<&str> = tsv.lines().collect();
-        assert_eq!(lines[0], "statement");
+        assert_eq!(lines[0], "statement\treason");
         assert_eq!(lines.len(), 3); // header + 2 rows
-        assert_eq!(lines[1], "SELECT 1");
+        assert_eq!(lines[1], "SELECT 1\tboom");
     }
 
     #[test]
-    fn tsv_escapes_tabs_newlines_backslashes() {
+    fn tsv_escapes_tabs_newlines_backslashes_in_both_columns() {
         let rows = vec!["a\tb\nc\\d".to_string()];
-        let tsv = format_failure_tsv(&rows, 1000);
-        // The statement must stay on a single line with escapes.
-        assert_eq!(tsv, "statement\na\\tb\\nc\\\\d\n");
+        let reasons = vec!["e\tf".to_string()];
+        let tsv = format_failure_tsv(&rows, &reasons, 1000);
+        // Statement and reason both stay on a single line with escapes.
+        assert_eq!(tsv, "statement\treason\na\\tb\\nc\\\\d\te\\tf\n");
+    }
+
+    #[test]
+    fn tsv_writes_empty_cell_for_a_missing_reason() {
+        let rows = vec!["SELECT 1".to_string()];
+        let tsv = format_failure_tsv(&rows, &[], 1000);
+        assert_eq!(tsv, "statement\treason\nSELECT 1\t\n");
     }
 
     #[test]
     fn tsv_respects_the_cap() {
         let rows: Vec<String> = (0..2000).map(|i| format!("SELECT {i}")).collect();
-        let tsv = format_failure_tsv(&rows, 1000);
+        let reasons: Vec<String> = (0..2000).map(|i| format!("err {i}")).collect();
+        let tsv = format_failure_tsv(&rows, &reasons, 1000);
         // header + cap rows
         assert_eq!(tsv.lines().count(), 1001);
     }

@@ -53,6 +53,10 @@ pub struct ParserFailures {
     /// syntax-highlighted HTML at export time so the viewer ships no runtime
     /// highlighter. Each entry is the inner HTML of one `<pre>` block.
     pub preview_html: Vec<String>,
+    /// The parser's error message for each previewed statement, aligned with
+    /// `preview_html` (same index). Plain text, escaped by the viewer at render.
+    #[serde(default)]
+    pub preview_reasons: Vec<String>,
     /// Path (relative to the site root) of the full `.tsv.zst` download, or
     /// `None` when there were no failures to ship.
     pub download: Option<String>,

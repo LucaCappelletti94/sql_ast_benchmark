@@ -789,6 +789,9 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
                                 Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaCopy }
                             }
                             pre { id: "fail-{di}-{i}", class: "fail-code", dangerous_inner_html: "{html}" }
+                            if let Some(reason) = f.preview_reasons.get(i).filter(|r| !r.is_empty()) {
+                                div { class: "fail-reason", "{reason}" }
+                            }
                         }
                     }
                 }

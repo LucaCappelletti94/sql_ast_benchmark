@@ -107,42 +107,61 @@ const fn databend_dialect_of(d: Dialect) -> Option<DatabendDialect> {
 
 // Per-parser primitives (acceptance + reprint).
 
-fn qusql_accepts_dialect(sql: &str, d: SQLDialect) -> bool {
-    // qusql-parse uses todo!()/panic in some unimplemented paths, so treat those
-    // as parse failures rather than letting them abort the worker thread.
-    std::panic::catch_unwind(|| {
+/// Extract a human-readable message from a caught panic payload.
+fn panic_reason(p: &(dyn std::any::Any + Send)) -> String {
+    p.downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| p.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "panicked".to_string())
+}
+
+/// Run a parse closure under panic protection, turning a panic into an error
+/// message. Several parsers use `todo!()`/`panic!` on unimplemented paths, so
+/// this keeps a worker alive and still yields a reason for the rejection.
+fn catch_parse(
+    f: impl FnOnce() -> Result<(), String> + std::panic::UnwindSafe,
+) -> Result<(), String> {
+    match std::panic::catch_unwind(f) {
+        Ok(r) => r,
+        Err(p) => Err(panic_reason(&*p)),
+    }
+}
+
+fn qusql_try(sql: &str, d: SQLDialect) -> Result<(), String> {
+    catch_parse(|| {
         let opts = ParseOptions::new()
             .dialect(d)
             .arguments(qusql_parse::SQLArguments::Dollar);
         let mut issues = Issues::new(sql);
         let _ = parse_statements(sql, &mut issues, &opts);
-        !issues.get().iter().any(|i| i.level == Level::Error)
+        issues
+            .get()
+            .iter()
+            .find(|i| i.level == Level::Error)
+            .map_or(Ok(()), |e| Err(e.message.to_string()))
     })
-    .unwrap_or(false)
 }
 
-fn databend_accepts_dialect(sql: &str, d: DatabendDialect) -> bool {
-    std::panic::catch_unwind(|| {
-        databend_tokenize(sql)
-            .ok()
-            .and_then(|tokens| databend_parse(&tokens, d).ok())
-            .is_some()
+fn databend_try(sql: &str, d: DatabendDialect) -> Result<(), String> {
+    catch_parse(|| {
+        let tokens = databend_tokenize(sql).map_err(|e| e.to_string())?;
+        databend_parse(&tokens, d)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     })
-    .unwrap_or(false)
 }
 
-fn sqlite3_accepts(sql: &str) -> bool {
-    std::panic::catch_unwind(|| {
+fn sqlite3_try(sql: &str) -> Result<(), String> {
+    catch_parse(|| {
         let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
         loop {
             match parser.next() {
                 Ok(Some(_)) => {}
-                Ok(None) => return true,
-                Err(_) => return false,
+                Ok(None) => return Ok(()),
+                Err(e) => return Err(e.to_string()),
             }
         }
     })
-    .unwrap_or(false)
 }
 
 fn sqlite3_reprint(sql: &str) -> Option<String> {
@@ -235,7 +254,7 @@ fn reference_canonical(sql: &str, d: Dialect) -> Option<String> {
 pub fn reference_accepts(sql: &str, d: Dialect) -> Option<bool> {
     match d {
         Dialect::Postgresql => Some(pg_query::parse(sql).is_ok()),
-        Dialect::Sqlite => Some(sqlite3_accepts(sql)),
+        Dialect::Sqlite => Some(sqlite3_try(sql).is_ok()),
         _ => None,
     }
 }
@@ -305,30 +324,49 @@ impl BenchParser {
     /// `Some(true)` accepted, `Some(false)` rejected, `None` dialect unsupported.
     #[must_use]
     pub fn accepts(self, sql: &str, dialect: Dialect) -> Option<bool> {
+        self.try_parse(sql, dialect).map(|r| r.is_ok())
+    }
+
+    /// Parse `sql` in `dialect`, capturing the rejection reason. `None` = the
+    /// parser does not model the dialect, `Some(Ok(()))` = accepted, and
+    /// `Some(Err(msg))` = rejected with the parser's own error message (or a
+    /// panic message for parsers that abort on edge-case input). Panic-protected
+    /// like [`Self::accepts`], so it never unwinds the caller.
+    #[must_use]
+    pub fn try_parse(self, sql: &str, dialect: Dialect) -> Option<Result<(), String>> {
         match self {
-            Self::Sqlparser => Some(Parser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok()),
-            Self::PgQuery => (dialect == Dialect::Postgresql).then(|| pg_query::parse(sql).is_ok()),
-            Self::PgQuerySummary => {
-                (dialect == Dialect::Postgresql).then(|| pg_query::summary(sql, -1).is_ok())
-            }
-            Self::Qusql => qusql_dialect(dialect).map(|d| qusql_accepts_dialect(sql, d)),
-            Self::Polyglot => Some(
-                std::panic::catch_unwind(|| polyglot_parse(sql, polyglot_dialect(dialect)).is_ok())
-                    .unwrap_or(false),
+            Self::Sqlparser => Some(
+                Parser::parse_sql(&*sqlparser_dialect(dialect), sql)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string()),
             ),
-            Self::Databend => {
-                databend_dialect_of(dialect).map(|d| databend_accepts_dialect(sql, d))
-            }
-            Self::Orql => (dialect == Dialect::Oracle).then(|| {
-                std::panic::catch_unwind(|| orql_parser::parse(sql).is_ok()).unwrap_or(false)
+            Self::PgQuery => (dialect == Dialect::Postgresql)
+                .then(|| pg_query::parse(sql).map(|_| ()).map_err(|e| e.to_string())),
+            Self::PgQuerySummary => (dialect == Dialect::Postgresql).then(|| {
+                pg_query::summary(sql, -1)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
             }),
-            Self::Sqlglot => Some(
-                std::panic::catch_unwind(|| {
-                    sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect)).is_ok()
+            Self::Qusql => qusql_dialect(dialect).map(|d| qusql_try(sql, d)),
+            Self::Polyglot => Some(catch_parse(|| {
+                polyglot_parse(sql, polyglot_dialect(dialect))
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            })),
+            Self::Databend => databend_dialect_of(dialect).map(|d| databend_try(sql, d)),
+            Self::Orql => (dialect == Dialect::Oracle).then(|| {
+                catch_parse(|| {
+                    orql_parser::parse(sql)
+                        .map(|_| ())
+                        .map_err(|e| e.to_string())
                 })
-                .unwrap_or(false),
-            ),
-            Self::Sqlite3 => (dialect == Dialect::Sqlite).then(|| sqlite3_accepts(sql)),
+            }),
+            Self::Sqlglot => Some(catch_parse(|| {
+                sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect))
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            })),
+            Self::Sqlite3 => (dialect == Dialect::Sqlite).then(|| sqlite3_try(sql)),
         }
     }
 
@@ -552,6 +590,25 @@ mod tests {
         assert_eq!(
             BenchParser::Sqlparser.accepts("SELECT 1 FROM", Dialect::Postgresql),
             Some(false)
+        );
+    }
+
+    #[test]
+    fn try_parse_yields_a_reason_on_rejection() {
+        // Accepted: Ok with no message. Rejected: Err with a non-empty reason.
+        assert_eq!(
+            BenchParser::Sqlparser.try_parse("SELECT 1", Dialect::Postgresql),
+            Some(Ok(()))
+        );
+        let rejected = BenchParser::Sqlparser
+            .try_parse("SELECT 1 FROM", Dialect::Postgresql)
+            .expect("postgresql is modelled");
+        let reason = rejected.expect_err("garbage should be rejected");
+        assert!(!reason.is_empty(), "rejection reason should not be empty");
+        // Unsupported dialect/parser pairing stays None.
+        assert_eq!(
+            BenchParser::Sqlite3.try_parse("SELECT 1", Dialect::Postgresql),
+            None
         );
     }
 

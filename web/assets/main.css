@@ -459,6 +459,18 @@ main { display: block; }
 .fail-code-wrap:hover .copy-btn,
 .copy-btn:focus-visible { opacity: 1; }
 .copy-btn:hover { color: #1f2328; border-color: #b9b9b9; }
+/* The parser's error message for a rejected statement, under its preview. */
+.fail-reason {
+  margin: 0.2rem 0 0;
+  padding: 0.3rem 0.5rem 0.3rem 0.7rem;
+  border-left: 3px solid #e7a3a3;
+  background: #fdf3f3;
+  color: #8a2a2a;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Tables */
 .scroll { overflow-x: auto; }
