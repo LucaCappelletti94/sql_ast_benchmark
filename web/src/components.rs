@@ -1487,8 +1487,14 @@ fn memory_table(d: &DialectData) -> Element {
         .iter()
         .map(ToString::to_string)
         .collect();
-    let rows = d
-        .memory
+    // Order parsers the same way as every other plot/table on the page (the
+    // speed order in `d.perf`), so a parser sits in the same legend slot
+    // everywhere.
+    let mems: Vec<&viz::ParserMem> = display_order(d)
+        .iter()
+        .filter_map(|name| d.memory.iter().find(|m| m.parser.as_str() == *name))
+        .collect();
+    let rows = mems
         .iter()
         .map(|m| Row {
             key: m.parser.clone(),
@@ -1501,13 +1507,11 @@ fn memory_table(d: &DialectData) -> Element {
             ],
         })
         .collect();
-    let peak_lines: Vec<viz::Line> = d
-        .memory
+    let peak_lines: Vec<viz::Line> = mems
         .iter()
         .map(|m| viz::mem_line(m.parser.clone(), parser_rgb(&m.parser), &m.peak))
         .collect();
-    let ret_lines: Vec<viz::Line> = d
-        .memory
+    let ret_lines: Vec<viz::Line> = mems
         .iter()
         .map(|m| viz::mem_line(m.parser.clone(), parser_rgb(&m.parser), &m.retained))
         .collect();
