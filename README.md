@@ -4,10 +4,9 @@
 [![codecov](https://codecov.io/gh/LucaCappelletti94/sql_ast_benchmark/graph/badge.svg)](https://codecov.io/gh/LucaCappelletti94/sql_ast_benchmark)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021_edition-orange.svg)](https://www.rust-lang.org)
+[![Explorer](https://img.shields.io/website?url=https%3A%2F%2Fsql-ast-benchmark.luca.phd&label=explorer&up_message=online&down_message=offline)](https://sql-ast-benchmark.luca.phd)
 
 Benchmarking Rust SQL parsers on a real-world corpus of 311,594 statements across 13 SQL dialects. Each parser runs in its best-matching dialect, and correctness is graded against a real reference parser where one exists.
-
-**The full results live in the interactive explorer at <https://sql-ast-benchmark.luca.phd>**, with per-dialect distribution charts, correctness tables, and per-parser repository metadata, all kept current with the latest benchmark run. This README is a stable overview, see [CHANGELOG.md](CHANGELOG.md) for project history.
 
 ## Abstract
 
