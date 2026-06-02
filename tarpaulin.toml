@@ -11,8 +11,15 @@
 # first with `tar --zstd -xf datasets.tar.zst`, or the bench paths are skipped
 # and lib coverage drops accordingly.
 #
+# `workspace = true` covers the root and `viz` crates. The `web` crate is the
+# Dioxus rsx viewer (wasm UI): it has no meaningful unit-testable logic and
+# cannot run under tarpaulin's native instrumentation, so it is excluded rather
+# than counted as a large block of permanently-uncovered lines.
+#
 # Usage: cargo tarpaulin
 [default]
 engine = "Llvm"
+workspace = true
+exclude = ["sql_ast_benchmark_web"]
 run-types = ["Tests", "Benchmarks"]
 args = ["--test"]

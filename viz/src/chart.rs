@@ -342,6 +342,7 @@ mod tests {
                 subtotal_total: 0,
                 subtotal_accepted: vec![],
             },
+            failures: vec![],
         }
     }
 

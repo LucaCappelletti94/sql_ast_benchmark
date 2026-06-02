@@ -64,9 +64,12 @@ struct PerfRow {
 
 fn read_summary() -> Vec<PerfRow> {
     let path = format!("{}/summary.csv", bench_dist::DIST_DIR);
-    let Ok(content) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
+    std::fs::read_to_string(path).map_or_else(|_| Vec::new(), |c| parse_summary(&c))
+}
+
+/// Parse `summary.csv` content (header + rows) into [`PerfRow`]s, skipping rows
+/// that are too short or have unparsable counts.
+fn parse_summary(content: &str) -> Vec<PerfRow> {
     content
         .lines()
         .skip(1)
@@ -282,9 +285,21 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
 fn write_failure_tsv(file: &str, rejected: &[String]) -> std::io::Result<()> {
     std::fs::create_dir_all(FAILURES_DIR)?;
     let path = Path::new(FAILURES_DIR).join(file);
+    let tsv = format_failure_tsv(rejected, FAIL_CAP);
 
+    let raw = std::fs::File::create(&path)?;
+    let mut enc = zstd::stream::Encoder::new(raw, 19)?;
+    std::io::Write::write_all(&mut enc, tsv.as_bytes())?;
+    enc.finish()?;
+    Ok(())
+}
+
+/// Build the TSV body for a failure download: a `statement` header then up to
+/// `cap` rows, one rejected statement each, with backslashes, tabs, and
+/// newlines escaped so every statement stays on a single line.
+fn format_failure_tsv(rejected: &[String], cap: usize) -> String {
     let mut tsv = String::from("statement\n");
-    for s in rejected.iter().take(FAIL_CAP) {
+    for s in rejected.iter().take(cap) {
         tsv.push_str(
             &s.replace('\\', "\\\\")
                 .replace('\t', "\\t")
@@ -292,12 +307,7 @@ fn write_failure_tsv(file: &str, rejected: &[String]) -> std::io::Result<()> {
         );
         tsv.push('\n');
     }
-
-    let raw = std::fs::File::create(&path)?;
-    let mut enc = zstd::stream::Encoder::new(raw, 19)?;
-    std::io::Write::write_all(&mut enc, tsv.as_bytes())?;
-    enc.finish()?;
-    Ok(())
+    tsv
 }
 
 /// Grade every dialect, gather perf + coverage, and write `web/assets/bench.json`.
@@ -348,4 +358,67 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(out, json)?;
     println!("Wrote {OUT} ({} dialects)", bundle.dialects.len());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{format_failure_tsv, parse_summary, pct};
+
+    #[test]
+    fn summary_parses_rows_and_skips_short_lines() {
+        let csv = "dialect,parser,n_total,n_accepted,min,p10,p25,median,p75,p90,p99,max,mean,rt\n\
+                   postgresql,sqlparser-rs,100,80,1,2,3,4,5,6,7,8,9,99.5\n\
+                   too,short,row\n";
+        let rows = parse_summary(csv);
+        assert_eq!(rows.len(), 1);
+        let r = &rows[0];
+        assert_eq!(r.dialect, "postgresql");
+        assert_eq!(r.parser, "sqlparser-rs");
+        assert_eq!(r.n_total, 100);
+        assert_eq!(r.n_accepted, 80);
+        assert!((r.pct[3] - 4.0).abs() < 1e-9); // median column
+        assert!(r.roundtrip_pct.is_some_and(|v| (v - 99.5).abs() < 1e-9));
+    }
+
+    #[test]
+    fn summary_negative_roundtrip_is_none() {
+        let csv = "h,h,h,h,h,h,h,h,h,h,h,h,h,h\n\
+                   mysql,qusql-parse,10,5,1,1,1,1,1,1,1,1,1,-1\n";
+        let rows = parse_summary(csv);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].roundtrip_pct, None);
+    }
+
+    #[test]
+    fn pct_is_none_for_zero_base() {
+        assert_eq!(pct(3, 0), None);
+        assert_eq!(pct(0, 10), Some(0.0));
+        assert_eq!(pct(1, 4), Some(25.0));
+    }
+
+    #[test]
+    fn tsv_has_header_and_one_row_per_statement() {
+        let rows = vec!["SELECT 1".to_string(), "SELECT 2".to_string()];
+        let tsv = format_failure_tsv(&rows, 1000);
+        let lines: Vec<&str> = tsv.lines().collect();
+        assert_eq!(lines[0], "statement");
+        assert_eq!(lines.len(), 3); // header + 2 rows
+        assert_eq!(lines[1], "SELECT 1");
+    }
+
+    #[test]
+    fn tsv_escapes_tabs_newlines_backslashes() {
+        let rows = vec!["a\tb\nc\\d".to_string()];
+        let tsv = format_failure_tsv(&rows, 1000);
+        // The statement must stay on a single line with escapes.
+        assert_eq!(tsv, "statement\na\\tb\\nc\\\\d\n");
+    }
+
+    #[test]
+    fn tsv_respects_the_cap() {
+        let rows: Vec<String> = (0..2000).map(|i| format!("SELECT {i}")).collect();
+        let tsv = format_failure_tsv(&rows, 1000);
+        // header + cap rows
+        assert_eq!(tsv.lines().count(), 1001);
+    }
 }
