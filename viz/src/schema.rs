@@ -34,6 +34,36 @@ pub struct DialectData {
     /// Per-parser rejected-statement previews and download info.
     #[serde(default)]
     pub failures: Vec<ParserFailures>,
+    /// Per-parser memory distribution (peak and retained bytes per statement).
+    #[serde(default)]
+    pub memory: Vec<ParserMem>,
+}
+
+/// Per-statement memory distribution for one parser in one dialect. Bytes,
+/// measured by the `membench` allocator over the accepted statements.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ParserMem {
+    pub parser: String,
+    /// Number of statements measured.
+    pub n: usize,
+    /// Peak live bytes during the parse (the working-set high-water mark).
+    pub peak: MemDist,
+    /// Bytes still live after the parse: the AST plus the scaffolding it retains.
+    pub retained: MemDist,
+}
+
+/// A byte distribution: the same percentile set as [`ParserPerf`], in bytes.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MemDist {
+    pub min: f64,
+    pub p10: f64,
+    pub p25: f64,
+    pub median: f64,
+    pub p75: f64,
+    pub p90: f64,
+    pub p99: f64,
+    pub max: f64,
+    pub mean: f64,
 }
 
 /// A preview of the statements one parser rejected in one dialect, plus the

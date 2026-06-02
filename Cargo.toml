@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "viz", "web"]
+members = [".", "viz", "web", "membench"]
 default-members = ["."]
 resolver = "2"
 

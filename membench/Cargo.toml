@@ -1,0 +1,17 @@
+[package]
+name = "membench"
+version = "0.1.0"
+edition = "2021"
+description = "Per-statement memory benchmark for sql_ast_benchmark parsers"
+license = "MIT"
+publish = false
+
+# This crate installs a counting global allocator, which requires `unsafe`, so
+# unlike the main crate it does not forbid unsafe code.
+
+[dependencies]
+sql_ast_benchmark = { path = ".." }
+
+[[bin]]
+name = "membench"
+path = "src/main.rs"

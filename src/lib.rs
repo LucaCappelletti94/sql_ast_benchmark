@@ -415,6 +415,109 @@ impl BenchParser {
         }
     }
 
+    /// Parse `sql` while the `membench` allocator is active and return
+    /// `(peak, retained)` bytes: the high-water mark of live allocations during
+    /// the parse, and the bytes still live afterwards (the produced AST plus any
+    /// scaffolding it keeps alive). `None` for the `libpg_query` bindings, whose
+    /// real work happens in C and is invisible to the Rust allocator, and for
+    /// dialects a parser does not model. Intended for accepted statements, called
+    /// single-threaded from the `membench` binary.
+    #[must_use]
+    pub fn measure_mem(self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+        use std::hint::black_box;
+        // (peak, retained) relative to the live total just before the parse.
+        let snap = |before: usize| {
+            (
+                mem::peak().saturating_sub(before),
+                mem::live().saturating_sub(before),
+            )
+        };
+        match self {
+            // libpg_query allocates in C, invisible to the Rust allocator.
+            Self::PgQuery | Self::PgQuerySummary => None,
+            Self::Sqlparser => {
+                let before = mem::live();
+                mem::reset_peak();
+                let ast = Parser::parse_sql(&*sqlparser_dialect(dialect), sql);
+                black_box(&ast);
+                let r = snap(before);
+                drop(ast);
+                Some(r)
+            }
+            Self::Qusql => {
+                let d = qusql_dialect(dialect)?;
+                let before = mem::live();
+                mem::reset_peak();
+                let opts = ParseOptions::new()
+                    .dialect(d)
+                    .arguments(qusql_parse::SQLArguments::Dollar);
+                let mut issues = Issues::new(sql);
+                let ast = parse_statements(sql, &mut issues, &opts);
+                black_box((&ast, &issues));
+                let r = snap(before);
+                drop(ast);
+                drop(issues);
+                Some(r)
+            }
+            Self::Polyglot => {
+                let before = mem::live();
+                mem::reset_peak();
+                let ast = polyglot_parse(sql, polyglot_dialect(dialect));
+                black_box(&ast);
+                let r = snap(before);
+                drop(ast);
+                Some(r)
+            }
+            Self::Databend => {
+                let d = databend_dialect_of(dialect)?;
+                let before = mem::live();
+                mem::reset_peak();
+                let toks = databend_tokenize(sql);
+                let ast = toks.as_ref().ok().map(|t| databend_parse(t, d));
+                black_box((&toks, &ast));
+                let r = snap(before);
+                drop(ast);
+                drop(toks);
+                Some(r)
+            }
+            Self::Orql => {
+                let before = mem::live();
+                mem::reset_peak();
+                let ast = orql_parser::parse(sql);
+                black_box(&ast);
+                let r = snap(before);
+                drop(ast);
+                Some(r)
+            }
+            Self::Sqlglot => {
+                let before = mem::live();
+                mem::reset_peak();
+                let ast = sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect));
+                black_box(&ast);
+                let r = snap(before);
+                drop(ast);
+                Some(r)
+            }
+            Self::Sqlite3 => {
+                if dialect != Dialect::Sqlite {
+                    return None;
+                }
+                let before = mem::live();
+                mem::reset_peak();
+                let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+                let mut out = Vec::new();
+                while let Ok(Some(cmd)) = parser.next() {
+                    out.push(cmd);
+                }
+                black_box((&parser, &out));
+                let r = snap(before);
+                drop(out);
+                drop(parser);
+                Some(r)
+            }
+        }
+    }
+
     /// Parse and pretty-print, returning `None` if the parser has no printer, does not
     /// model `dialect`, or fails to parse `sql`.
     #[must_use]
@@ -487,6 +590,7 @@ impl BenchParser {
 pub mod bench_dist;
 pub mod datasets;
 pub mod export;
+pub mod mem;
 pub mod report;
 pub mod stats;
 

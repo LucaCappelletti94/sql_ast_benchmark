@@ -10,6 +10,20 @@ use std::fs;
 /// Directory where the benchmark writes raw per-statement timing files.
 pub const DIST_DIR: &str = "target/bench_dist";
 
+/// Directory where `membench` writes raw per-statement memory files.
+pub const MEM_DIR: &str = "target/mem_dist";
+
+/// Ascending-sorted byte values for one `(dialect, parser, kind)`, where `kind`
+/// is `"peak"` or `"retained"`, from `target/mem_dist/{dialect}__{slug}.{kind}.txt`
+/// (empty if absent).
+#[must_use]
+pub fn load_mem(dialect: &str, parser: &str, kind: &str) -> Vec<f64> {
+    let path = format!("{MEM_DIR}/{dialect}__{}.{kind}.txt", slug(parser));
+    fs::read_to_string(path)
+        .map(|c| parse_times(&c))
+        .unwrap_or_default()
+}
+
 /// Ascending-sorted ns timings for one `(dialect, parser)` from its raw
 /// `target/bench_dist/{dialect}__{slug}.txt` file (empty if absent).
 #[must_use]

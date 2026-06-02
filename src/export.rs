@@ -14,7 +14,8 @@ use crate::{bench_dist, stats, BenchParser};
 use std::cmp::Ordering;
 use std::path::Path;
 use viz::{
-    Bundle, CoverageFile, CoverageMatrix, DialectData, ParserFailures, ParserMetrics, ParserPerf,
+    Bundle, CoverageFile, CoverageMatrix, DialectData, MemDist, ParserFailures, ParserMem,
+    ParserMetrics, ParserPerf,
 };
 
 /// Output path (relative to repo root, where `cargo run` runs from).
@@ -178,6 +179,55 @@ fn perf_row_to_perf(r: &PerfRow, ecdf: Vec<[f64; 2]>) -> ParserPerf {
         roundtrip_pct: r.roundtrip_pct,
         ecdf,
     }
+}
+
+/// Build a byte distribution from an ascending-sorted sample (empty -> zeros).
+fn dist_from(sorted: &[f64]) -> MemDist {
+    if sorted.is_empty() {
+        return MemDist {
+            min: 0.0,
+            p10: 0.0,
+            p25: 0.0,
+            median: 0.0,
+            p75: 0.0,
+            p90: 0.0,
+            p99: 0.0,
+            max: 0.0,
+            mean: 0.0,
+        };
+    }
+    MemDist {
+        min: sorted[0],
+        p10: stats::quantile(sorted, 0.10),
+        p25: stats::quantile(sorted, 0.25),
+        median: stats::quantile(sorted, 0.50),
+        p75: stats::quantile(sorted, 0.75),
+        p90: stats::quantile(sorted, 0.90),
+        p99: stats::quantile(sorted, 0.99),
+        max: sorted[sorted.len() - 1],
+        mean: sorted.iter().sum::<f64>() / sorted.len() as f64,
+    }
+}
+
+/// Per-parser memory distributions for a dialect, read from `target/mem_dist`.
+/// Parsers with no measured file (e.g. the `libpg_query` bindings) are omitted.
+fn mem_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserMem> {
+    let mut out = Vec::new();
+    for p in parsers {
+        let name = p.name();
+        let peak = bench_dist::load_mem(dir, name, "peak");
+        if peak.is_empty() {
+            continue;
+        }
+        let retained = bench_dist::load_mem(dir, name, "retained");
+        out.push(ParserMem {
+            parser: name.to_string(),
+            n: peak.len(),
+            peak: dist_from(&peak),
+            retained: dist_from(&retained),
+        });
+    }
+    out
 }
 
 fn coverage_for(dialect: Dialect, all_parsers: &[BenchParser]) -> CoverageMatrix {
@@ -416,6 +466,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             perf: perf_for(d.dir_name(), &summary),
             coverage: coverage_for(d, &parsers),
             failures: failures_for(d.dir_name(), &parsers),
+            memory: mem_for(d.dir_name(), &parsers),
         });
     }
 

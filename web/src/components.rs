@@ -564,6 +564,7 @@ pub fn DialectView(dir: String) -> Element {
         }
 
         {perf_table(d)}
+        {memory_table(d)}
         {correctness_table(d)}
 
         Link { class: "back", to: Route::Overview {},
@@ -722,11 +723,63 @@ pub fn ParserView(name: String) -> Element {
             }
         }
 
+        {parser_memory_section(b, &parser)}
+
         {failures_section(b, &parser)}
 
         Link { class: "back", to: Route::Overview {},
             Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaArrowLeftLong }
             "All dialects & parsers"
+        }
+    }
+}
+
+/// The "Memory by dialect" section for a parser: per dialect it models, the
+/// peak and retained bytes per statement. Renders nothing for a parser with no
+/// measured memory (the libpg_query bindings, whose memory is C-side).
+fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
+    let rows: Vec<Row> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.iter().find(|m| m.parser == parser).map(|m| Row {
+                key: d.dir_name.clone(),
+                head: Head::Dialect {
+                    dir: d.dir_name.clone(),
+                    name: d.display_name.clone(),
+                },
+                cells: vec![
+                    Cell::bytes(Some(m.peak.median)),
+                    Cell::bytes(Some(m.peak.p90)),
+                    Cell::bytes(Some(m.retained.median)),
+                    Cell::bytes(Some(m.retained.p90)),
+                ],
+            })
+        })
+        .collect();
+    if rows.is_empty() {
+        return rsx! {};
+    }
+    let columns = ["peak p50", "peak p90", "retained p50", "retained p90"]
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaMicrochip }
+                "Memory by dialect"
+            }
+            p { class: "table-cap",
+                "One row per dialect this parser models, in bytes per statement over the statements it accepted. \"peak\" is the high-water mark of live memory during a parse, and \"retained\" is what the produced AST (plus the scaffolding it keeps alive) holds afterwards. Click any header to sort."
+            }
+            SortTable {
+                caption: format!("Per-dialect memory in bytes for {}", parser),
+                corner: "dialect".to_string(),
+                columns,
+                rows,
+                footer: None,
+            }
         }
     }
 }
@@ -1109,9 +1162,27 @@ impl Cell {
             num: v,
         }
     }
+    /// Byte cell from an optional value, formatted as B / KB / MB ("N/A" if missing).
+    fn bytes(v: Option<f64>) -> Cell {
+        Cell {
+            text: v.map_or_else(|| "N/A".to_string(), fmt_bytes),
+            num: v,
+        }
+    }
     /// Cell with explicit text and a numeric sort key.
     fn with(text: String, num: Option<f64>) -> Cell {
         Cell { text, num }
+    }
+}
+
+/// Human-readable byte size: B under 1 KiB, then KB or MB with one decimal.
+fn fmt_bytes(x: f64) -> String {
+    if x < 1024.0 {
+        format!("{} B", x.round() as usize)
+    } else if x < 1024.0 * 1024.0 {
+        format!("{:.1} KB", x / 1024.0)
+    } else {
+        format!("{:.1} MB", x / (1024.0 * 1024.0))
     }
 }
 
@@ -1205,6 +1276,10 @@ fn col_help(name: &str) -> Option<&'static str> {
         "missed %" => "Missed: the share of statements the parser was expected to accept but did not. On reference dialects this is one minus recall, elsewhere the unaccepted fraction. Lower is better.",
         "median ns" => "Median parse time per accepted statement, in nanoseconds: half of statements parse faster than this.",
         "p90 ns" => "90th-percentile parse time per accepted statement, in nanoseconds: nine in ten statements parse faster than this.",
+        "peak p50" => "Median peak live memory while parsing one statement: the working-set high-water mark that half of statements stay under.",
+        "peak p90" => "90th-percentile peak live memory per statement: nine in ten statements stay under this high-water mark.",
+        "retained p50" => "Median retained memory per statement: the bytes the produced AST (plus the scaffolding it keeps alive) holds after parsing. Half of statements retain less.",
+        "retained p90" => "90th-percentile retained memory per statement: the AST footprint nine in ten statements stay under.",
         _ => return None,
     })
 }
@@ -1351,6 +1426,48 @@ fn perf_table(d: &DialectData) -> Element {
             }
             SortTable {
                 caption: format!("Per-parser parse time in nanoseconds for {}", d.display_name),
+                corner: "parser".to_string(),
+                columns,
+                rows,
+                footer: None,
+            }
+        }
+    }
+}
+
+fn memory_table(d: &DialectData) -> Element {
+    if d.memory.is_empty() {
+        return rsx! {};
+    }
+    let columns = ["peak p50", "peak p90", "retained p50", "retained p90"]
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    let rows = d
+        .memory
+        .iter()
+        .map(|m| Row {
+            key: m.parser.clone(),
+            head: Head::Parser(m.parser.clone()),
+            cells: vec![
+                Cell::bytes(Some(m.peak.median)),
+                Cell::bytes(Some(m.peak.p90)),
+                Cell::bytes(Some(m.retained.median)),
+                Cell::bytes(Some(m.retained.p90)),
+            ],
+        })
+        .collect();
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaMicrochip }
+                "Memory"
+            }
+            p { class: "table-cap",
+                "One row per parser, in bytes per statement over the statements it accepted. \"peak\" is the high-water mark of live memory during the parse, and \"retained\" is what the produced AST (plus the scaffolding it keeps alive) holds afterwards, measured with a counting allocator. The libpg_query bindings are omitted because they parse in C, where the Rust allocator cannot see their memory. Click any header to sort."
+            }
+            SortTable {
+                caption: format!("Per-parser memory in bytes for {}", d.display_name),
                 corner: "parser".to_string(),
                 columns,
                 rows,
