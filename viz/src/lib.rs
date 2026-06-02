@@ -13,4 +13,6 @@ pub mod schema;
 
 pub use chart::{box_lines, box_svg, ecdf_lines, ecdf_svg, Line};
 pub use color::{parser_hex, parser_rgb};
-pub use schema::{Bundle, CoverageFile, CoverageMatrix, DialectData, ParserMetrics, ParserPerf};
+pub use schema::{
+    Bundle, CoverageFile, CoverageMatrix, DialectData, ParserFailures, ParserMetrics, ParserPerf,
+};

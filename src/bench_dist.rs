@@ -31,3 +31,24 @@ fn parse_times(content: &str) -> Vec<f64> {
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     v
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{load_times, parse_times};
+
+    #[test]
+    fn parse_times_drops_junk_and_sorts() {
+        let v = parse_times("30\n\n  10  \nnot-a-number\n-5\n0\n20\n");
+        assert_eq!(v, vec![10.0, 20.0, 30.0]);
+    }
+
+    #[test]
+    fn parse_times_empty_input() {
+        assert!(parse_times("").is_empty());
+    }
+
+    #[test]
+    fn load_times_missing_file_is_empty() {
+        assert!(load_times("nope_dialect", "nope_parser").is_empty());
+    }
+}

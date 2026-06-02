@@ -236,6 +236,89 @@ pub fn coverage_dialect(
     (parsers, stats)
 }
 
+/// The statements one parser rejected in one dialect, with the corpus total.
+pub struct ParserFailures {
+    pub parser: BenchParser,
+    /// Statements the parser failed to accept, in corpus order.
+    pub rejected: Vec<String>,
+    /// Total statements graded for the dialect (denominator for the count).
+    pub total: usize,
+}
+
+/// For each parser that supports `dialect`, collect the statements it rejected.
+///
+/// These are the actionable "should parse but did not" cases a parser author
+/// would want to fix. Reference-invalid statements are excluded so the set stays
+/// meaningful: only statements the parser ought to accept (reference-valid, or
+/// provenance-valid where there is no reference).
+///
+/// # Panics
+/// Panics if a worker thread cannot be spawned or panics while grading.
+#[must_use]
+pub fn failures_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Vec<ParserFailures> {
+    failures_dialect_from(Path::new("datasets"), dialect, all_parsers)
+}
+
+/// As [`failures_dialect`], but from an arbitrary corpus root (for testing).
+///
+/// # Panics
+/// Panics if a worker thread cannot be spawned or panics while grading.
+#[allow(clippy::needless_collect)] // handles must all spawn before any join
+#[must_use]
+pub fn failures_dialect_from(
+    root: &Path,
+    dialect: Dialect,
+    all_parsers: &[BenchParser],
+) -> Vec<ParserFailures> {
+    let stmts = load_dialect_from(root, dialect);
+    if stmts.is_empty() {
+        return Vec::new();
+    }
+    let reference = has_reference(dialect);
+    // Only statements the parser is expected to accept count as failures.
+    let expected: Vec<&String> = stmts
+        .iter()
+        .filter(|s| !reference || reference_accepts(s, dialect) == Some(true))
+        .collect();
+    let total = expected.len();
+
+    let parsers: Vec<BenchParser> = all_parsers
+        .iter()
+        .copied()
+        .filter(|p| p.supports(dialect))
+        .collect();
+
+    // One worker per parser: each scans the expected-valid statements and keeps
+    // the rejects. Parsing dominates, so parser-level parallelism is plenty.
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = parsers
+            .iter()
+            .map(|&p| {
+                let expected = &expected;
+                std::thread::Builder::new()
+                    .stack_size(WORKER_STACK)
+                    .spawn_scoped(scope, move || {
+                        let rejected: Vec<String> = expected
+                            .iter()
+                            .filter(|s| p.accepts(s, dialect) != Some(true))
+                            .map(|s| (*s).clone())
+                            .collect();
+                        ParserFailures {
+                            parser: p,
+                            rejected,
+                            total,
+                        }
+                    })
+                    .expect("spawn worker")
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("failure thread panicked"))
+            .collect()
+    })
+}
+
 /// Acceptance counts for one dataset file (None if unreadable or empty).
 fn eval_file(path: &Path, dialect: Dialect, parsers: &[BenchParser]) -> Option<FileCoverage> {
     let name = path.file_name()?.to_string_lossy().into_owned();
@@ -345,6 +428,48 @@ mod tests {
         assert_eq!(r.valid_total, 1);
         assert_eq!(r.invalid_total, 0);
         assert_eq!(r.stats[0].accepted_valid, 1);
+    }
+
+    #[test]
+    fn failures_collects_rejected_expected_statements() {
+        // On a reference dialect, only reference-valid statements that the parser
+        // rejects should appear. "SELECT 1 FROM" is reference-invalid (excluded);
+        // a valid statement sqlparser cannot parse should be captured.
+        let root = temp_root("failures_pg");
+        let dir = root.join("postgresql");
+        fs::create_dir_all(&dir).unwrap();
+        // "SELECT 1" is valid and accepted (no failure); the truncated one is
+        // reference-invalid and must be excluded from the failure set entirely.
+        fs::write(dir.join("q.txt"), "SELECT 1\nSELECT 1 FROM\n").unwrap();
+
+        let fails = super::failures_dialect_from(
+            &root,
+            Dialect::Postgresql,
+            &[BenchParser::Sqlparser, BenchParser::PgQuery],
+        );
+        // pg_query is the reference and accepts every reference-valid statement.
+        let pg = fails
+            .iter()
+            .find(|f| f.parser == BenchParser::PgQuery)
+            .unwrap();
+        assert_eq!(pg.total, 1); // one reference-valid statement
+        assert!(pg.rejected.is_empty());
+        // sqlparser also accepts "SELECT 1", so no failures here either, but the
+        // reference-invalid statement is never counted.
+        let sp = fails
+            .iter()
+            .find(|f| f.parser == BenchParser::Sqlparser)
+            .unwrap();
+        assert!(!sp.rejected.iter().any(|s| s == "SELECT 1 FROM"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn failures_empty_for_missing_corpus() {
+        let root = temp_root("failures_missing");
+        let fails = super::failures_dialect_from(&root, Dialect::Trino, &[BenchParser::Sqlparser]);
+        assert!(fails.is_empty());
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

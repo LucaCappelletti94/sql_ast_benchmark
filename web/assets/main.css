@@ -402,6 +402,41 @@ main { display: block; }
 .lightbox-close:hover { background: rgba(255, 255, 255, 0.25); }
 .lightbox-close:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 
+/* Failing-statement previews on parser pages */
+.fail-intro { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; max-width: 70ch; }
+.fail-dialect { margin-bottom: 1.4rem; }
+.fail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.fail-title { display: inline-flex; align-items: baseline; gap: 0.6rem; }
+.fail-title strong { font-size: 1rem; }
+.fail-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b03030;
+  background: #fdecec;
+  border: 1px solid #e7a3a3;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+/* Wrapper around dioxus-code's highlighted <pre>; it brings its own theme. */
+.fail-code {
+  margin: 0.3rem 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.82rem;
+}
+.fail-code pre {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  white-space: pre;
+}
+
 /* Tables */
 .scroll { overflow-x: auto; }
 table.data {
@@ -455,8 +490,6 @@ table.data td:first-child { text-align: left; }
 table.data tbody tr:nth-child(even) { background: #fcfcfd; }
 table.data tbody tr:hover { background: #f4f7fb; }
 th[scope="row"] { font-weight: 500; white-space: nowrap; }
-tr.subtotal th, tr.subtotal td { font-weight: 700; border-top: 2px solid var(--line); background: #f7f9fb; }
-.fname { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.82rem; }
 .dot { display: inline-block; width: 0.7em; height: 0.7em; border-radius: 3px; margin-right: 0.5em; vertical-align: middle; }
 
 /* Small inline dialect mark in per-parser table rows (logo or brand glyph). */

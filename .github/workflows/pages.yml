@@ -49,6 +49,7 @@ jobs:
           cp web/static/og-image.png _site/og-image.png     # social card image (Open Graph / Twitter)
           cp web/static/robots.txt _site/robots.txt         # crawler directives + sitemap pointer
           cp web/static/sitemap.xml _site/sitemap.xml       # sitemap for search engines
+          cp -r web/static/failures _site/failures          # rejected-statement TSV downloads
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

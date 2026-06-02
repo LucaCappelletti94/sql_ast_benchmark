@@ -4,10 +4,12 @@ use crate::brand::brand;
 use crate::data::bundle;
 use crate::Route;
 use dioxus::prelude::*;
+use dioxus_code::Code;
 use dioxus_free_icons::icons::fa_brands_icons::FaGithub;
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaArrowLeftLong, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork,
-    FaDatabase, FaDownload, FaScaleBalanced, FaStar, FaStopwatch, FaTableCells, FaUsers, FaVial,
+    FaDatabase, FaDownload, FaScaleBalanced, FaStar, FaStopwatch, FaTableCells,
+    FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -313,13 +315,13 @@ pub fn Overview() -> Element {
                 {rich_text("Choosing a SQL parser for a Rust project means weighing dialect coverage, correctness, and speed, yet those trade-offs are seldom measured on realistic input. This project benchmarks the actively maintained Rust SQL parsers on a large, multi-dialect corpus of real-world statements so the choice can rest on evidence rather than on each library's own claims.").into_iter()}
             }
             p { class: "blurb",
-                {rich_text(&format!("Eight parser libraries are evaluated: [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) (Apache DataFusion), [pg_query.rs](https://github.com/pganalyze/pg_query.rs) and its faster summary mode (Rust bindings to [libpg_query](https://github.com/pganalyze/libpg_query), PostgreSQL's own parser), [databend-common-ast](https://crates.io/crates/databend-common-ast), [polyglot-sql](https://github.com/tobilg/polyglot), [sqlglot-rust](https://crates.io/crates/sqlglot-rust), [qusql-parse](https://crates.io/crates/qusql-parse), and [sqlite3-parser](https://crates.io/crates/sqlite3-parser) (lemon-rs), with [orql](https://codeberg.org/xitep/orql) added on Oracle. The corpus holds 311,594 statements across these {} dialects, drawn from each engine's own regression suites and official samples and committed compressed for reproducibility.", b.dialects.len())).into_iter()}
+                {rich_text(&format!("The study evaluates eight parser libraries: [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) (Apache DataFusion), [pg_query.rs](https://github.com/pganalyze/pg_query.rs) and its faster summary mode (Rust bindings to [libpg_query](https://github.com/pganalyze/libpg_query), PostgreSQL's own parser), [databend-common-ast](https://crates.io/crates/databend-common-ast), [polyglot-sql](https://github.com/tobilg/polyglot), [sqlglot-rust](https://crates.io/crates/sqlglot-rust), [qusql-parse](https://crates.io/crates/qusql-parse), and [sqlite3-parser](https://crates.io/crates/sqlite3-parser) (lemon-rs), plus [orql](https://codeberg.org/xitep/orql) on Oracle. They run against a corpus of 311,594 statements spanning these {} dialects, drawn from each engine's own regression suites and official samples and committed compressed so every run is reproducible.", b.dialects.len())).into_iter()}
             }
             p { class: "blurb",
-                {rich_text("Every parser runs in the dialect that matches the corpus under test. Where a ground-truth parser exists, [libpg_query](https://github.com/pganalyze/libpg_query) for PostgreSQL and [lemon-rs](https://github.com/gwenn/lemon-rs) for SQLite, it labels each statement valid or invalid, and parsers are scored on recall (valid statements accepted), false positives (invalid statements wrongly accepted), display round-trip stability, and canonical-form fidelity. The remaining dialects have no reference, so statements count as provenance-valid and the metric is acceptance rate. Speed is reported as a per-statement parse-time distribution over every accepted statement.").into_iter()}
+                {rich_text("Each parser is exercised in the dialect that matches the corpus under test. Where a ground-truth parser exists, [libpg_query](https://github.com/pganalyze/libpg_query) for PostgreSQL and [lemon-rs](https://github.com/gwenn/lemon-rs) for SQLite, it labels each statement valid or invalid, and the parsers are scored on recall (valid statements accepted), false positives (invalid statements wrongly accepted), display round-trip stability, and canonical-form fidelity. The other dialects have no such authority, so their statements count as provenance-valid and the metric is simply the acceptance rate. Across all dialects, speed is captured as a per-statement parse-time distribution over every accepted statement.").into_iter()}
             }
             p { class: "blurb",
-                {rich_text("The reference bindings are exact on their home dialect by construction. Among the pure-Rust parsers, [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) is the most broadly capable, while permissive parsers such as [polyglot-sql](https://github.com/tobilg/polyglot) accept the most statements but at a high false-positive rate, and stricter parsers trade coverage for precision. Speed varies by more than an order of magnitude: median parse times run from well under a microsecond for the fastest parsers to the low single-digit microseconds for most, with [polyglot-sql](https://github.com/tobilg/polyglot) a clear outlier at around fifteen microseconds per statement. Coverage, false-positive behavior, and speed together separate the parsers.").into_iter()}
+                {rich_text("On their home dialect the reference bindings are exact by construction, so the more telling comparison is among the pure-Rust parsers. There, [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) is the most broadly capable, the permissive parsers such as [polyglot-sql](https://github.com/tobilg/polyglot) accept the most statements but pay for it with a high false-positive rate, and the stricter parsers reject more in exchange for precision. Speed spans more than an order of magnitude, from well under a microsecond per statement for the fastest parsers to the low single-digit microseconds for most, with [polyglot-sql](https://github.com/tobilg/polyglot) a clear outlier at roughly fifteen. No parser leads on every axis, so the right choice comes down to what a given project values most: broad coverage, few false positives, or raw speed.").into_iter()}
             }
         }
         div { class: "section-head",
@@ -563,7 +565,6 @@ pub fn DialectView(dir: String) -> Element {
 
         {perf_table(d)}
         {correctness_table(d)}
-        {coverage_table(d)}
 
         Link { class: "back", to: Route::Overview {},
             Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaArrowLeftLong }
@@ -718,9 +719,72 @@ pub fn ParserView(name: String) -> Element {
             }
         }
 
+        {failures_section(b, &parser)}
+
         Link { class: "back", to: Route::Overview {},
             Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaArrowLeftLong }
             "All dialects & parsers"
+        }
+    }
+}
+
+/// The "Failing statements" section for a parser: per dialect it models, the
+/// rejected-statement count, a short syntax-highlighted preview, and a download
+/// link to the full capped `.tsv.zst`. Renders nothing if the parser rejected
+/// nothing anywhere (or has no recorded failure data).
+fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
+    // Gather (dialect display name, failures) for dialects where this parser
+    // has at least one rejected statement.
+    let entries: Vec<(&str, &viz::ParserFailures)> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.failures
+                .iter()
+                .find(|f| f.parser == parser && f.rejected_total > 0)
+                .map(|f| (d.display_name.as_str(), f))
+        })
+        .collect();
+    if entries.is_empty() {
+        return rsx! {};
+    }
+
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaTriangleExclamation }
+                "Failing statements"
+            }
+            p { class: "fail-intro",
+                "Statements this parser was expected to accept but rejected. Each dialect links to the full set (capped at 1,000) as a compressed TSV so the cases can be downloaded and addressed."
+            }
+            for (dialect , f) in entries {
+                div { class: "fail-dialect", key: "{dialect}",
+                    div { class: "fail-head",
+                        span { class: "fail-title",
+                            strong { "{dialect}" }
+                            span { class: "fail-count", "{commas(f.rejected_total)} rejected" }
+                        }
+                        if let Some(path) = &f.download {
+                            a {
+                                class: "dl-btn",
+                                href: "/{path}",
+                                download: true,
+                                Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaDownload }
+                                "TSV"
+                            }
+                        }
+                    }
+                    for (i , stmt) in f.preview.iter().enumerate() {
+                        div { class: "fail-code", key: "{i}",
+                            Code {
+                                src: dioxus_code::SourceCode::new(dioxus_code::Language::Sql, stmt.clone()),
+                                theme: dioxus_code::Theme::GITHUB_LIGHT,
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -930,15 +994,13 @@ enum Head {
     Parser(String),
     /// Dialect: link to the dialect page.
     Dialect { dir: String, name: String },
-    /// Plain monospace label (e.g. a file name), no link.
-    File(String),
 }
 
 impl Head {
     /// The text used when sorting by the first column.
     fn sort_key(&self) -> &str {
         match self {
-            Head::Parser(s) | Head::File(s) => s,
+            Head::Parser(s) => s,
             Head::Dialect { name, .. } => name,
         }
     }
@@ -1041,9 +1103,6 @@ fn render_head(head: &Head) -> Element {
                 {dialect_row_mark(dir)}
                 Link { to: Route::DialectView { dir: dir.clone() }, "{name}" }
             }
-        },
-        Head::File(f) => rsx! {
-            th { scope: "row", class: "fname", "{f}" }
         },
     }
 }
@@ -1233,62 +1292,6 @@ fn correctness_table(d: &DialectData) -> Element {
                 columns,
                 rows,
                 footer: None,
-            }
-        }
-    }
-}
-
-fn coverage_table(d: &DialectData) -> Element {
-    let cov = &d.coverage;
-    // Column order matching the Speed/Correctness tables, as indices into the
-    // coverage vectors (which are stored in canonical parser order).
-    let cols: Vec<usize> = display_order(d)
-        .iter()
-        .filter_map(|name| cov.parsers.iter().position(|p| p == name))
-        .collect();
-    // Per-file ratio sorts by accepted/total so files of different sizes compare
-    // fairly, while the displayed text stays a percentage.
-    let ratio = |acc: usize, total: usize| {
-        Cell::with(
-            ratio_pct(acc, total),
-            (total > 0).then(|| acc as f64 / total as f64),
-        )
-    };
-    let columns: Vec<String> = std::iter::once("total".to_string())
-        .chain(cols.iter().map(|&c| cov.parsers[c].clone()))
-        .collect();
-    let rows = cov
-        .files
-        .iter()
-        .map(|f| Row {
-            key: f.name.clone(),
-            head: Head::File(f.name.clone()),
-            cells: std::iter::once(Cell::with(commas(f.total), Some(f.total as f64)))
-                .chain(cols.iter().map(|&c| ratio(f.accepted[c], f.total)))
-                .collect(),
-        })
-        .collect();
-    let footer_cells: Vec<Cell> = std::iter::once(Cell::with(
-        commas(cov.subtotal_total),
-        Some(cov.subtotal_total as f64),
-    ))
-    .chain(
-        cols.iter()
-            .map(|&c| ratio(cov.subtotal_accepted[c], cov.subtotal_total)),
-    )
-    .collect();
-    rsx! {
-        section { class: "block",
-            h2 {
-                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaTableCells }
-                "Per-file acceptance"
-            }
-            SortTable {
-                caption: format!("Per-file acceptance rate by parser for {}", d.display_name),
-                corner: "file".to_string(),
-                columns,
-                rows,
-                footer: Some(("subtotal".to_string(), footer_cells)),
             }
         }
     }
