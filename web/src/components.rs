@@ -151,7 +151,7 @@ pub fn Shell() -> Element {
             div { class: "foot-inner",
                 a { class: "foot-link", href: REPO,
                     Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaGithub }
-                    "Source on GitHub"
+                    "LucaCappelletti94/sql_ast_benchmark"
                 }
                 a { class: "foot-link", href: "{REPO}/blob/main/LICENSE",
                     Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaScaleBalanced }
