@@ -7,7 +7,7 @@
 
 Benchmarking Rust SQL parsers on a real-world corpus of 311,594 statements across 13 SQL dialects. Each parser runs in its best-matching dialect, and correctness is graded against a real reference parser where one exists.
 
-**The full results live in the interactive explorer at <https://sql-ast-benchmark.luca.phd>**, with per-dialect distribution charts, correctness tables, and per-parser repository metadata, all kept current with the latest benchmark run. This README is a stable overview; see [CHANGELOG.md](CHANGELOG.md) for project history.
+**The full results live in the interactive explorer at <https://sql-ast-benchmark.luca.phd>**, with per-dialect distribution charts, correctness tables, and per-parser repository metadata, all kept current with the latest benchmark run. This README is a stable overview, see [CHANGELOG.md](CHANGELOG.md) for project history.
 
 ## Abstract
 
@@ -36,9 +36,9 @@ Per-parser repository metadata (stars, contributors, fuzzing, test and benchmark
 
 ## Corpus
 
-311,594 statements across 34 files and 13 dialects, committed compressed as `datasets.tar.zst` (5.3 MB) and unpacked to `datasets/{dialect}/{name}.txt`, one statement per line. The commands below extract it automatically on first use. All sources are openly licensed (Apache-2.0, MIT, BSD, public domain or CC-BY), drawn from each engine's own regression suites and official samples; natural-language-with-embedded-SQL datasets are intentionally excluded.
+311,594 statements across 34 files and 13 dialects, committed compressed as `datasets.tar.zst` (5.3 MB) and unpacked to `datasets/{dialect}/{name}.txt`, one statement per line. The commands below extract it automatically on first use. All sources are openly licensed (Apache-2.0, MIT, BSD, public domain or CC-BY), drawn from each engine's own regression suites and official samples. Natural-language-with-embedded-SQL datasets are intentionally excluded.
 
-Correctness is defined per dialect. PostgreSQL is graded against pg_query (libpg_query, PostgreSQL's actual parser) and SQLite against sqlite3-parser (lemon-rs); the reference splits the corpus into valid and invalid and scores recall, false positives, round-trip, and fidelity. The other 11 dialects have no reference, so their statements count as provenance-valid (sourced from each engine's own suites) and the metric is acceptance rate. Speed is a per-statement parse-time distribution over every accepted statement, timed with an adaptive iteration count on a no-`catch_unwind` path.
+Correctness is defined per dialect. PostgreSQL is graded against pg_query (libpg_query, PostgreSQL's actual parser) and SQLite against sqlite3-parser (lemon-rs). The reference splits the corpus into valid and invalid and scores recall, false positives, round-trip, and fidelity. The other 11 dialects have no reference, so their statements count as provenance-valid (sourced from each engine's own suites) and the metric is acceptance rate. Speed is a per-statement parse-time distribution over every accepted statement, timed with an adaptive iteration count on a no-`catch_unwind` path.
 
 ## Running
 
@@ -68,7 +68,7 @@ Deeply nested SQL can overflow the stack in recursive-descent parsers, and a sta
 
 ## Reproducibility
 
-Git dependencies track each parser's latest commit; the hashes in the Parsers Under Test table identify the exact versions benchmarked. To pin them, replace the git dependencies in `Cargo.toml` with crates.io versions.
+Git dependencies track each parser's latest commit, and the hashes in the Parsers Under Test table identify the exact versions benchmarked. To pin them, replace the git dependencies in `Cargo.toml` with crates.io versions.
 
 ## Contributing
 
