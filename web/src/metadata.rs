@@ -74,6 +74,28 @@ pub const fn benches_description(has: bool) -> &'static str {
     }
 }
 
+/// A full sentence describing whether the crate builds without the standard
+/// library, which decides if it can live in constrained runtimes.
+#[must_use]
+pub const fn no_std_description(no_std: bool) -> &'static str {
+    if no_std {
+        "Runs without the standard library (no_std plus alloc), so it can be embedded in firmware, kernels, and other bare-metal targets."
+    } else {
+        "Needs the standard library, so it cannot be dropped into no_std contexts such as embedded firmware or kernel code."
+    }
+}
+
+/// A full sentence describing whether the crate compiles to WebAssembly, which
+/// decides if it can run client-side rather than only on a server.
+#[must_use]
+pub const fn wasm_description(wasm: bool) -> &'static str {
+    if wasm {
+        "Compiles to wasm32-unknown-unknown, so it can parse SQL client-side in the browser or any other WebAssembly runtime."
+    } else {
+        "Will not build for wasm32-unknown-unknown (it pulls in C code or a non-wasm dependency), so it can only run server-side."
+    }
+}
+
 /// The year the metadata snapshot was taken, parsed from [`SNAPSHOT`].
 const SNAPSHOT_YEAR: u16 = 2026;
 
@@ -198,6 +220,10 @@ pub struct ParserMeta {
     pub tests: bool,
     /// Whether the repository ships criterion benchmarks.
     pub benches: bool,
+    /// Whether the crate builds without the standard library (`no_std`).
+    pub no_std: bool,
+    /// Whether the crate compiles to the `wasm32-unknown-unknown` target.
+    pub wasm: bool,
     /// Human-readable all-time crates.io downloads (empty when not on crates.io).
     pub downloads: &'static str,
 }
@@ -216,6 +242,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::Yes,
             tests: true,
             benches: true,
+            no_std: true,
+            wasm: true,
             downloads: "63.2M",
         },
         // Both libpg_query bindings: own crate has no harness, but libpg_query
@@ -230,6 +258,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::Upstream,
             tests: true,
             benches: true,
+            no_std: false,
+            wasm: false,
             downloads: "1.5M",
         },
         "qusql-parse" => ParserMeta {
@@ -242,6 +272,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::No,
             tests: true,
             benches: false,
+            no_std: true,
+            wasm: true,
             downloads: "2.5k",
         },
         "polyglot-sql" => ParserMeta {
@@ -254,6 +286,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::Yes,
             tests: true,
             benches: true,
+            no_std: false,
+            wasm: true,
             downloads: "8.3k",
         },
         "databend-common-ast" => ParserMeta {
@@ -266,6 +300,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::Yes,
             tests: true,
             benches: true,
+            no_std: false,
+            wasm: false,
             downloads: "26k",
         },
         "sqlglot-rust" => ParserMeta {
@@ -278,6 +314,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::No,
             tests: true,
             benches: true,
+            no_std: false,
+            wasm: true,
             downloads: "1.3k",
         },
         "sqlite3-parser" => ParserMeta {
@@ -290,6 +328,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::No,
             tests: true,
             benches: true,
+            no_std: false,
+            wasm: true,
             downloads: "3.3M",
         },
         "orql" => ParserMeta {
@@ -302,6 +342,8 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             fuzz: Fuzz::No,
             tests: true,
             benches: true,
+            no_std: false,
+            wasm: true,
             downloads: "18",
         },
         _ => return None,
