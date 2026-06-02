@@ -32,6 +32,11 @@ pub struct DialectMeta {
     pub wasm: bool,
     /// The project providing the wasm build (e.g. "PGlite"), or "" when none.
     pub wasm_note: &'static str,
+    /// Whether the engine is embeddable on mobile (iOS, Android) and embedded
+    /// systems.
+    pub mobile: bool,
+    /// A short qualifier for the mobile/embedded reach, or "" when not mobile.
+    pub mobile_note: &'static str,
 }
 
 /// Engine facts for a dialect's `dir_name`, if recorded. The cross-dialect
@@ -49,6 +54,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C",
             wasm: true,
             wasm_note: "PGlite",
+            mobile: false,
+            mobile_note: "",
         },
         "mysql" => DialectMeta {
             vendor: "Oracle",
@@ -60,6 +67,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C++",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "sqlite" => DialectMeta {
             vendor: "Hwaci",
@@ -71,6 +80,9 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C",
             wasm: true,
             wasm_note: "sqlite3.wasm",
+            mobile: true,
+            mobile_note:
+                "it ships in every iOS and Android device and runs down to microcontrollers",
         },
         "clickhouse" => DialectMeta {
             vendor: "ClickHouse",
@@ -82,6 +94,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C++",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "duckdb" => DialectMeta {
             vendor: "DuckDB Labs",
@@ -93,6 +107,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C++",
             wasm: true,
             wasm_note: "DuckDB-Wasm",
+            mobile: true,
+            mobile_note: "it embeds in-process on iOS, Android, and small Linux boards",
         },
         "hive" => DialectMeta {
             vendor: "Apache",
@@ -104,6 +120,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "Java",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "spark_sql" => DialectMeta {
             vendor: "Apache",
@@ -115,6 +133,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "Scala",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "trino" => DialectMeta {
             vendor: "Trino SF",
@@ -126,6 +146,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "Java",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "tsql" => DialectMeta {
             vendor: "Microsoft",
@@ -137,6 +159,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C++",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "oracle" => DialectMeta {
             vendor: "Oracle",
@@ -148,6 +172,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "bigquery" => DialectMeta {
             vendor: "Google",
@@ -159,6 +185,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C++",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         "redshift" => DialectMeta {
             vendor: "AWS",
@@ -170,6 +198,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             language: "C++",
             wasm: false,
             wasm_note: "",
+            mobile: false,
+            mobile_note: "",
         },
         _ => return None,
     })
@@ -234,6 +264,18 @@ pub fn version_value(version: &str, released: &str) -> String {
 #[must_use]
 pub fn language_description(language: &str) -> String {
     format!("The engine is implemented primarily in {language}.")
+}
+
+/// Tooltip for the mobile/embedded badge.
+#[must_use]
+pub fn mobile_description(mobile: bool, note: &str) -> String {
+    if mobile && !note.is_empty() {
+        format!("Runs on mobile and embedded targets: {note}.")
+    } else if mobile {
+        "Embeddable on mobile (iOS, Android) and embedded systems.".to_string()
+    } else {
+        "A server or cloud engine, not built to run on mobile or embedded devices.".to_string()
+    }
 }
 
 /// Tooltip for the WebAssembly badge.
