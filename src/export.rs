@@ -257,7 +257,8 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
             out.push(ParserFailures {
                 parser: name.to_string(),
                 rejected_total: 0,
-                preview: Vec::new(),
+                expected_total: f.total,
+                preview_html: Vec::new(),
                 download: None,
             });
             continue;
@@ -266,14 +267,15 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
             .rejected
             .iter()
             .take(FAIL_PREVIEW)
-            .cloned()
+            .map(|s| highlight_sql(s))
             .collect::<Vec<_>>();
         let file = format!("{dir}__{}.tsv.zst", stats::slug(name));
         match write_failure_tsv(&file, &f.rejected) {
             Ok(()) => out.push(ParserFailures {
                 parser: name.to_string(),
                 rejected_total: f.rejected.len(),
-                preview,
+                expected_total: f.total,
+                preview_html: preview,
                 download: Some(format!("failures/{file}")),
             }),
             Err(e) => {
@@ -281,13 +283,62 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
                 out.push(ParserFailures {
                     parser: name.to_string(),
                     rejected_total: f.rejected.len(),
-                    preview,
+                    expected_total: f.total,
+                    preview_html: preview,
                     download: None,
                 });
             }
         }
     }
     out
+}
+
+/// The shared syntax and theme sets, loaded once. Loading the bundled defaults
+/// parses a compressed dump, so it is done lazily and reused across statements.
+fn highlight_assets() -> &'static (syntect::parsing::SyntaxSet, syntect::highlighting::Theme) {
+    use std::sync::OnceLock;
+    use syntect::highlighting::ThemeSet;
+    use syntect::parsing::SyntaxSet;
+    static ASSETS: OnceLock<(SyntaxSet, syntect::highlighting::Theme)> = OnceLock::new();
+    ASSETS.get_or_init(|| {
+        let ss = SyntaxSet::load_defaults_newlines();
+        let theme = ThemeSet::load_defaults().themes["InspiredGitHub"].clone();
+        (ss, theme)
+    })
+}
+
+/// Render one SQL statement to static syntax-highlighted HTML (inner content of
+/// a `<pre>`), so the web viewer ships no runtime highlighter. Colors are inlined
+/// per span with no background, letting the page's own `.fail-code` style frame
+/// it. On any highlighting error the escaped plain text is returned.
+fn highlight_sql(sql: &str) -> String {
+    use syntect::easy::HighlightLines;
+    use syntect::html::{styled_line_to_highlighted_html, IncludeBackground};
+    use syntect::util::LinesWithEndings;
+
+    let (ss, theme) = highlight_assets();
+    let syntax = ss
+        .find_syntax_by_token("sql")
+        .unwrap_or_else(|| ss.find_syntax_plain_text());
+    let mut h = HighlightLines::new(syntax, theme);
+    let mut out = String::new();
+    for line in LinesWithEndings::from(sql) {
+        let Ok(ranges) = h.highlight_line(line, ss) else {
+            return html_escape(sql);
+        };
+        match styled_line_to_highlighted_html(&ranges, IncludeBackground::No) {
+            Ok(html) => out.push_str(&html),
+            Err(_) => return html_escape(sql),
+        }
+    }
+    out
+}
+
+/// Minimal HTML escaping for the plain-text fallback.
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Write up to [`FAIL_CAP`] rejected statements to a zstd-compressed TSV under

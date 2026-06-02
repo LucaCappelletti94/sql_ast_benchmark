@@ -4,7 +4,6 @@ use crate::brand::brand;
 use crate::data::bundle;
 use crate::Route;
 use dioxus::prelude::*;
-use dioxus_code::Code;
 use dioxus_free_icons::icons::fa_brands_icons::FaGithub;
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaArrowLeftLong, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork,
@@ -763,7 +762,7 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
                     div { class: "fail-head",
                         span { class: "fail-title",
                             strong { "{dialect}" }
-                            span { class: "fail-count", "{commas(f.rejected_total)} rejected" }
+                            span { class: "fail-count", "{commas(f.rejected_total)} of {commas(f.expected_total)} rejected" }
                         }
                         if let Some(path) = &f.download {
                             a {
@@ -775,13 +774,8 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
                             }
                         }
                     }
-                    for (i , stmt) in f.preview.iter().enumerate() {
-                        div { class: "fail-code", key: "{i}",
-                            Code {
-                                src: dioxus_code::SourceCode::new(dioxus_code::Language::Sql, stmt.clone()),
-                                theme: dioxus_code::Theme::GITHUB_LIGHT,
-                            }
-                        }
+                    for (i , html) in f.preview_html.iter().enumerate() {
+                        pre { class: "fail-code", key: "{i}", dangerous_inner_html: "{html}" }
                     }
                 }
             }
