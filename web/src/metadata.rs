@@ -230,6 +230,64 @@ pub struct ParserMeta {
     pub repo: &'static str,
     /// Whether the crate is published on crates.io (vs git-only / unreleased).
     pub crates_io: bool,
+    /// Whether the crate is pure Rust (vs an FFI binding to a C library).
+    pub pure_rust: bool,
+    /// What the crate uses `unsafe` for, or `""` when it has no unsafe code.
+    pub unsafe_note: &'static str,
+    /// Month of the most recent release, `"YYYY-MM"`.
+    pub last_release: &'static str,
+    /// Sanitizer/Miri run in CI (short label, e.g. `"leak"`), or `""` for none.
+    pub sanitizers: &'static str,
+}
+
+/// Releases at least this recent count as actively maintained. Roughly twelve
+/// months before [`SNAPSHOT`]; `"YYYY-MM"` strings order by date.
+const MAINTAINED_SINCE: &str = "2025-05";
+
+/// Whether the crate's latest release is recent enough to look maintained.
+#[must_use]
+pub fn maintained(last_release: &str) -> bool {
+    last_release >= MAINTAINED_SINCE
+}
+
+/// A full sentence describing whether the crate is pure Rust or a C binding.
+#[must_use]
+pub const fn pure_rust_description(pure: bool) -> &'static str {
+    if pure {
+        "Pure Rust: builds with cargo alone, needing no C toolchain or native library."
+    } else {
+        "Not pure Rust: it binds a C library through FFI, so it needs a C toolchain and cannot target every platform (no wasm, no no_std)."
+    }
+}
+
+/// A full sentence describing the crate's use of `unsafe`.
+#[must_use]
+pub fn unsafe_description(note: &str) -> String {
+    if note.is_empty() {
+        "Memory safe: the crate contains no unsafe code, so the compiler vouches for its memory safety.".to_string()
+    } else {
+        format!("Uses unsafe code for {note}, stepping outside the compiler's memory-safety guarantees.")
+    }
+}
+
+/// A full sentence describing how recently the crate was released.
+#[must_use]
+pub fn maintenance_description(last_release: &str) -> String {
+    if maintained(last_release) {
+        format!("Actively maintained: last released {last_release}, within the past year.")
+    } else {
+        format!("Possibly unmaintained: last released {last_release}, more than a year ago, so it may lag behind SQL changes and fixes.")
+    }
+}
+
+/// A full sentence describing whether the project runs a sanitizer or Miri.
+#[must_use]
+pub fn sanitizer_description(sanitizers: &str) -> String {
+    if sanitizers.is_empty() {
+        "No sanitizer or Miri in CI, so memory errors, leaks, and undefined behavior are not caught automatically.".to_string()
+    } else {
+        format!("Runs the {sanitizers} sanitizer in CI, catching memory errors automatically on every change.")
+    }
 }
 
 /// A full sentence describing whether the crate is published on crates.io, which
@@ -287,6 +345,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "63.2M",
             repo: "https://github.com/sqlparser-rs/sqlparser-rs",
             crates_io: true,
+            pure_rust: true,
+            unsafe_note: "",
+            last_release: "2026-05",
+            sanitizers: "",
         },
         // Both libpg_query bindings: own crate has no harness, but libpg_query
         // (PostgreSQL's own C parser) is fuzzed upstream.
@@ -305,6 +367,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "1.5M",
             repo: "https://github.com/pganalyze/pg_query.rs",
             crates_io: true,
+            pure_rust: false,
+            unsafe_note: "the C FFI bindings to libpg_query",
+            last_release: "2025-08",
+            sanitizers: "leak",
         },
         "qusql-parse" => ParserMeta {
             stars: 17,
@@ -321,6 +387,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "2.5k",
             repo: "https://github.com/antialize/qusql",
             crates_io: true,
+            pure_rust: true,
+            unsafe_note: "one unchecked UTF-8 conversion in the lexer",
+            last_release: "2026-05",
+            sanitizers: "",
         },
         "polyglot-sql" => ParserMeta {
             stars: 829,
@@ -337,6 +407,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "8.3k",
             repo: "https://github.com/tobilg/polyglot",
             crates_io: true,
+            pure_rust: true,
+            unsafe_note: "",
+            last_release: "2026-06",
+            sanitizers: "",
         },
         "databend-common-ast" => ParserMeta {
             stars: 9308,
@@ -353,6 +427,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "26k",
             repo: "https://github.com/datafuselabs/databend/tree/main/src/query/ast",
             crates_io: true,
+            pure_rust: true,
+            unsafe_note: "",
+            last_release: "2026-03",
+            sanitizers: "",
         },
         "sqlglot-rust" => ParserMeta {
             stars: 15,
@@ -369,6 +447,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "1.3k",
             repo: "https://github.com/protegrity/sql-glot-rust",
             crates_io: true,
+            pure_rust: true,
+            unsafe_note: "its C-ABI export layer",
+            last_release: "2026-05",
+            sanitizers: "",
         },
         "sqlite3-parser" => ParserMeta {
             stars: 62,
@@ -385,6 +467,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "3.3M",
             repo: "https://github.com/gwenn/lemon-rs",
             crates_io: true,
+            pure_rust: true,
+            unsafe_note: "one unchecked UTF-8 conversion in keyword lookup",
+            last_release: "2026-04",
+            sanitizers: "",
         },
         "orql" => ParserMeta {
             stars: 0,
@@ -401,6 +487,10 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             downloads: "18",
             repo: "https://codeberg.org/xitep/orql",
             crates_io: true,
+            pure_rust: true,
+            unsafe_note: "an unchecked UTF-8 conversion and a transmute",
+            last_release: "2026-01",
+            sanitizers: "",
         },
         _ => return None,
     })

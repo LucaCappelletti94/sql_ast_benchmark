@@ -4,11 +4,12 @@ use crate::brand::brand;
 use crate::data::bundle;
 use crate::Route;
 use dioxus::prelude::*;
-use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub};
+use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaArrowLeftLong, FaBox, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork,
-    FaCopy, FaCube, FaDatabase, FaDownload, FaMicrochip, FaScaleBalanced, FaStar, FaStopwatch,
-    FaTableCells, FaTriangleExclamation, FaUsers, FaVial,
+    FaCopy, FaCube, FaDatabase, FaDownload, FaFlaskVial, FaHeartPulse, FaMicrochip,
+    FaScaleBalanced, FaShieldHalved, FaStar, FaStopwatch, FaTableCells, FaTriangleExclamation,
+    FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -984,6 +985,10 @@ fn parser_meta_pills(parser: &str) -> Element {
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaStopwatch } }, "benches", if m.benches { "yes".to_string() } else { "no".to_string() }, m.benches, crate::metadata::benches_description(m.benches))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "no_std", if m.no_std { "yes".to_string() } else { "no".to_string() }, m.no_std, crate::metadata::no_std_description(m.no_std))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCube } }, "wasm", if m.wasm { "yes".to_string() } else { "no".to_string() }, m.wasm, crate::metadata::wasm_description(m.wasm))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaRust } }, "impl", if m.pure_rust { "pure Rust".to_string() } else { "C FFI".to_string() }, m.pure_rust, crate::metadata::pure_rust_description(m.pure_rust))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "unsafe", if m.unsafe_note.is_empty() { "none".to_string() } else { "uses".to_string() }, m.unsafe_note.is_empty(), &crate::metadata::unsafe_description(m.unsafe_note))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "maintained", if crate::metadata::maintained(m.last_release) { "active".to_string() } else { "stale".to_string() }, crate::metadata::maintained(m.last_release), &crate::metadata::maintenance_description(m.last_release))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaFlaskVial } }, "miri/san", if m.sanitizers.is_empty() { "no".to_string() } else { m.sanitizers.to_string() }, !m.sanitizers.is_empty(), &crate::metadata::sanitizer_description(m.sanitizers))}
         }
     }
 }
