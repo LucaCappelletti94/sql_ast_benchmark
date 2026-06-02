@@ -952,8 +952,8 @@ fn parser_meta_pills(parser: &str) -> Element {
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBug } }, "fuzzed", m.fuzz.label().to_string(), m.fuzz.is_ok(), m.fuzz.description())}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaVial } }, "tests", if m.tests { "yes".to_string() } else { "no".to_string() }, m.tests, crate::metadata::tests_description(m.tests))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaStopwatch } }, "benches", if m.benches { "yes".to_string() } else { "no".to_string() }, m.benches, crate::metadata::benches_description(m.benches))}
-            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "no_std", if m.no_std { "yes".to_string() } else { "no".to_string() }, crate::metadata::no_std_description(m.no_std).to_string())}
-            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCube } }, "wasm", if m.wasm { "yes".to_string() } else { "no".to_string() }, crate::metadata::wasm_description(m.wasm).to_string())}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "no_std", if m.no_std { "yes".to_string() } else { "no".to_string() }, m.no_std, crate::metadata::no_std_description(m.no_std))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCube } }, "wasm", if m.wasm { "yes".to_string() } else { "no".to_string() }, m.wasm, crate::metadata::wasm_description(m.wasm))}
         }
     }
 }
