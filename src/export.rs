@@ -148,36 +148,47 @@ fn perf_for(dir: &str, rows: &[PerfRow]) -> Vec<ParserPerf> {
         .iter()
         .filter(|r| r.dialect == dir)
         .map(|r| {
-            let times = bench_dist::load_times(dir, &r.parser);
-            let ecdf = stats::ecdf_points(&times, 200)
+            let ecdf = stats::ecdf_points(&bench_dist::load_times(dir, &r.parser), 200)
                 .into_iter()
                 .map(|(x, y)| [x, y])
                 .collect();
-            ParserPerf {
-                parser: r.parser.clone(),
-                n_total: r.n_total,
-                n_accepted: r.n_accepted,
-                min: r.pct[0],
-                p10: r.pct[1],
-                p25: r.pct[2],
-                median: r.pct[3],
-                p75: r.pct[4],
-                p90: r.pct[5],
-                p99: r.pct[6],
-                max: r.pct[7],
-                mean: r.pct[8],
-                roundtrip_pct: r.roundtrip_pct,
-                ecdf,
-            }
+            perf_row_to_perf(r, ecdf)
         })
         .collect();
     v.sort_by(|a, b| a.median.partial_cmp(&b.median).unwrap_or(Ordering::Equal));
     v
 }
 
+/// Map a parsed `summary.csv` row plus its eCDF points to a `ParserPerf`. Pure,
+/// so the percentile-to-field wiring is testable without the timing files.
+fn perf_row_to_perf(r: &PerfRow, ecdf: Vec<[f64; 2]>) -> ParserPerf {
+    ParserPerf {
+        parser: r.parser.clone(),
+        n_total: r.n_total,
+        n_accepted: r.n_accepted,
+        min: r.pct[0],
+        p10: r.pct[1],
+        p25: r.pct[2],
+        median: r.pct[3],
+        p75: r.pct[4],
+        p90: r.pct[5],
+        p99: r.pct[6],
+        max: r.pct[7],
+        mean: r.pct[8],
+        roundtrip_pct: r.roundtrip_pct,
+        ecdf,
+    }
+}
+
 fn coverage_for(dialect: Dialect, all_parsers: &[BenchParser]) -> CoverageMatrix {
     let (parsers, files) = report::coverage_dialect(dialect, all_parsers);
     let cols: Vec<String> = parsers.iter().map(|p| p.name().to_string()).collect();
+    build_coverage_matrix(cols, &files)
+}
+
+/// Assemble a `CoverageMatrix` from the column names and per-file counts,
+/// computing the column subtotals. Pure, so the subtotal math is testable.
+fn build_coverage_matrix(cols: Vec<String>, files: &[report::FileCoverage]) -> CoverageMatrix {
     let mut subtotal_accepted = vec![0usize; cols.len()];
     let mut subtotal_total = 0usize;
     let files_out = files
@@ -362,7 +373,98 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_failure_tsv, parse_summary, pct};
+    use super::{
+        build_coverage_matrix, format_failure_tsv, git_short, metrics, now_utc, parse_summary, pct,
+        perf_row_to_perf, PerfRow,
+    };
+    use crate::datasets::Dialect;
+    use crate::report::{DialectReport, FileCoverage};
+    use crate::BenchParser;
+
+    fn perf_row(parser: &str) -> PerfRow {
+        PerfRow {
+            dialect: "postgresql".to_string(),
+            parser: parser.to_string(),
+            n_total: 10,
+            n_accepted: 8,
+            pct: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            roundtrip_pct: Some(50.0),
+        }
+    }
+
+    #[test]
+    fn metrics_reference_dialect_sets_recall_and_fp() {
+        let mut report = DialectReport::empty(Dialect::Postgresql, &[BenchParser::Sqlparser]);
+        report.valid_total = 10;
+        report.invalid_total = 4;
+        report.stats[0].accepted_valid = 8;
+        report.stats[0].accepted_invalid = 1;
+        let m = metrics(&report);
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].recall_pct, Some(80.0));
+        assert_eq!(m[0].false_positive_pct, Some(25.0));
+        assert_eq!(m[0].accept_pct, None); // None on reference dialects
+    }
+
+    #[test]
+    fn metrics_provenance_dialect_sets_accept_only() {
+        let mut report = DialectReport::empty(Dialect::Clickhouse, &[BenchParser::Sqlparser]);
+        report.valid_total = 4;
+        report.stats[0].accepted_valid = 3;
+        let m = metrics(&report);
+        assert_eq!(m[0].recall_pct, None);
+        assert_eq!(m[0].false_positive_pct, None);
+        assert_eq!(m[0].accept_pct, Some(75.0));
+    }
+
+    #[test]
+    fn perf_row_maps_percentile_columns_in_order() {
+        let p = perf_row_to_perf(&perf_row("sqlparser-rs"), vec![[1.0, 0.5]]);
+        assert_eq!(p.parser, "sqlparser-rs");
+        assert_eq!(p.n_total, 10);
+        assert!((p.min - 1.0).abs() < 1e-9);
+        assert!((p.median - 4.0).abs() < 1e-9);
+        assert!((p.p99 - 7.0).abs() < 1e-9);
+        assert!((p.mean - 9.0).abs() < 1e-9);
+        assert_eq!(p.ecdf.len(), 1);
+    }
+
+    #[test]
+    fn coverage_matrix_sums_column_subtotals() {
+        let files = vec![
+            FileCoverage {
+                name: "a.txt".to_string(),
+                total: 10,
+                accepted: vec![8, 6],
+            },
+            FileCoverage {
+                name: "b.txt".to_string(),
+                total: 5,
+                accepted: vec![5, 1],
+            },
+        ];
+        let cm = build_coverage_matrix(vec!["p1".to_string(), "p2".to_string()], &files);
+        assert_eq!(cm.subtotal_total, 15);
+        assert_eq!(cm.subtotal_accepted, vec![13, 7]);
+        assert_eq!(cm.files.len(), 2);
+    }
+
+    #[test]
+    fn now_utc_is_nonempty_iso_or_unix() {
+        let s = now_utc();
+        assert!(!s.is_empty());
+        // Either an ISO Z timestamp or the unix: fallback.
+        assert!(s.ends_with('Z') || s.starts_with("unix:"));
+    }
+
+    #[test]
+    fn git_short_runs_without_panicking() {
+        // In the repo it returns Some(hash); the point is it does not panic and
+        // yields a non-empty string when present.
+        if let Some(h) = git_short() {
+            assert!(!h.is_empty());
+        }
+    }
 
     #[test]
     fn summary_parses_rows_and_skips_short_lines() {
