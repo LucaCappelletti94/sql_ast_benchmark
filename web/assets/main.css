@@ -424,8 +424,9 @@ main { display: block; }
   padding: 0.1rem 0.5rem;
 }
 /* Pre-rendered highlighted SQL preview (static HTML from the exporter). */
+.fail-code-wrap { position: relative; margin: 0.3rem 0; }
 .fail-code {
-  margin: 0.3rem 0;
+  margin: 0;
   padding: 0.5rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -436,6 +437,28 @@ main { display: block; }
   background: #fbfbfb;
   color: #1f2328;
 }
+/* Copy-to-clipboard button, revealed on hover over a preview. */
+.copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.fail-code-wrap:hover .copy-btn,
+.copy-btn:focus-visible { opacity: 1; }
+.copy-btn:hover { color: #1f2328; border-color: #b9b9b9; }
 
 /* Tables */
 .scroll { overflow-x: auto; }

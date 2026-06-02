@@ -6,7 +6,7 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::FaGithub;
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork,
+    FaArrowLeftLong, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork, FaCopy,
     FaDatabase, FaDownload, FaScaleBalanced, FaStar, FaStopwatch, FaTableCells,
     FaTriangleExclamation, FaUsers, FaVial,
 };
@@ -757,7 +757,7 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
             p { class: "fail-intro",
                 "Statements this parser was expected to accept but rejected. Each dialect links to the full set (capped at 1,000) as a compressed TSV so the cases can be downloaded and addressed."
             }
-            for (dialect , f) in entries {
+            for (di , (dialect , f)) in entries.into_iter().enumerate() {
                 div { class: "fail-dialect", key: "{dialect}",
                     div { class: "fail-head",
                         span { class: "fail-title",
@@ -775,7 +775,21 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
                         }
                     }
                     for (i , html) in f.preview_html.iter().enumerate() {
-                        pre { class: "fail-code", key: "{i}", dangerous_inner_html: "{html}" }
+                        div { class: "fail-code-wrap", key: "{i}",
+                            button {
+                                class: "copy-btn",
+                                r#type: "button",
+                                aria_label: "Copy this statement to the clipboard",
+                                title: "Copy statement",
+                                onclick: move |_| {
+                                    document::eval(&format!(
+                                        "{{ const el = document.getElementById('fail-{di}-{i}'); if (el) {{ navigator.clipboard.writeText(el.textContent); }} }}"
+                                    ));
+                                },
+                                Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaCopy }
+                            }
+                            pre { id: "fail-{di}-{i}", class: "fail-code", dangerous_inner_html: "{html}" }
+                        }
                     }
                 }
             }
