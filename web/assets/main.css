@@ -412,9 +412,9 @@ main { display: block; }
 .lightbox-close:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 
 /* Failing-statement previews on parser pages */
-.fail-intro { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; max-width: 70ch; }
+.fail-intro { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; width: 100%; max-width: none; text-align: justify; text-justify: inter-word; }
 /* Explanatory caption shown under a table section heading. */
-.table-cap { color: var(--muted); font-size: 0.88rem; line-height: 1.5; margin: 0 0 0.9rem; max-width: 80ch; }
+.table-cap { color: var(--muted); font-size: 0.88rem; line-height: 1.5; margin: 0 0 0.9rem; width: 100%; max-width: none; text-align: justify; text-justify: inter-word; }
 .fail-dialect { margin-bottom: 1.4rem; }
 .fail-head {
   display: flex;
