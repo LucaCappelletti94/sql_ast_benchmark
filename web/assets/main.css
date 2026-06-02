@@ -318,8 +318,9 @@ main { display: block; }
   margin-top: 0.4rem;
   color: var(--muted);
   font-size: 0.82rem;
-  text-align: justify;
-  text-justify: inter-word;
+  /* Left-aligned, not justified: justify stretches the inter-word spaces of
+     short captions unevenly, which reads as inconsistent spacing. */
+  text-align: left;
   overflow-wrap: break-word;
 }
 /* Download buttons overlaid on the bottom-right of the chart image, stacked. */
