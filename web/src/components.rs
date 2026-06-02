@@ -299,11 +299,13 @@ pub fn Overview() -> Element {
     let b = bundle();
     rsx! {
         section { class: "intro",
-            h1 {
-                "Rust SQL Parser Benchmark"
-                span { class: "title-meta",
-                    "Snapshot {b.generated_utc}"
-                    if let Some(c) = &b.git_commit { " | commit {c}" }
+            div { class: "intro-head",
+                h1 { "Rust SQL Parser Benchmark" }
+                div { class: "stamp",
+                    {mini_pill(rsx! { Icon { width: 10, height: 10, fill: "currentColor".to_string(), icon: FaCalendarDays } }, b.generated_utc.clone(), format!("Benchmark data captured at {}.", b.generated_utc))}
+                    if let Some(c) = &b.git_commit {
+                        {mini_pill(rsx! { Icon { width: 10, height: 10, fill: "currentColor".to_string(), icon: FaCodeCommit } }, c.clone(), format!("Built from commit {c}."))}
+                    }
                 }
             }
         }

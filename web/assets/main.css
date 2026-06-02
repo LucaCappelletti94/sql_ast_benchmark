@@ -86,8 +86,12 @@ main { display: block; }
 
 .intro { padding: 2rem 1.2rem 0.5rem; }
 .intro h1 { font-size: 1.9rem; margin: 0 0 0.3em; letter-spacing: -0.01em; }
-/* Snapshot/commit stamp inlined after the page title. */
-.title-meta { margin-left: 0.6rem; font-size: 0.8rem; font-weight: 400; color: var(--muted); white-space: nowrap; }
+/* Title row with the snapshot/commit pills; wraps under the title on mobile. */
+.intro-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.8rem; }
+.intro-head h1 { margin-bottom: 0; }
+.stamp { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.stamp .mini-pill { max-width: 100%; }
+.stamp .mini-pill span:not(.mini-ico) { overflow: hidden; text-overflow: ellipsis; }
 
 /* Landing-page abstract */
 .abstract {
