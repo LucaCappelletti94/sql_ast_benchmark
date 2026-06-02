@@ -1184,6 +1184,28 @@ fn render_head(head: &Head) -> Element {
     }
 }
 
+/// A full-sentence explanation of what a table column means, for the header's
+/// tooltip and screen-reader label. `None` for columns whose label already says
+/// it all. Recall in particular is spelled out: in this benchmark it measures
+/// agreement with a reference parser on which statements are valid, not whether
+/// the parser runs at all.
+fn col_help(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "parser" => "The SQL parser library under test.",
+        "dialect" => "The SQL dialect the row reports on.",
+        "recall" => "Recall: of the statements the reference parser treats as valid, the share this parser also accepted. It measures agreement with the reference on what counts as valid SQL, not whether the parser runs. Higher is better.",
+        "accept" => "Acceptance rate: the share of the corpus this parser accepted. Used where there is no reference parser, so every corpus statement is treated as expected-valid.",
+        "accept / recall" => "Recall where a reference parser exists (agreement with it on valid statements), otherwise the plain acceptance rate. Higher is better.",
+        "false pos" => "False positives: of the statements the reference parser rejects as invalid, the share this parser wrongly accepted. Lower is better.",
+        "round-trip" | "RT %" => "Round-trip rate: of the statements it accepted, the share that print back to SQL and re-parse unchanged. Shown as n/a when the parser cannot print. Higher is better.",
+        "fidelity" => "Fidelity: of the accepted statements, the share whose printed form is semantically identical to the original under the reference parser's canonical form. Higher is better.",
+        "missed %" => "Missed: the share of statements the parser was expected to accept but did not. On reference dialects this is one minus recall, elsewhere the unaccepted fraction. Lower is better.",
+        "median ns" => "Median parse time per accepted statement, in nanoseconds: half of statements parse faster than this.",
+        "p90 ns" => "90th-percentile parse time per accepted statement, in nanoseconds: nine in ten statements parse faster than this.",
+        _ => return None,
+    })
+}
+
 /// A generic click-to-sort data table. `corner` labels the first (header)
 /// column; `columns` are the value-column labels. Clicking any header toggles
 /// ascending / descending on that column. `footer`, if present, is a row
@@ -1222,10 +1244,16 @@ fn SortTable(
                                 let aria = if !active { "none" } else if asc { "ascending" } else { "descending" };
                                 let arrow = if !active { "\u{2195}" } else if asc { "\u{25b2}" } else { "\u{25bc}" };
                                 let first = idx == 0;
+                                let help = col_help(&name);
+                                let title_text = help.unwrap_or("");
+                                let aria_text =
+                                    help.map_or_else(|| name.clone(), ToString::to_string);
                                 rsx! {
                                     th { scope: "col", key: "{idx}", "aria-sort": aria,
                                         button {
                                             class: if first { "sort-btn first" } else { "sort-btn" },
+                                            title: "{title_text}",
+                                            "aria-label": "{aria_text}",
                                             onclick: move |_| {
                                                 let next = match sort() {
                                                     Some((c, a)) if c == idx => (idx, !a),
