@@ -147,12 +147,6 @@ pub fn Shell() -> Element {
             }
         }
         main { id: "content", Outlet::<Route> {} }
-        footer { class: "site-foot",
-            "Charts are rendered in your browser from a single committed "
-            code { "bench.json" }
-            ". "
-            a { href: REPO, "Source on GitHub" }
-        }
         if let Some((filename, svg)) = ZOOM() {
             // The enlarged copy carries its own id so the same download scripts
             // can target it, keeping the PNG/SVG buttons usable while zoomed.
