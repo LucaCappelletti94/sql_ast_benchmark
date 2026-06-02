@@ -7,6 +7,7 @@ use dioxus::prelude::*;
 use manganis::AssetOptions;
 
 mod brand;
+mod cadence;
 mod components;
 mod data;
 mod descriptions;

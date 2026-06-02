@@ -6,6 +6,8 @@
 //! the wasm build stays free of any network access. Refresh the numbers and
 //! the date together when revising.
 
+use crate::cadence::Cadence;
+
 /// The date the figures below were collected (ISO 8601).
 pub const SNAPSHOT: &str = "2026-05-31";
 
@@ -226,6 +228,8 @@ pub struct ParserMeta {
     pub wasm: bool,
     /// Human-readable all-time crates.io downloads (empty when not on crates.io).
     pub downloads: &'static str,
+    /// How often the crate publishes releases.
+    pub cadence: Cadence,
     /// URL of the source repository.
     pub repo: &'static str,
     /// Whether the crate is published on crates.io (vs git-only / unreleased).
@@ -343,6 +347,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: true,
             wasm: true,
             downloads: "63.2M",
+            cadence: Cadence::Quarterly,
             repo: "https://github.com/sqlparser-rs/sqlparser-rs",
             crates_io: true,
             pure_rust: true,
@@ -365,6 +370,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: false,
             wasm: false,
             downloads: "1.5M",
+            cadence: Cadence::Quarterly,
             repo: "https://github.com/pganalyze/pg_query.rs",
             crates_io: true,
             pure_rust: false,
@@ -385,6 +391,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: true,
             wasm: true,
             downloads: "2.5k",
+            cadence: Cadence::Monthly,
             repo: "https://github.com/antialize/qusql",
             crates_io: true,
             pure_rust: true,
@@ -405,6 +412,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: false,
             wasm: true,
             downloads: "8.3k",
+            cadence: Cadence::Monthly,
             repo: "https://github.com/tobilg/polyglot",
             crates_io: true,
             pure_rust: true,
@@ -425,6 +433,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: false,
             wasm: false,
             downloads: "26k",
+            cadence: Cadence::Quarterly,
             repo: "https://github.com/datafuselabs/databend/tree/main/src/query/ast",
             crates_io: true,
             pure_rust: true,
@@ -445,6 +454,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: false,
             wasm: true,
             downloads: "1.3k",
+            cadence: Cadence::Monthly,
             repo: "https://github.com/protegrity/sql-glot-rust",
             crates_io: true,
             pure_rust: true,
@@ -465,6 +475,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: false,
             wasm: true,
             downloads: "3.3M",
+            cadence: Cadence::Quarterly,
             repo: "https://github.com/gwenn/lemon-rs",
             crates_io: true,
             pure_rust: true,
@@ -485,6 +496,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             no_std: false,
             wasm: true,
             downloads: "18",
+            cadence: Cadence::Irregular,
             repo: "https://codeberg.org/xitep/orql",
             crates_io: true,
             pure_rust: true,

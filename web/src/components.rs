@@ -6,10 +6,11 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaBox, FaBug, FaBuilding, FaCalendarDays, FaChartColumn, FaChartLine, FaCode,
-    FaCodeCommit, FaCodeFork, FaCopy, FaCube, FaDatabase, FaDownload, FaFlaskVial, FaHeartPulse,
-    FaMicrochip, FaMobileScreen, FaScaleBalanced, FaServer, FaShieldHalved, FaStar, FaStopwatch,
-    FaTableCells, FaTag, FaTriangleExclamation, FaUsers, FaVial,
+    FaArrowLeftLong, FaArrowsRotate, FaBox, FaBug, FaBuilding, FaCalendarDays, FaChartColumn,
+    FaChartLine, FaCode, FaCodeCommit, FaCodeFork, FaCopy, FaCube, FaDatabase, FaDownload,
+    FaFlaskVial, FaHeartPulse, FaMicrochip, FaMobileScreen, FaScaleBalanced, FaServer,
+    FaShieldHalved, FaStar, FaStopwatch, FaTableCells, FaTag, FaTriangleExclamation, FaUsers,
+    FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -983,6 +984,7 @@ fn dialect_meta_pills(dir: &str) -> Element {
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMobileScreen } }, "mobile", if m.mobile { "yes".to_string() } else { "no".to_string() }, dm::mobile_description(m.mobile, m.mobile_note))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaChartColumn } }, "workload", m.workload.label().to_string(), m.workload.description().to_string())}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaServer } }, "deployment", m.deployment.label().to_string(), m.deployment.description().to_string())}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaArrowsRotate } }, "releases", m.cadence.label().to_string(), m.cadence.is_ok(), m.cadence.description())}
         }
     }
 }
@@ -1006,6 +1008,7 @@ fn parser_meta_pills(parser: &str) -> Element {
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaUsers } }, "contributors", commas(m.contributors as usize), crate::metadata::contributors_description(m.contributors))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCalendarDays } }, "since", m.since.to_string(), crate::metadata::since_description(m.since))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaDownload } }, "downloads", m.downloads.to_string(), crate::metadata::downloads_description(m.downloads))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaArrowsRotate } }, "releases", m.cadence.label().to_string(), m.cadence.is_ok(), m.cadence.description())}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBox } }, "crates.io", if m.crates_io { "yes".to_string() } else { "no".to_string() }, m.crates_io, crate::metadata::crates_io_description(m.crates_io))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaScaleBalanced } }, "license", m.license.to_string(), crate::metadata::license_ok(m.license), &crate::metadata::license_description(m.license))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBug } }, "fuzzed", m.fuzz.label().to_string(), m.fuzz.is_ok(), m.fuzz.description())}

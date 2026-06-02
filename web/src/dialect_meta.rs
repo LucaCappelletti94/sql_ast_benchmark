@@ -7,6 +7,8 @@
 //! mobile, its workload model, and its deployment model), not fetched at
 //! runtime. Refresh the figures and the date together.
 
+use crate::cadence::Cadence;
+
 /// The date the engine figures below were collected (ISO 8601).
 pub const SNAPSHOT: &str = "2026-06-02";
 
@@ -108,6 +110,8 @@ pub struct DialectMeta {
     pub workload: Workload,
     /// Deployment model.
     pub deployment: Deployment,
+    /// How often the engine publishes releases.
+    pub cadence: Cadence,
 }
 
 /// Engine facts for a dialect's `dir_name`, if recorded. The cross-dialect
@@ -129,6 +133,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Oltp,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Yearly,
         },
         "mysql" => DialectMeta {
             vendor: "Oracle",
@@ -144,6 +149,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Oltp,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Quarterly,
         },
         "sqlite" => DialectMeta {
             vendor: "Hwaci",
@@ -160,6 +166,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
                 "it ships in every iOS and Android device and runs down to microcontrollers",
             workload: Workload::Oltp,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Quarterly,
         },
         "clickhouse" => DialectMeta {
             vendor: "ClickHouse",
@@ -175,6 +182,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Olap,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Monthly,
         },
         "duckdb" => DialectMeta {
             vendor: "DuckDB Labs",
@@ -190,6 +198,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "it embeds in-process on iOS, Android, and small Linux boards",
             workload: Workload::Olap,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Quarterly,
         },
         "hive" => DialectMeta {
             vendor: "Apache",
@@ -205,6 +214,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Olap,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Yearly,
         },
         "spark_sql" => DialectMeta {
             vendor: "Apache",
@@ -220,6 +230,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Olap,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Quarterly,
         },
         "trino" => DialectMeta {
             vendor: "Trino SF",
@@ -235,6 +246,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Olap,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Monthly,
         },
         "tsql" => DialectMeta {
             vendor: "Microsoft",
@@ -250,6 +262,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Oltp,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Multiyear,
         },
         "oracle" => DialectMeta {
             vendor: "Oracle",
@@ -265,6 +278,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Oltp,
             deployment: Deployment::SelfHosted,
+            cadence: Cadence::Yearly,
         },
         "bigquery" => DialectMeta {
             vendor: "Google",
@@ -280,6 +294,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Olap,
             deployment: Deployment::CloudOnly,
+            cadence: Cadence::Rolling,
         },
         "redshift" => DialectMeta {
             vendor: "AWS",
@@ -295,6 +310,7 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile_note: "",
             workload: Workload::Olap,
             deployment: Deployment::CloudOnly,
+            cadence: Cadence::Rolling,
         },
         _ => return None,
     })
