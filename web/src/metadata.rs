@@ -228,6 +228,19 @@ pub struct ParserMeta {
     pub downloads: &'static str,
     /// URL of the source repository.
     pub repo: &'static str,
+    /// Whether the crate is published on crates.io (vs git-only / unreleased).
+    pub crates_io: bool,
+}
+
+/// A full sentence describing whether the crate is published on crates.io, which
+/// decides if it can be depended on with a plain version requirement.
+#[must_use]
+pub const fn crates_io_description(published: bool) -> &'static str {
+    if published {
+        "Published on crates.io, so it can be added with a normal version dependency and is indexed on docs.rs."
+    } else {
+        "Not on crates.io: it is only available as a git dependency, so it cannot be pinned to a published version."
+    }
 }
 
 /// The hosting service a repository URL points at, for the source badge.
@@ -273,6 +286,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: true,
             downloads: "63.2M",
             repo: "https://github.com/sqlparser-rs/sqlparser-rs",
+            crates_io: true,
         },
         // Both libpg_query bindings: own crate has no harness, but libpg_query
         // (PostgreSQL's own C parser) is fuzzed upstream.
@@ -290,6 +304,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: false,
             downloads: "1.5M",
             repo: "https://github.com/pganalyze/pg_query.rs",
+            crates_io: true,
         },
         "qusql-parse" => ParserMeta {
             stars: 17,
@@ -305,6 +320,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: true,
             downloads: "2.5k",
             repo: "https://github.com/antialize/qusql",
+            crates_io: true,
         },
         "polyglot-sql" => ParserMeta {
             stars: 829,
@@ -320,6 +336,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: true,
             downloads: "8.3k",
             repo: "https://github.com/tobilg/polyglot",
+            crates_io: true,
         },
         "databend-common-ast" => ParserMeta {
             stars: 9308,
@@ -335,6 +352,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: false,
             downloads: "26k",
             repo: "https://github.com/datafuselabs/databend/tree/main/src/query/ast",
+            crates_io: true,
         },
         "sqlglot-rust" => ParserMeta {
             stars: 15,
@@ -350,6 +368,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: true,
             downloads: "1.3k",
             repo: "https://github.com/protegrity/sql-glot-rust",
+            crates_io: true,
         },
         "sqlite3-parser" => ParserMeta {
             stars: 62,
@@ -365,6 +384,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: true,
             downloads: "3.3M",
             repo: "https://github.com/gwenn/lemon-rs",
+            crates_io: true,
         },
         "orql" => ParserMeta {
             stars: 0,
@@ -380,6 +400,7 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             wasm: true,
             downloads: "18",
             repo: "https://codeberg.org/xitep/orql",
+            crates_io: true,
         },
         _ => return None,
     })

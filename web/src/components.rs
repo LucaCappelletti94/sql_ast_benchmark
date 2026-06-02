@@ -6,8 +6,8 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork, FaCopy,
-    FaCube, FaDatabase, FaDownload, FaMicrochip, FaScaleBalanced, FaStar, FaStopwatch,
+    FaArrowLeftLong, FaBox, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork,
+    FaCopy, FaCube, FaDatabase, FaDownload, FaMicrochip, FaScaleBalanced, FaStar, FaStopwatch,
     FaTableCells, FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
@@ -977,6 +977,7 @@ fn parser_meta_pills(parser: &str) -> Element {
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaUsers } }, "contributors", commas(m.contributors as usize), crate::metadata::contributors_description(m.contributors))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCalendarDays } }, "since", m.since.to_string(), crate::metadata::since_description(m.since))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaDownload } }, "downloads", m.downloads.to_string(), crate::metadata::downloads_description(m.downloads))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBox } }, "crates.io", if m.crates_io { "yes".to_string() } else { "no".to_string() }, m.crates_io, crate::metadata::crates_io_description(m.crates_io))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaScaleBalanced } }, "license", m.license.to_string(), crate::metadata::license_ok(m.license), &crate::metadata::license_description(m.license))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBug } }, "fuzzed", m.fuzz.label().to_string(), m.fuzz.is_ok(), m.fuzz.description())}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaVial } }, "tests", if m.tests { "yes".to_string() } else { "no".to_string() }, m.tests, crate::metadata::tests_description(m.tests))}
