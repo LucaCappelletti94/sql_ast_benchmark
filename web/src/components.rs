@@ -710,6 +710,9 @@ pub fn ParserView(name: String) -> Element {
                 Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaTableCells }
                 "Results by dialect"
             }
+            p { class: "table-cap",
+                "One row per dialect this parser models. \"accept / recall\" is recall where a reference parser exists (the share of reference-valid statements accepted), otherwise the plain acceptance rate. \"false pos\" is the share of reference-invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that print back to SQL and re-parse unchanged, and \"fidelity\" the share whose printed form matches the original under the reference's canonical form. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster). Click any header to sort."
+            }
             SortTable {
                 caption: format!("Per-dialect results for {}", parser),
                 corner: "dialect".to_string(),
@@ -1343,6 +1346,9 @@ fn perf_table(d: &DialectData) -> Element {
                 Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaTableCells }
                 "Speed"
             }
+            p { class: "table-cap",
+                "One row per parser, measured over the statements it accepted. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster), where p90 means nine in ten statements parse faster than that. \"missed %\" is the share of statements the parser was expected to accept but did not, and \"RT %\" is the round-trip rate, the share of accepted statements that print back to SQL and re-parse unchanged. Click any header to sort."
+            }
             SortTable {
                 caption: format!("Per-parser parse time in nanoseconds for {}", d.display_name),
                 corner: "parser".to_string(),
@@ -1390,6 +1396,13 @@ fn correctness_table(d: &DialectData) -> Element {
             h2 {
                 Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaTableCells }
                 "Correctness"
+            }
+            p { class: "table-cap",
+                if reference {
+                    "One row per parser, graded against the reference parser for this dialect. \"recall\" is the share of reference-valid statements it accepted (this measures agreement with the reference on valid SQL, not whether the parser runs). \"false pos\" is the share of reference-invalid statements it wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that print back to SQL and re-parse unchanged, and \"fidelity\" the share whose printed form matches the original under the reference's canonical form. Click any header to sort."
+                } else {
+                    "One row per parser. This dialect has no reference parser, so every corpus statement is treated as expected-valid. \"accept\" is the share of the corpus the parser accepted, and \"round-trip\" the share of accepted statements that print back to SQL and re-parse unchanged. Click any header to sort."
+                }
             }
             SortTable {
                 caption: format!("Per-parser correctness for {}", d.display_name),

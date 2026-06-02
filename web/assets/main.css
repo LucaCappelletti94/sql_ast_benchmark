@@ -413,6 +413,8 @@ main { display: block; }
 
 /* Failing-statement previews on parser pages */
 .fail-intro { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; max-width: 70ch; }
+/* Explanatory caption shown under a table section heading. */
+.table-cap { color: var(--muted); font-size: 0.88rem; line-height: 1.5; margin: 0 0 0.9rem; max-width: 80ch; }
 .fail-dialect { margin-bottom: 1.4rem; }
 .fail-head {
   display: flex;
