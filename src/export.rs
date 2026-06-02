@@ -257,6 +257,7 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
             out.push(ParserFailures {
                 parser: name.to_string(),
                 rejected_total: 0,
+                expected_total: f.total,
                 preview: Vec::new(),
                 download: None,
             });
@@ -273,6 +274,7 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
             Ok(()) => out.push(ParserFailures {
                 parser: name.to_string(),
                 rejected_total: f.rejected.len(),
+                expected_total: f.total,
                 preview,
                 download: Some(format!("failures/{file}")),
             }),
@@ -281,6 +283,7 @@ fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
                 out.push(ParserFailures {
                     parser: name.to_string(),
                     rejected_total: f.rejected.len(),
+                    expected_total: f.total,
                     preview,
                     download: None,
                 });

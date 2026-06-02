@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-06-02T06:26:01Z",
-  "git_commit": "e5431cf",
+  "generated_utc": "2026-06-02T10:05:25Z",
+  "git_commit": "5db194a",
   "parsers": [
     "sqlparser-rs",
     "pg_query.rs",
@@ -5906,6 +5906,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 3162,
+          "expected_total": 27844,
           "preview": [
             "select array(select percentile_disc(a) within group (order by x) from (values (0.3),(0.7)) v(a) group by a) from generate_series(1,5) g(x); select rank(sum(x)) within group (order by x) from generate_series(1,5) x; select rank(3) within group (order by x) from (values ('fred'),('jim')) v(x); select rank(3) within group (order by stringu1,stringu2) from tenk1; select rank('fred') within group (order by x) from generate_series(1,5) x; select rank('adam'::text collate \"C\") within group (order by x collate \"POSIX\") from (values ('fred'),('jim')) v(x); select rank('adam'::varchar) within group (order by x) from (values ('fred'),('jim')) v(x); select rank('3') within group (order by x) from generate_series(1,5) x; select percent_rank(0) within group (order by x) from generate_series(1,0) x; create view aggordview1 as select ten, percentile_disc(0.5) within group (order by thousand) as p50, percentile_disc(0.5) within group (order by thousand) filter (where hundred=1) as px, rank(5,'AZZZZ',50) within group (order by hundred, string4 desc, hundred) from tenk1 group by ten order by ten; select pg_get_viewdef('aggordview1'); select * from aggordview1 order by ten; drop view aggordview1; select least_agg(q1,q2) from int8_tbl; select least_agg(variadic array[q1,q2]) from int8_tbl; select cleast_agg(q1,q2) from int8_tbl; select cleast_agg(4.5,f1) from int4_tbl; select cleast_agg(variadic array[4.5,f1]) from int4_tbl; select pg_typeof(cleast_agg(variadic array[4.5,f1])) from int4_tbl; begin; create table agg_simplify (a int, not_null_col int not null, nullable_col int); explain (costs off, verbose) select count(not_null_col) from agg_simplify; explain (costs off, verbose) select count('bananas') from agg_simplify; explain (costs off, verbose) select count(null) from agg_simplify",
             "explain (costs off, verbose) select a from agg_simplify a group by a having exists (select 1 from onek b where count(a.not_null_col) = b.four); rollback; begin work; create type avg_state as (total bigint, count bigint); create or replace function avg_transfn(state avg_state, n int) returns avg_state as $$ declare new_state avg_state; begin raise notice 'avg_transfn called with %', n; if state is null then if n is not null then new_state.total := n; new_state.count := 1; return new_state; end if; return null; elsif n is not null then state.total := state.total + n; state.count := state.count + 1; return state; end if; return null; end $$ language plpgsql; create function avg_finalfn(state avg_state) returns int4 as $$ begin if state is null then return NULL; else return state.total / state.count; end if; end $$ language plpgsql; create function sum_finalfn(state avg_state) returns int4 as $$ begin if state is null then return NULL; else return state.total; end if; end $$ language plpgsql; create aggregate my_avg(int4) ( stype = avg_state, sfunc = avg_transfn, finalfunc = avg_finalfn ); create aggregate my_sum(int4) ( stype = avg_state, sfunc = avg_transfn, finalfunc = sum_finalfn ); select my_avg(one),my_avg(one) from (values(1),(3)) t(one); select my_avg(one),my_sum(one) from (values(1),(3)) t(one); select my_avg(distinct one),my_sum(distinct one) from (values(1),(3),(1)) t(one); select my_avg(distinct one),my_sum(one) from (values(1),(3)) t(one)",
@@ -5923,18 +5924,21 @@
         {
           "parser": "pg_query.rs",
           "rejected_total": 0,
+          "expected_total": 27844,
           "preview": [],
           "download": null
         },
         {
           "parser": "pg_query (summary)",
           "rejected_total": 0,
+          "expected_total": 27844,
           "preview": [],
           "download": null
         },
         {
           "parser": "qusql-parse",
           "rejected_total": 6538,
+          "expected_total": 27844,
           "preview": [
             "INSERT INTO consumer_div.user_sessions (user_id, session_start_ts, session_end_ts, device_type, device_id) VALUES (1, '2023-06-01 09:45:22', '2023-06-01 10:20:35', 'mobile_app', 'mobile_8fh2k1'), (1, '2023-06-02 13:30:00', '2023-06-02 14:15:15', 'web_app', 'web_33lq1dh'), (1, '2023-06-06 14:19:00', '2023-06-06 14:22:10', 'web_app', 'web_33lq1dh'), (1, '2023-06-07 23:49:12', '2023-06-08 00:00:00', 'web_app', 'web_33lq1dh'), (2, '2023-06-02 08:55:08', '2023-06-02 09:45:42', 'mobile_app', 'mobile_yjp08q'), (2, '2023-06-07 10:09:15', '2023-06-07 10:12:25', 'mobile_app', 'mobile_1av8p0'), (3, '2023-06-01 13:15:33', '2023-06-01 13:28:01', 'web_app', 'web_k29qjd'), (3, '2023-06-05 12:00:00', '2023-06-05 12:10:22', 'mobile_app', 'mobile_x28qlj'), (4, '2023-06-02 20:30:12', '2023-06-02 21:15:48', 'mobile_app', 'mobile_34jdkl'), (5, '2023-06-03 10:45:30', '2023-06-03 11:20:28', 'web_app', 'web_8902wknz'), (6, '2023-06-02 14:00:00', '2023-06-02 15:10:05', 'web_app', 'web_zz91p44l'), (7, '2023-06-06 16:45:22', '2023-06-06 17:10:40', 'web_app', 'web_zld22f'), (8, '2023-06-04 19:25:15', '2023-06-04 19:40:20', 'web_app', 'web_d8180kaf'), (8, '2023-06-01 17:30:00', '2023-06-01 18:15:35', 'mobile_app', 'mobile_q3mz8n'), (9, '2023-06-04 07:45:30', '2023-06-04 08:15:27', 'mobile_app', 'mobile_g3mjfz'), (10, '2023-06-02 14:10:15', '2023-06-02 14:40:58', 'web_app', 'web_zz91p44l'), (5, CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '32 days' + INTERVAL '15 min', 'web_app', 'web_8902wknz'), (6, CURRENT_TIMESTAMP - INTERVAL '8 days', CURRENT_TIMESTAMP - INTERVAL '8 days' + INTERVAL '15 min', 'web_app', 'web_zz91p44l'), (7, CURRENT_TIMESTAMP - INTERVAL '5 days', CURRENT_TIMESTAMP - INTERVAL '5 days' + INTERVAL '15 min', 'web_app', 'web_zz91p44l'), (8, CURRENT_TIMESTAMP - INTERVAL '3 days', CURRENT_TIMESTAMP - INTERVAL '3 days' + INTERVAL '15 min', 'web_app', 'web_d8180kaf'), (9, CURRENT_TIMESTAMP - INTERVAL '1 days', CURRENT_TIMESTAMP - INTERVAL '1 days' + INTERVAL '15 min', 'mobile_app', 'mobile_g3mjfz'), (10, CURRENT_TIMESTAMP - INTERVAL '2 days', CURRENT_TIMESTAMP - INTERVAL '2 days' + INTERVAL '15 min', 'web_app', 'web_zz91p44l'), (5, CURRENT_TIMESTAMP - INTERVAL '2 days', CURRENT_TIMESTAMP - INTERVAL '2 days' + INTERVAL '15 min', 'web_app', 'web_8902wknz')",
             "SELECT COUNT(sbTxId) AS num_transactions, SUM(sbTxAmount) AS total_amount FROM sbTransaction t JOIN sbCustomer c ON t.sbTxCustId = c.sbCustId WHERE c.sbCustCountry = 'USA' AND t.sbTxDateTime BETWEEN DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 week' AND DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 millisecond'",
@@ -5952,6 +5956,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 4278,
+          "expected_total": 27844,
           "preview": [
             "explain (verbose, costs off) select s1, s2, sm from generate_series(1, 3) s1, lateral (select s2, sum(s1 + s2) sm from generate_series(1, 3) s2 group by s2) ss order by 1, 2",
             "explain (verbose, costs off) select array(select sum(x+y) s from generate_series(1,3) y group by y order by s) from generate_series(1,3) x",
@@ -5969,6 +5974,7 @@
         {
           "parser": "databend-common-ast",
           "rejected_total": 14924,
+          "expected_total": 27844,
           "preview": [
             "CREATE TABLE public.course_offering ( offering_id bigint DEFAULT '0'::bigint NOT NULL, course_id bigint, semester bigint, section_number bigint, start_time time, end_time time, monday text, tuesday text, wednesday text, thursday text, friday text, saturday text, sunday text, has_final_project boolean, has_final_exam boolean, textbook text, class_address text, allow_audit text DEFAULT 'false'::text )",
             "CREATE TABLE salespersons ( id SERIAL PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL, email VARCHAR(255) NOT NULL UNIQUE, phone VARCHAR(20) NOT NULL, hire_date DATE NOT NULL, termination_date DATE, crtd_ts TIMESTAMP NOT NULL DEFAULT NOW() )",
@@ -5986,6 +5992,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 12477,
+          "expected_total": 27844,
           "preview": [
             "CREATE SCHEMA IF NOT EXISTS consumer_div",
             "SELECT COUNT(DISTINCT t.sbTxCustId) FROM sbTransaction t JOIN sbCustomer c ON t.sbTxCustId = c.sbCustId JOIN sbTicker tk ON t.sbTxTickerId = tk.sbTickerId WHERE c.sbCustEmail LIKE '%.com' AND tk.sbTickerSymbol ~ '(AMZN|AAPL|GOOGL|META|NFLX)'",
@@ -10212,6 +10219,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 12,
+          "expected_total": 12040,
           "preview": [
             "SELECT purse__$__ FROM table_11622896_1 WHERE location = \"New York\"",
             "SELECT tournament_location FROM table_12243817_1 WHERE winners_share__$_ = 7000",
@@ -10229,6 +10237,7 @@
         {
           "parser": "qusql-parse",
           "rejected_total": 92,
+          "expected_total": 12040,
           "preview": [
             "SELECT COUNT(kickoff_)[a_] FROM table_11406866_2 WHERE \"week\" = \"week\"",
             "SELECT purse__$__ FROM table_11622896_1 WHERE location = \"New York\"",
@@ -10246,6 +10255,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 14,
+          "expected_total": 12040,
           "preview": [
             "SELECT 3 AS ’utr_sequence FROM table_14332822_1 WHERE genbank_id = \"HQ021437\"",
             "SELECT 3 AS ’utr_sequence FROM table_14332822_1 WHERE variant_id = \"AD'6A 4\"",
@@ -10263,6 +10273,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 95,
+          "expected_total": 12040,
           "preview": [
             "SELECT DISTINCT Range FROM mountain ORDER BY Prominence DESC LIMIT 3",
             "SELECT Range FROM mountain GROUP BY Range ORDER BY COUNT(*) DESC LIMIT 1",
@@ -10280,6 +10291,7 @@
         {
           "parser": "sqlite3-parser",
           "rejected_total": 0,
+          "expected_total": 12040,
           "preview": [],
           "download": null
         }
@@ -14517,6 +14529,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 7328,
+          "expected_total": 30220,
           "preview": [
             "INSERT INTO xy (VALUES ROW(1, 1))",
             "INSERT INTO fk_ref (VALUES ROW(1))",
@@ -14534,6 +14547,7 @@
         {
           "parser": "qusql-parse",
           "rejected_total": 10825,
+          "expected_total": 30220,
           "preview": [
             "SELECT * FROM onecolumn AS a JOIN onecolumn as b USING(x) ORDER BY x",
             "SELECT * FROM onecolumn AS a LEFT OUTER JOIN onecolumn AS b USING(x) ORDER BY x",
@@ -14551,6 +14565,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 7234,
+          "expected_total": 30220,
           "preview": [
             "INSERT INTO xy (VALUES ROW(1, 1))",
             "INSERT INTO fk_ref (VALUES ROW(1))",
@@ -14568,6 +14583,7 @@
         {
           "parser": "databend-common-ast",
           "rejected_total": 13640,
+          "expected_total": 30220,
           "preview": [
             "SELECT * FROM (SELECT x FROM onecolumn ORDER BY x DESC) sq NATURAL JOIN (SELECT column_0 as x from (VALUES ROW(42)) v) AS v LIMIT 1",
             "SELECT * FROM onecolumn JOIN (SELECT column_0 as x FROM (VALUES ROW(41), ROW(42), ROW(43)) a) AS a USING(x)",
@@ -14585,6 +14601,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 15949,
+          "expected_total": 30220,
           "preview": [
             "SELECT * FROM onecolumn AS a NATURAL JOIN onecolumn as b",
             "SELECT * FROM onecolumn AS a NATURAL LEFT OUTER JOIN onecolumn AS b",
@@ -17141,6 +17158,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 18893,
+          "expected_total": 92268,
           "preview": [
             "CREATE OR REPLACE TABLE hits ( WatchID BIGINT NOT NULL, JavaEnable SMALLINT NOT NULL, Title TEXT NOT NULL, GoodEvent SMALLINT NOT NULL, EventTime TIMESTAMP NOT NULL, EventDate Date NOT NULL, CounterID INTEGER NOT NULL, ClientIP INTEGER NOT NULL, RegionID INTEGER NOT NULL, UserID BIGINT NOT NULL, CounterClass SMALLINT NOT NULL, OS SMALLINT NOT NULL, UserAgent SMALLINT NOT NULL, URL TEXT NOT NULL, Referer TEXT NOT NULL, IsRefresh SMALLINT NOT NULL, RefererCategoryID SMALLINT NOT NULL, RefererRegionID INTEGER NOT NULL, URLCategoryID SMALLINT NOT NULL, URLRegionID INTEGER NOT NULL, ResolutionWidth SMALLINT NOT NULL, ResolutionHeight SMALLINT NOT NULL, ResolutionDepth SMALLINT NOT NULL, FlashMajor SMALLINT NOT NULL, FlashMinor SMALLINT NOT NULL, FlashMinor2 TEXT NOT NULL, NetMajor SMALLINT NOT NULL, NetMinor SMALLINT NOT NULL, UserAgentMajor SMALLINT NOT NULL, UserAgentMinor VARCHAR(255) NOT NULL, CookieEnable SMALLINT NOT NULL, JavascriptEnable SMALLINT NOT NULL, IsMobile SMALLINT NOT NULL, MobilePhone SMALLINT NOT NULL, MobilePhoneModel TEXT NOT NULL, Params TEXT NOT NULL, IPNetworkID INTEGER NOT NULL, TraficSourceID SMALLINT NOT NULL, SearchEngineID SMALLINT NOT NULL, SearchPhrase TEXT NOT NULL, AdvEngineID SMALLINT NOT NULL, IsArtifical SMALLINT NOT NULL, WindowClientWidth SMALLINT NOT NULL, WindowClientHeight SMALLINT NOT NULL, ClientTimeZone SMALLINT NOT NULL, ClientEventTime TIMESTAMP NOT NULL, SilverlightVersion1 SMALLINT NOT NULL, SilverlightVersion2 SMALLINT NOT NULL, SilverlightVersion3 INTEGER NOT NULL, SilverlightVersion4 SMALLINT NOT NULL, PageCharset TEXT NOT NULL, CodeVersion INTEGER NOT NULL, IsLink SMALLINT NOT NULL, IsDownload SMALLINT NOT NULL, IsNotBounce SMALLINT NOT NULL, FUniqID BIGINT NOT NULL, OriginalURL TEXT NOT NULL, HID INTEGER NOT NULL, IsOldCounter SMALLINT NOT NULL, IsEvent SMALLINT NOT NULL, IsParameter SMALLINT NOT NULL, DontCountHits SMALLINT NOT NULL, WithHash SMALLINT NOT NULL, HitColor CHAR NOT NULL, LocalEventTime TIMESTAMP NOT NULL, Age SMALLINT NOT NULL, Sex SMALLINT NOT NULL, Income SMALLINT NOT NULL, Interests SMALLINT NOT NULL, Robotness SMALLINT NOT NULL, RemoteIP INTEGER NOT NULL, WindowName INTEGER NOT NULL, OpenerName INTEGER NOT NULL, HistoryLength SMALLINT NOT NULL, BrowserLanguage TEXT NOT NULL, BrowserCountry TEXT NOT NULL, SocialNetwork TEXT NOT NULL, SocialAction TEXT NOT NULL, HTTPError SMALLINT NOT NULL, SendTiming INTEGER NOT NULL, DNSTiming INTEGER NOT NULL, ConnectTiming INTEGER NOT NULL, ResponseStartTiming INTEGER NOT NULL, ResponseEndTiming INTEGER NOT NULL, FetchTiming INTEGER NOT NULL, SocialSourceNetworkID SMALLINT NOT NULL, SocialSourcePage TEXT NOT NULL, ParamPrice BIGINT NOT NULL, ParamOrderID TEXT NOT NULL, ParamCurrency TEXT NOT NULL, ParamCurrencyID SMALLINT NOT NULL, OpenstatServiceName TEXT NOT NULL, OpenstatCampaignID TEXT NOT NULL, OpenstatAdID TEXT NOT NULL, OpenstatSourceID TEXT NOT NULL, UTMSource TEXT NOT NULL, UTMMedium TEXT NOT NULL, UTMCampaign TEXT NOT NULL, UTMContent TEXT NOT NULL, UTMTerm TEXT NOT NULL, FromTag TEXT NOT NULL, HasGCLID SMALLINT NOT NULL, RefererHash BIGINT NOT NULL, URLHash BIGINT NOT NULL, CLID INTEGER NOT NULL, ) ENGINE = Memory",
             "CREATE OR REPLACE TABLE hits ( WatchID BIGINT NOT NULL, JavaEnable SMALLINT NOT NULL, Title TEXT NOT NULL, GoodEvent SMALLINT NOT NULL, EventTime TIMESTAMP NOT NULL, EventDate Date NOT NULL, CounterID INTEGER NOT NULL, ClientIP INTEGER NOT NULL, RegionID INTEGER NOT NULL, UserID BIGINT NOT NULL, CounterClass SMALLINT NOT NULL, OS SMALLINT NOT NULL, UserAgent SMALLINT NOT NULL, URL TEXT NOT NULL, Referer TEXT NOT NULL, IsRefresh SMALLINT NOT NULL, RefererCategoryID SMALLINT NOT NULL, RefererRegionID INTEGER NOT NULL, URLCategoryID SMALLINT NOT NULL, URLRegionID INTEGER NOT NULL, ResolutionWidth SMALLINT NOT NULL, ResolutionHeight SMALLINT NOT NULL, ResolutionDepth SMALLINT NOT NULL, FlashMajor SMALLINT NOT NULL, FlashMinor SMALLINT NOT NULL, FlashMinor2 TEXT NOT NULL, NetMajor SMALLINT NOT NULL, NetMinor SMALLINT NOT NULL, UserAgentMajor SMALLINT NOT NULL, UserAgentMinor VARCHAR(255) NOT NULL, CookieEnable SMALLINT NOT NULL, JavascriptEnable SMALLINT NOT NULL, IsMobile SMALLINT NOT NULL, MobilePhone SMALLINT NOT NULL, MobilePhoneModel TEXT NOT NULL, Params TEXT NOT NULL, IPNetworkID INTEGER NOT NULL, TraficSourceID SMALLINT NOT NULL, SearchEngineID SMALLINT NOT NULL, SearchPhrase TEXT NOT NULL, AdvEngineID SMALLINT NOT NULL, IsArtifical SMALLINT NOT NULL, WindowClientWidth SMALLINT NOT NULL, WindowClientHeight SMALLINT NOT NULL, ClientTimeZone SMALLINT NOT NULL, ClientEventTime TIMESTAMP NOT NULL, SilverlightVersion1 SMALLINT NOT NULL, SilverlightVersion2 SMALLINT NOT NULL, SilverlightVersion3 INTEGER NOT NULL, SilverlightVersion4 SMALLINT NOT NULL, PageCharset TEXT NOT NULL, CodeVersion INTEGER NOT NULL, IsLink SMALLINT NOT NULL, IsDownload SMALLINT NOT NULL, IsNotBounce SMALLINT NOT NULL, FUniqID BIGINT NOT NULL, OriginalURL TEXT NOT NULL, HID INTEGER NOT NULL, IsOldCounter SMALLINT NOT NULL, IsEvent SMALLINT NOT NULL, IsParameter SMALLINT NOT NULL, DontCountHits SMALLINT NOT NULL, WithHash SMALLINT NOT NULL, HitColor CHAR NOT NULL, LocalEventTime TIMESTAMP NOT NULL, Age SMALLINT NOT NULL, Sex SMALLINT NOT NULL, Income SMALLINT NOT NULL, Interests SMALLINT NOT NULL, Robotness SMALLINT NOT NULL, RemoteIP INTEGER NOT NULL, WindowName INTEGER NOT NULL, OpenerName INTEGER NOT NULL, HistoryLength SMALLINT NOT NULL, BrowserLanguage TEXT NOT NULL, BrowserCountry TEXT NOT NULL, SocialNetwork TEXT NOT NULL, SocialAction TEXT NOT NULL, HTTPError SMALLINT NOT NULL, SendTiming INTEGER NOT NULL, DNSTiming INTEGER NOT NULL, ConnectTiming INTEGER NOT NULL, ResponseStartTiming INTEGER NOT NULL, ResponseEndTiming INTEGER NOT NULL, FetchTiming INTEGER NOT NULL, SocialSourceNetworkID SMALLINT NOT NULL, SocialSourcePage TEXT NOT NULL, ParamPrice BIGINT NOT NULL, ParamOrderID TEXT NOT NULL, ParamCurrency TEXT NOT NULL, ParamCurrencyID SMALLINT NOT NULL, OpenstatServiceName TEXT NOT NULL, OpenstatCampaignID TEXT NOT NULL, OpenstatAdID TEXT NOT NULL, OpenstatSourceID TEXT NOT NULL, UTMSource TEXT NOT NULL, UTMMedium TEXT NOT NULL, UTMCampaign TEXT NOT NULL, UTMContent TEXT NOT NULL, UTMTerm TEXT NOT NULL, FromTag TEXT NOT NULL, HasGCLID SMALLINT NOT NULL, RefererHash BIGINT NOT NULL, URLHash BIGINT NOT NULL, CLID INTEGER NOT NULL, PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID) ) ENGINE = MergeTree SETTINGS index_granularity = 1024, fsync_after_insert = 1",
@@ -17158,6 +17176,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 125,
+          "expected_total": 92268,
           "preview": [
             "do echo \"SELECT count() FROM pk_set WHERE host IN ('a'\"$(seq 1 $i | sed -r \"s/.+/,'\\\\0'/\")\") AND code = 100 AND n = 11;\"; done > queries.tsv DROP TABLE pk_set; (seq 1 $i | sed -r \"s/.+/,'\\\\0'/\")\") AND code = 100 AND n = 11;\"; done > queries.tsv DROP TABLE pk_set",
             "SELECT DISTINCT eq FROM ( WITH range(2 + number % 10) AS arr, -- minimum two elements, to avoid nan result -- arrayMap(x -> x = intDiv(number, 10) ? nan : x, arr) AS arr_with_nan, arrayFilter(x -> x != intDiv(number, 10), arr) AS arr_filtered SELECT number, arrayReduce('quantileExact', arr_with_nan) AS q1, arrayReduce('quantileExact', arr_filtered) AS q2, q1 = q2 AS eq FROM numbers(100) )",
@@ -17175,6 +17194,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 40545,
+          "expected_total": 92268,
           "preview": [
             "CREATE OR REPLACE TABLE hits ( WatchID BIGINT NOT NULL, JavaEnable SMALLINT NOT NULL, Title TEXT NOT NULL, GoodEvent SMALLINT NOT NULL, EventTime TIMESTAMP NOT NULL, EventDate Date NOT NULL, CounterID INTEGER NOT NULL, ClientIP INTEGER NOT NULL, RegionID INTEGER NOT NULL, UserID BIGINT NOT NULL, CounterClass SMALLINT NOT NULL, OS SMALLINT NOT NULL, UserAgent SMALLINT NOT NULL, URL TEXT NOT NULL, Referer TEXT NOT NULL, IsRefresh SMALLINT NOT NULL, RefererCategoryID SMALLINT NOT NULL, RefererRegionID INTEGER NOT NULL, URLCategoryID SMALLINT NOT NULL, URLRegionID INTEGER NOT NULL, ResolutionWidth SMALLINT NOT NULL, ResolutionHeight SMALLINT NOT NULL, ResolutionDepth SMALLINT NOT NULL, FlashMajor SMALLINT NOT NULL, FlashMinor SMALLINT NOT NULL, FlashMinor2 TEXT NOT NULL, NetMajor SMALLINT NOT NULL, NetMinor SMALLINT NOT NULL, UserAgentMajor SMALLINT NOT NULL, UserAgentMinor VARCHAR(255) NOT NULL, CookieEnable SMALLINT NOT NULL, JavascriptEnable SMALLINT NOT NULL, IsMobile SMALLINT NOT NULL, MobilePhone SMALLINT NOT NULL, MobilePhoneModel TEXT NOT NULL, Params TEXT NOT NULL, IPNetworkID INTEGER NOT NULL, TraficSourceID SMALLINT NOT NULL, SearchEngineID SMALLINT NOT NULL, SearchPhrase TEXT NOT NULL, AdvEngineID SMALLINT NOT NULL, IsArtifical SMALLINT NOT NULL, WindowClientWidth SMALLINT NOT NULL, WindowClientHeight SMALLINT NOT NULL, ClientTimeZone SMALLINT NOT NULL, ClientEventTime TIMESTAMP NOT NULL, SilverlightVersion1 SMALLINT NOT NULL, SilverlightVersion2 SMALLINT NOT NULL, SilverlightVersion3 INTEGER NOT NULL, SilverlightVersion4 SMALLINT NOT NULL, PageCharset TEXT NOT NULL, CodeVersion INTEGER NOT NULL, IsLink SMALLINT NOT NULL, IsDownload SMALLINT NOT NULL, IsNotBounce SMALLINT NOT NULL, FUniqID BIGINT NOT NULL, OriginalURL TEXT NOT NULL, HID INTEGER NOT NULL, IsOldCounter SMALLINT NOT NULL, IsEvent SMALLINT NOT NULL, IsParameter SMALLINT NOT NULL, DontCountHits SMALLINT NOT NULL, WithHash SMALLINT NOT NULL, HitColor CHAR NOT NULL, LocalEventTime TIMESTAMP NOT NULL, Age SMALLINT NOT NULL, Sex SMALLINT NOT NULL, Income SMALLINT NOT NULL, Interests SMALLINT NOT NULL, Robotness SMALLINT NOT NULL, RemoteIP INTEGER NOT NULL, WindowName INTEGER NOT NULL, OpenerName INTEGER NOT NULL, HistoryLength SMALLINT NOT NULL, BrowserLanguage TEXT NOT NULL, BrowserCountry TEXT NOT NULL, SocialNetwork TEXT NOT NULL, SocialAction TEXT NOT NULL, HTTPError SMALLINT NOT NULL, SendTiming INTEGER NOT NULL, DNSTiming INTEGER NOT NULL, ConnectTiming INTEGER NOT NULL, ResponseStartTiming INTEGER NOT NULL, ResponseEndTiming INTEGER NOT NULL, FetchTiming INTEGER NOT NULL, SocialSourceNetworkID SMALLINT NOT NULL, SocialSourcePage TEXT NOT NULL, ParamPrice BIGINT NOT NULL, ParamOrderID TEXT NOT NULL, ParamCurrency TEXT NOT NULL, ParamCurrencyID SMALLINT NOT NULL, OpenstatServiceName TEXT NOT NULL, OpenstatCampaignID TEXT NOT NULL, OpenstatAdID TEXT NOT NULL, OpenstatSourceID TEXT NOT NULL, UTMSource TEXT NOT NULL, UTMMedium TEXT NOT NULL, UTMCampaign TEXT NOT NULL, UTMContent TEXT NOT NULL, UTMTerm TEXT NOT NULL, FromTag TEXT NOT NULL, HasGCLID SMALLINT NOT NULL, RefererHash BIGINT NOT NULL, URLHash BIGINT NOT NULL, CLID INTEGER NOT NULL, ) ENGINE = Memory",
             "CREATE OR REPLACE TABLE hits ( WatchID BIGINT NOT NULL, JavaEnable SMALLINT NOT NULL, Title TEXT NOT NULL, GoodEvent SMALLINT NOT NULL, EventTime TIMESTAMP NOT NULL, EventDate Date NOT NULL, CounterID INTEGER NOT NULL, ClientIP INTEGER NOT NULL, RegionID INTEGER NOT NULL, UserID BIGINT NOT NULL, CounterClass SMALLINT NOT NULL, OS SMALLINT NOT NULL, UserAgent SMALLINT NOT NULL, URL TEXT NOT NULL, Referer TEXT NOT NULL, IsRefresh SMALLINT NOT NULL, RefererCategoryID SMALLINT NOT NULL, RefererRegionID INTEGER NOT NULL, URLCategoryID SMALLINT NOT NULL, URLRegionID INTEGER NOT NULL, ResolutionWidth SMALLINT NOT NULL, ResolutionHeight SMALLINT NOT NULL, ResolutionDepth SMALLINT NOT NULL, FlashMajor SMALLINT NOT NULL, FlashMinor SMALLINT NOT NULL, FlashMinor2 TEXT NOT NULL, NetMajor SMALLINT NOT NULL, NetMinor SMALLINT NOT NULL, UserAgentMajor SMALLINT NOT NULL, UserAgentMinor VARCHAR(255) NOT NULL, CookieEnable SMALLINT NOT NULL, JavascriptEnable SMALLINT NOT NULL, IsMobile SMALLINT NOT NULL, MobilePhone SMALLINT NOT NULL, MobilePhoneModel TEXT NOT NULL, Params TEXT NOT NULL, IPNetworkID INTEGER NOT NULL, TraficSourceID SMALLINT NOT NULL, SearchEngineID SMALLINT NOT NULL, SearchPhrase TEXT NOT NULL, AdvEngineID SMALLINT NOT NULL, IsArtifical SMALLINT NOT NULL, WindowClientWidth SMALLINT NOT NULL, WindowClientHeight SMALLINT NOT NULL, ClientTimeZone SMALLINT NOT NULL, ClientEventTime TIMESTAMP NOT NULL, SilverlightVersion1 SMALLINT NOT NULL, SilverlightVersion2 SMALLINT NOT NULL, SilverlightVersion3 INTEGER NOT NULL, SilverlightVersion4 SMALLINT NOT NULL, PageCharset TEXT NOT NULL, CodeVersion INTEGER NOT NULL, IsLink SMALLINT NOT NULL, IsDownload SMALLINT NOT NULL, IsNotBounce SMALLINT NOT NULL, FUniqID BIGINT NOT NULL, OriginalURL TEXT NOT NULL, HID INTEGER NOT NULL, IsOldCounter SMALLINT NOT NULL, IsEvent SMALLINT NOT NULL, IsParameter SMALLINT NOT NULL, DontCountHits SMALLINT NOT NULL, WithHash SMALLINT NOT NULL, HitColor CHAR NOT NULL, LocalEventTime TIMESTAMP NOT NULL, Age SMALLINT NOT NULL, Sex SMALLINT NOT NULL, Income SMALLINT NOT NULL, Interests SMALLINT NOT NULL, Robotness SMALLINT NOT NULL, RemoteIP INTEGER NOT NULL, WindowName INTEGER NOT NULL, OpenerName INTEGER NOT NULL, HistoryLength SMALLINT NOT NULL, BrowserLanguage TEXT NOT NULL, BrowserCountry TEXT NOT NULL, SocialNetwork TEXT NOT NULL, SocialAction TEXT NOT NULL, HTTPError SMALLINT NOT NULL, SendTiming INTEGER NOT NULL, DNSTiming INTEGER NOT NULL, ConnectTiming INTEGER NOT NULL, ResponseStartTiming INTEGER NOT NULL, ResponseEndTiming INTEGER NOT NULL, FetchTiming INTEGER NOT NULL, SocialSourceNetworkID SMALLINT NOT NULL, SocialSourcePage TEXT NOT NULL, ParamPrice BIGINT NOT NULL, ParamOrderID TEXT NOT NULL, ParamCurrency TEXT NOT NULL, ParamCurrencyID SMALLINT NOT NULL, OpenstatServiceName TEXT NOT NULL, OpenstatCampaignID TEXT NOT NULL, OpenstatAdID TEXT NOT NULL, OpenstatSourceID TEXT NOT NULL, UTMSource TEXT NOT NULL, UTMMedium TEXT NOT NULL, UTMCampaign TEXT NOT NULL, UTMContent TEXT NOT NULL, UTMTerm TEXT NOT NULL, FromTag TEXT NOT NULL, HasGCLID SMALLINT NOT NULL, RefererHash BIGINT NOT NULL, URLHash BIGINT NOT NULL, CLID INTEGER NOT NULL, PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID) ) ENGINE = MergeTree SETTINGS index_granularity = 1024, fsync_after_insert = 1",
@@ -19740,6 +19760,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 3265,
+          "expected_total": 41148,
           "preview": [
             "CREATE EXTERNAL TABLE multiple_ordered_table ( a0 INTEGER, a INTEGER, b INTEGER, c INTEGER, d INTEGER ) STORED AS CSV WITH ORDER (a ASC, b ASC) WITH ORDER (c ASC) LOCATION '../../datafusion/core/tests/data/window_2.csv' OPTIONS ('format.has_header' 'true')",
             "CREATE EXTERNAL TABLE aggregate_test_100 ( c1 VARCHAR NOT NULL, c2 TINYINT NOT NULL, c3 SMALLINT NOT NULL, c4 SMALLINT, c5 INT, c6 BIGINT NOT NULL, c7 SMALLINT NOT NULL, c8 INT NOT NULL, c9 INT UNSIGNED NOT NULL, c10 BIGINT UNSIGNED NOT NULL, c11 FLOAT NOT NULL, c12 DOUBLE NOT NULL, c13 VARCHAR NOT NULL, c14 DATE NOT NULL, c15 TIMESTAMP NOT NULL, ) STORED AS CSV LOCATION '../../testing/data/csv/aggregate_test_100_with_dates.csv' OPTIONS ('format.has_header' 'true')",
@@ -19757,6 +19778,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 2635,
+          "expected_total": 41148,
           "preview": [
             "CREATE EXTERNAL TABLE multiple_ordered_table ( a0 INTEGER, a INTEGER, b INTEGER, c INTEGER, d INTEGER ) STORED AS CSV WITH ORDER (a ASC, b ASC) WITH ORDER (c ASC) LOCATION '../../datafusion/core/tests/data/window_2.csv' OPTIONS ('format.has_header' 'true')",
             "EXPLAIN SELECT a, NTH_VALUE(c, 1 ORDER BY c) as result FROM multiple_ordered_table GROUP BY a",
@@ -19774,6 +19796,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 14721,
+          "expected_total": 41148,
           "preview": [
             "CREATE EXTERNAL TABLE multiple_ordered_table ( a0 INTEGER, a INTEGER, b INTEGER, c INTEGER, d INTEGER ) STORED AS CSV WITH ORDER (a ASC, b ASC) WITH ORDER (c ASC) LOCATION '../../datafusion/core/tests/data/window_2.csv' OPTIONS ('format.has_header' 'true')",
             "EXPLAIN SELECT a, ARRAY_AGG(c ORDER BY c)[1] as result FROM multiple_ordered_table GROUP BY a",
@@ -23165,6 +23188,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 8033,
+          "expected_total": 41294,
           "preview": [
             "select i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price ,sum(ws_ext_sales_price) as itemrevenue ,sum(ws_ext_sales_price)*100/sum(sum(ws_ext_sales_price)) over (partition by i_class) as revenueratio from web_sales ,item ,date_dim where ws_item_sk = i_item_sk and i_category in ('Electronics', 'Books', 'Women') and ws_sold_date_sk = d_date_sk and d_date between cast('1998-01-06' as date) and (cast('1998-01-06' as date) + 30 days) group by i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price order by i_category ,i_class ,i_item_id ,i_item_desc ,revenueratio limit 100",
             "select count(distinct cs_order_number) as `order count` ,sum(cs_ext_ship_cost) as `total shipping cost` ,sum(cs_net_profit) as `total net profit` from catalog_sales cs1 ,date_dim ,customer_address ,call_center where d_date between '1999-4-01' and (cast('1999-4-01' as date) + 60 days) and cs1.cs_ship_date_sk = d_date_sk and cs1.cs_ship_addr_sk = ca_address_sk and ca_state = 'IL' and cs1.cs_call_center_sk = cc_call_center_sk and cc_county in ('Richland County','Bronx County','Maverick County','Mesa County', 'Raleigh County' ) and exists (select * from catalog_sales cs2 where cs1.cs_order_number = cs2.cs_order_number and cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk) and not exists(select * from catalog_returns cr1 where cs1.cs_order_number = cr1.cr_order_number) order by count(distinct cs_order_number) limit 100",
@@ -23182,6 +23206,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 6493,
+          "expected_total": 41294,
           "preview": [
             "select i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price ,sum(ws_ext_sales_price) as itemrevenue ,sum(ws_ext_sales_price)*100/sum(sum(ws_ext_sales_price)) over (partition by i_class) as revenueratio from web_sales ,item ,date_dim where ws_item_sk = i_item_sk and i_category in ('Electronics', 'Books', 'Women') and ws_sold_date_sk = d_date_sk and d_date between cast('1998-01-06' as date) and (cast('1998-01-06' as date) + 30 days) group by i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price order by i_category ,i_class ,i_item_id ,i_item_desc ,revenueratio limit 100",
             "select count(distinct cs_order_number) as `order count` ,sum(cs_ext_ship_cost) as `total shipping cost` ,sum(cs_net_profit) as `total net profit` from catalog_sales cs1 ,date_dim ,customer_address ,call_center where d_date between '1999-4-01' and (cast('1999-4-01' as date) + 60 days) and cs1.cs_ship_date_sk = d_date_sk and cs1.cs_ship_addr_sk = ca_address_sk and ca_state = 'IL' and cs1.cs_call_center_sk = cc_call_center_sk and cc_county in ('Richland County','Bronx County','Maverick County','Mesa County', 'Raleigh County' ) and exists (select * from catalog_sales cs2 where cs1.cs_order_number = cs2.cs_order_number and cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk) and not exists(select * from catalog_returns cr1 where cs1.cs_order_number = cr1.cr_order_number) order by count(distinct cs_order_number) limit 100",
@@ -23199,6 +23224,7 @@
         {
           "parser": "databend-common-ast",
           "rejected_total": 19932,
+          "expected_total": 41294,
           "preview": [
             "select i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price ,sum(ws_ext_sales_price) as itemrevenue ,sum(ws_ext_sales_price)*100/sum(sum(ws_ext_sales_price)) over (partition by i_class) as revenueratio from web_sales ,item ,date_dim where ws_item_sk = i_item_sk and i_category in ('Electronics', 'Books', 'Women') and ws_sold_date_sk = d_date_sk and d_date between cast('1998-01-06' as date) and (cast('1998-01-06' as date) + 30 days) group by i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price order by i_category ,i_class ,i_item_id ,i_item_desc ,revenueratio limit 100",
             "select count(distinct cs_order_number) as `order count` ,sum(cs_ext_ship_cost) as `total shipping cost` ,sum(cs_net_profit) as `total net profit` from catalog_sales cs1 ,date_dim ,customer_address ,call_center where d_date between '1999-4-01' and (cast('1999-4-01' as date) + 60 days) and cs1.cs_ship_date_sk = d_date_sk and cs1.cs_ship_addr_sk = ca_address_sk and ca_state = 'IL' and cs1.cs_call_center_sk = cc_call_center_sk and cc_county in ('Richland County','Bronx County','Maverick County','Mesa County', 'Raleigh County' ) and exists (select * from catalog_sales cs2 where cs1.cs_order_number = cs2.cs_order_number and cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk) and not exists(select * from catalog_returns cr1 where cs1.cs_order_number = cr1.cr_order_number) order by count(distinct cs_order_number) limit 100",
@@ -23216,6 +23242,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 22363,
+          "expected_total": 41294,
           "preview": [
             "select i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price ,sum(ws_ext_sales_price) as itemrevenue ,sum(ws_ext_sales_price)*100/sum(sum(ws_ext_sales_price)) over (partition by i_class) as revenueratio from web_sales ,item ,date_dim where ws_item_sk = i_item_sk and i_category in ('Electronics', 'Books', 'Women') and ws_sold_date_sk = d_date_sk and d_date between cast('1998-01-06' as date) and (cast('1998-01-06' as date) + 30 days) group by i_item_id ,i_item_desc ,i_category ,i_class ,i_current_price order by i_category ,i_class ,i_item_id ,i_item_desc ,revenueratio limit 100",
             "select count(distinct cs_order_number) as `order count` ,sum(cs_ext_ship_cost) as `total shipping cost` ,sum(cs_net_profit) as `total net profit` from catalog_sales cs1 ,date_dim ,customer_address ,call_center where d_date between '1999-4-01' and (cast('1999-4-01' as date) + 60 days) and cs1.cs_ship_date_sk = d_date_sk and cs1.cs_ship_addr_sk = ca_address_sk and ca_state = 'IL' and cs1.cs_call_center_sk = cc_call_center_sk and cc_county in ('Richland County','Bronx County','Maverick County','Mesa County', 'Raleigh County' ) and exists (select * from catalog_sales cs2 where cs1.cs_order_number = cs2.cs_order_number and cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk) and not exists(select * from catalog_returns cr1 where cs1.cs_order_number = cr1.cr_order_number) order by count(distinct cs_order_number) limit 100",
@@ -25781,6 +25808,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 2151,
+          "expected_total": 14464,
           "preview": [
             "Permalink: table(\"sqlPerformance\").where('timestamp === ${timestamp}L)",
             "(.*)\\.([^\\(]+)\\(([^:]+)(:{0,1}\\d*)\\)",
@@ -25798,6 +25826,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 1204,
+          "expected_total": 14464,
           "preview": [
             "Permalink: table(\"sqlPerformance\").where('timestamp === ${timestamp}L)",
             "(.*)\\.([^\\(]+)\\(([^:]+)(:{0,1}\\d*)\\)",
@@ -25815,6 +25844,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 5591,
+          "expected_total": 14464,
           "preview": [
             "Permalink: table(\"sqlPerformance\").where('timestamp === ${timestamp}L)",
             "(.*)\\.([^\\(]+)\\(([^:]+)(:{0,1}\\d*)\\)",
@@ -26727,6 +26757,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 1,
+          "expected_total": 71,
           "preview": [
             "create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s; create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s"
           ],
@@ -26735,6 +26766,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 1,
+          "expected_total": 71,
           "preview": [
             "create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s; create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s"
           ],
@@ -26743,6 +26775,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 19,
+          "expected_total": 71,
           "preview": [
             "CREATE SCHEMA IF NOT EXISTS hive.clickbench WITH (location = 'local:///')",
             "CREATE TABLE hive.clickbench.hits_raw ( WatchID bigint, JavaEnable smallint, Title varchar, GoodEvent smallint, EventTime bigint, EventDate integer, CounterID integer, ClientIP integer, RegionID integer, UserID bigint, CounterClass smallint, OS smallint, UserAgent smallint, URL varchar, Referer varchar, IsRefresh smallint, RefererCategoryID smallint, RefererRegionID integer, URLCategoryID smallint, URLRegionID integer, ResolutionWidth smallint, ResolutionHeight smallint, ResolutionDepth smallint, FlashMajor smallint, FlashMinor smallint, FlashMinor2 varchar, NetMajor smallint, NetMinor smallint, UserAgentMajor smallint, UserAgentMinor varchar, CookieEnable smallint, JavascriptEnable smallint, IsMobile smallint, MobilePhone smallint, MobilePhoneModel varchar, Params varchar, IPNetworkID integer, TraficSourceID smallint, SearchEngineID smallint, SearchPhrase varchar, AdvEngineID smallint, IsArtifical smallint, WindowClientWidth smallint, WindowClientHeight smallint, ClientTimeZone smallint, ClientEventTime bigint, SilverlightVersion1 smallint, SilverlightVersion2 smallint, SilverlightVersion3 integer, SilverlightVersion4 smallint, PageCharset varchar, CodeVersion integer, IsLink smallint, IsDownload smallint, IsNotBounce smallint, FUniqID bigint, OriginalURL varchar, HID integer, IsOldCounter smallint, IsEvent smallint, IsParameter smallint, DontCountHits smallint, WithHash smallint, HitColor varchar, LocalEventTime bigint, Age smallint, Sex smallint, Income smallint, Interests smallint, Robotness smallint, RemoteIP integer, WindowName integer, OpenerName integer, HistoryLength smallint, BrowserLanguage varchar, BrowserCountry varchar, SocialNetwork varchar, SocialAction varchar, HTTPError smallint, SendTiming integer, DNSTiming integer, ConnectTiming integer, ResponseStartTiming integer, ResponseEndTiming integer, FetchTiming integer, SocialSourceNetworkID smallint, SocialSourcePage varchar, ParamPrice bigint, ParamOrderID varchar, ParamCurrency varchar, ParamCurrencyID smallint, OpenstatServiceName varchar, OpenstatCampaignID varchar, OpenstatAdID varchar, OpenstatSourceID varchar, UTMSource varchar, UTMMedium varchar, UTMCampaign varchar, UTMContent varchar, UTMTerm varchar, FromTag varchar, HasGCLID smallint, RefererHash bigint, URLHash bigint, CLID integer ) WITH ( external_location = 'local:///hits', format = 'PARQUET' )",
@@ -29299,6 +29332,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 4125,
+          "expected_total": 14782,
           "preview": [
             "USE tempdb CREATE TABLE col_elem_ex ( ident int NOT NULL IDENTITY(1,1), rguid UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() ROWGUIDCOL, col1 INT ) INSERT INTO col_elem_ex(col1) VALUES(2) SELECT $IDENTITY AS ident_col FROM col_elem_ex SELECT $ROWGUID AS guid_col FROM col_elem_ex SELECT col_elem_ex.col1 AS qualified_col FROM col_elem_ex SELECT col1 AS nonQualified_col FROM col_elem_ex SELECT NULL AS null_col FROM col_elem_ex DROP TABLE col_elem_ex AS ident_col FROM col_elem_ex SELECT $ROWGUID AS guid_col FROM col_elem_ex SELECT col_elem_ex.col1 AS qualified_col FROM col_elem_ex SELECT col1 AS nonQualified_col FROM col_elem_ex SELECT NULL AS null_col FROM col_elem_ex DROP TABLE col_elem_ex",
             "SET XACT_ABORT ON GO SET XACT_ABORT, NOCOUNT OFF GO",
@@ -29316,6 +29350,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 3718,
+          "expected_total": 14782,
           "preview": [
             "USE tempdb CREATE TABLE col_elem_ex ( ident int NOT NULL IDENTITY(1,1), rguid UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() ROWGUIDCOL, col1 INT ) INSERT INTO col_elem_ex(col1) VALUES(2) SELECT $IDENTITY AS ident_col FROM col_elem_ex SELECT $ROWGUID AS guid_col FROM col_elem_ex SELECT col_elem_ex.col1 AS qualified_col FROM col_elem_ex SELECT col1 AS nonQualified_col FROM col_elem_ex SELECT NULL AS null_col FROM col_elem_ex DROP TABLE col_elem_ex AS ident_col FROM col_elem_ex SELECT $ROWGUID AS guid_col FROM col_elem_ex SELECT col_elem_ex.col1 AS qualified_col FROM col_elem_ex SELECT col1 AS nonQualified_col FROM col_elem_ex SELECT NULL AS null_col FROM col_elem_ex DROP TABLE col_elem_ex",
             "SET XACT_ABORT ON GO SET XACT_ABORT, NOCOUNT OFF GO",
@@ -29333,6 +29368,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 6695,
+          "expected_total": 14782,
           "preview": [
             "USE tempdb CREATE TABLE col_elem_ex ( ident int NOT NULL IDENTITY(1,1), rguid UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() ROWGUIDCOL, col1 INT ) INSERT INTO col_elem_ex(col1) VALUES(2) SELECT $IDENTITY AS ident_col FROM col_elem_ex SELECT $ROWGUID AS guid_col FROM col_elem_ex SELECT col_elem_ex.col1 AS qualified_col FROM col_elem_ex SELECT col1 AS nonQualified_col FROM col_elem_ex SELECT NULL AS null_col FROM col_elem_ex DROP TABLE col_elem_ex AS ident_col FROM col_elem_ex SELECT $ROWGUID AS guid_col FROM col_elem_ex SELECT col_elem_ex.col1 AS qualified_col FROM col_elem_ex SELECT col1 AS nonQualified_col FROM col_elem_ex SELECT NULL AS null_col FROM col_elem_ex DROP TABLE col_elem_ex",
             "SET XACT_ABORT ON GO SET XACT_ABORT, NOCOUNT OFF GO",
@@ -32196,6 +32232,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 8839,
+          "expected_total": 21648,
           "preview": [
             "REM Script: 18c approx_count function REM Data analysis applications heavily use aggregate functions. Approximate query processing (available since Oracle Database 12c Release 1) aims to deliver faster results for these queries. The approximate results are not identical to the exact results but they are very close. New approximate SQL functions for rank, sum and count are now available for Top-N style queries. By making use of approximate query processing, you can instantly improve the performance of existing analytic workloads and enable faster ad-hoc data exploration drop table t purge",
             "select owner, approx_count(*) from t group by owner having approx_rank(partition by owner order by approx_count(*) desc) <= 1 order by 1",
@@ -32213,6 +32250,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 8736,
+          "expected_total": 21648,
           "preview": [
             "REM Script: 18c approx_count function REM Data analysis applications heavily use aggregate functions. Approximate query processing (available since Oracle Database 12c Release 1) aims to deliver faster results for these queries. The approximate results are not identical to the exact results but they are very close. New approximate SQL functions for rank, sum and count are now available for Top-N style queries. By making use of approximate query processing, you can instantly improve the performance of existing analytic workloads and enable faster ad-hoc data exploration drop table t purge",
             "select owner, approx_count(*) from t group by owner having approx_rank(partition by owner order by approx_count(*) desc) <= 1 order by 1",
@@ -32230,6 +32268,7 @@
         {
           "parser": "orql",
           "rejected_total": 21579,
+          "expected_total": 21648,
           "preview": [
             "REM Script: 18c approx_count function REM Data analysis applications heavily use aggregate functions. Approximate query processing (available since Oracle Database 12c Release 1) aims to deliver faster results for these queries. The approximate results are not identical to the exact results but they are very close. New approximate SQL functions for rank, sum and count are now available for Top-N style queries. By making use of approximate query processing, you can instantly improve the performance of existing analytic workloads and enable faster ad-hoc data exploration drop table t purge",
             "create table t as select * from all_objects where owner in ('SYS','SYSTEM','PUBLIC','SCOTT','HR','SALES')",
@@ -32247,6 +32286,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 9527,
+          "expected_total": 21648,
           "preview": [
             "REM Script: 18c approx_count function REM Data analysis applications heavily use aggregate functions. Approximate query processing (available since Oracle Database 12c Release 1) aims to deliver faster results for these queries. The approximate results are not identical to the exact results but they are very close. New approximate SQL functions for rank, sum and count are now available for Top-N style queries. By making use of approximate query processing, you can instantly improve the performance of existing analytic workloads and enable faster ad-hoc data exploration drop table t purge",
             "select owner, approx_count(*) from t group by owner having approx_rank(partition by owner order by approx_count(*) desc) <= 1 order by 1",
@@ -34719,6 +34759,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 2,
+          "expected_total": 224,
           "preview": [
             "create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s; create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s",
             "create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= to_date(':1') and l_shipdate < dateadd(month, 3, to_date(':1')) group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s ; create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= to_date(':1') and l_shipdate < dateadd(month, 3, to_date(':1')) group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s"
@@ -34728,6 +34769,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 2,
+          "expected_total": 224,
           "preview": [
             "create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s; create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= date ':1' and l_shipdate < date ':1' + interval '3' month group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s",
             "create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= to_date(':1') and l_shipdate < dateadd(month, 3, to_date(':1')) group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s ; create view revenue:s (supplier_no, total_revenue) as select l_suppkey, sum(l_extendedprice * (1 - l_discount)) from lineitem where l_shipdate >= to_date(':1') and l_shipdate < dateadd(month, 3, to_date(':1')) group by l_suppkey; select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue:s where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue:s ) order by s_suppkey; drop view revenue:s"
@@ -34737,6 +34779,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 44,
+          "expected_total": 224,
           "preview": [
             "CREATE TABLE test.hits ( WatchID BIGINT NOT NULL, JavaEnable SMALLINT NOT NULL, Title String NOT NULL, GoodEvent SMALLINT NOT NULL, EventTime TIMESTAMP NOT NULL, EventDate Date NOT NULL, CounterID INTEGER NOT NULL, ClientIP INTEGER NOT NULL, RegionID INTEGER NOT NULL, UserID BIGINT NOT NULL, CounterClass SMALLINT NOT NULL, OS SMALLINT NOT NULL, UserAgent SMALLINT NOT NULL, URL String NOT NULL, Referer String NOT NULL, IsRefresh SMALLINT NOT NULL, RefererCategoryID SMALLINT NOT NULL, RefererRegionID INTEGER NOT NULL, URLCategoryID SMALLINT NOT NULL, URLRegionID INTEGER NOT NULL, ResolutionWidth SMALLINT NOT NULL, ResolutionHeight SMALLINT NOT NULL, ResolutionDepth SMALLINT NOT NULL, FlashMajor SMALLINT NOT NULL, FlashMinor SMALLINT NOT NULL, FlashMinor2 String NOT NULL, NetMajor SMALLINT NOT NULL, NetMinor SMALLINT NOT NULL, UserAgentMajor SMALLINT NOT NULL, UserAgentMinor String NOT NULL, CookieEnable SMALLINT NOT NULL, JavascriptEnable SMALLINT NOT NULL, IsMobile SMALLINT NOT NULL, MobilePhone SMALLINT NOT NULL, MobilePhoneModel String NOT NULL, Params String NOT NULL, IPNetworkID INTEGER NOT NULL, TraficSourceID SMALLINT NOT NULL, SearchEngineID SMALLINT NOT NULL, SearchPhrase String NOT NULL, AdvEngineID SMALLINT NOT NULL, IsArtifical SMALLINT NOT NULL, WindowClientWidth SMALLINT NOT NULL, WindowClientHeight SMALLINT NOT NULL, ClientTimeZone SMALLINT NOT NULL, ClientEventTime TIMESTAMP NOT NULL, SilverlightVersion1 SMALLINT NOT NULL, SilverlightVersion2 SMALLINT NOT NULL, SilverlightVersion3 INTEGER NOT NULL, SilverlightVersion4 SMALLINT NOT NULL, PageCharset String NOT NULL, CodeVersion INTEGER NOT NULL, IsLink SMALLINT NOT NULL, IsDownload SMALLINT NOT NULL, IsNotBounce SMALLINT NOT NULL, FUniqID BIGINT NOT NULL, OriginalURL String NOT NULL, HID INTEGER NOT NULL, IsOldCounter SMALLINT NOT NULL, IsEvent SMALLINT NOT NULL, IsParameter SMALLINT NOT NULL, DontCountHits SMALLINT NOT NULL, WithHash SMALLINT NOT NULL, HitColor String NOT NULL, LocalEventTime TIMESTAMP NOT NULL, Age SMALLINT NOT NULL, Sex SMALLINT NOT NULL, Income SMALLINT NOT NULL, Interests SMALLINT NOT NULL, Robotness SMALLINT NOT NULL, RemoteIP INTEGER NOT NULL, WindowName INTEGER NOT NULL, OpenerName INTEGER NOT NULL, HistoryLength SMALLINT NOT NULL, BrowserLanguage String NOT NULL, BrowserCountry String NOT NULL, SocialNetwork String NOT NULL, SocialAction String NOT NULL, HTTPError SMALLINT NOT NULL, SendTiming INTEGER NOT NULL, DNSTiming INTEGER NOT NULL, ConnectTiming INTEGER NOT NULL, ResponseStartTiming INTEGER NOT NULL, ResponseEndTiming INTEGER NOT NULL, FetchTiming INTEGER NOT NULL, SocialSourceNetworkID SMALLINT NOT NULL, SocialSourcePage String NOT NULL, ParamPrice BIGINT NOT NULL, ParamOrderID String NOT NULL, ParamCurrency String NOT NULL, ParamCurrencyID SMALLINT NOT NULL, OpenstatServiceName String NOT NULL, OpenstatCampaignID String NOT NULL, OpenstatAdID String NOT NULL, OpenstatSourceID String NOT NULL, UTMSource String NOT NULL, UTMMedium String NOT NULL, UTMCampaign String NOT NULL, UTMContent String NOT NULL, UTMTerm String NOT NULL, FromTag String NOT NULL, HasGCLID SMALLINT NOT NULL, RefererHash BIGINT NOT NULL, URLHash BIGINT NOT NULL, CLID INTEGER NOT NULL, ) CLUSTER BY CounterID, EventDate, UserID, EventTime",
             "create table `_destination_dataset.catalog_returns` PARTITION BY RANGE_BUCKET(cr_returned_date_sk, GENERATE_ARRAY(2450821, 2452922, 1)) as select * from `_source_dataset.catalog_returns`; create table `_destination_dataset.catalog_sales` PARTITION BY RANGE_BUCKET(cs_sold_date_sk, GENERATE_ARRAY(2450815, 2452654, 1)) as select * from `_source_dataset.catalog_sales`; create table `_destination_dataset.inventory` PARTITION BY RANGE_BUCKET(inv_date_sk, GENERATE_ARRAY(2450815, 2452635, 1)) as select * from `_source_dataset.inventory`; create table `_destination_dataset.store_returns` PARTITION BY RANGE_BUCKET(sr_returned_date_sk, GENERATE_ARRAY(2450820, 2452822, 1)) as select * from `_source_dataset.store_returns`; create table `_destination_dataset.store_sales` PARTITION BY RANGE_BUCKET(ss_sold_date_sk, GENERATE_ARRAY(2450816, 2452642, 1)) as select * from `_source_dataset.store_sales`; create table `_destination_dataset.web_returns` PARTITION BY RANGE_BUCKET(wr_returned_date_sk, GENERATE_ARRAY(2450820, 2453001, 1)) as select * from `_source_dataset.web_returns`; create table `_destination_dataset.web_sales` PARTITION BY RANGE_BUCKET(ws_sold_date_sk, GENERATE_ARRAY(2450816, 2452642, 1)) as select * from `_source_dataset.web_sales`; create table `_destination_dataset.dbgen_version` as select * from `_source_dataset.dbgen_version`; create table `_destination_dataset.customer_address` as select * from `_source_dataset.customer_address`; create table `_destination_dataset.customer_demographics` as select * from `_source_dataset.customer_demographics`; create table `_destination_dataset.date_dim` as select * from `_source_dataset.date_dim`; create table `_destination_dataset.warehouse` as select * from `_source_dataset.warehouse`; create table `_destination_dataset.ship_mode` as select * from `_source_dataset.ship_mode`; create table `_destination_dataset.time_dim` as select * from `_source_dataset.time_dim`; create table `_destination_dataset.reason` as select * from `_source_dataset.reason`; create table `_destination_dataset.income_band` as select * from `_source_dataset.income_band`; create table `_destination_dataset.item` as select * from `_source_dataset.item`; create table `_destination_dataset.store` as select * from `_source_dataset.store`; create table `_destination_dataset.call_center` as select * from `_source_dataset.call_center`; create table `_destination_dataset.customer` as select * from `_source_dataset.customer`; create table `_destination_dataset.web_site` as select * from `_source_dataset.web_site`; create table `_destination_dataset.household_demographics` as select * from `_source_dataset.household_demographics`; create table `_destination_dataset.web_page` as select * from `_source_dataset.web_page`; create table `_destination_dataset.promotion` as select * from `_source_dataset.promotion`; create table `_destination_dataset.catalog_page` as select * from `_source_dataset.catalog_page`",
@@ -37302,6 +37345,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 237,
+          "expected_total": 2992,
           "preview": [
             "DROP SCHEMA IF EXISTS :schema_name CASCADE",
             "CREATE SCHEMA :schema_name",
@@ -37319,6 +37363,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 255,
+          "expected_total": 2992,
           "preview": [
             "DROP SCHEMA IF EXISTS :schema_name CASCADE",
             "CREATE SCHEMA :schema_name",
@@ -37336,6 +37381,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 485,
+          "expected_total": 2992,
           "preview": [
             "set enable_result_cache_for_session = off",
             "select count(*) from ((select distinct c_last_name, c_first_name, d_date from store_sales, date_dim, customer where store_sales.ss_sold_date_sk = date_dim.d_date_sk and store_sales.ss_customer_sk = customer.c_customer_sk and d_month_seq between 1210 and 1210+11) except (select distinct c_last_name, c_first_name, d_date from catalog_sales, date_dim, customer where catalog_sales.cs_sold_date_sk = date_dim.d_date_sk and catalog_sales.cs_bill_customer_sk = customer.c_customer_sk and d_month_seq between 1210 and 1210+11) except (select distinct c_last_name, c_first_name, d_date from web_sales, date_dim, customer where web_sales.ws_sold_date_sk = date_dim.d_date_sk and web_sales.ws_bill_customer_sk = customer.c_customer_sk and d_month_seq between 1210 and 1210+11) ) cool_cust",
@@ -39883,6 +39929,7 @@
         {
           "parser": "sqlparser-rs",
           "rejected_total": 5960,
+          "expected_total": 10962,
           "preview": [
             "ALTER SEQUENCE foo INCREMENT BY 1",
             "ALTER SEQUENCE foo MAXVALUE 7 NO minvalue",
@@ -39900,6 +39947,7 @@
         {
           "parser": "polyglot-sql",
           "rejected_total": 3619,
+          "expected_total": 10962,
           "preview": [
             "ALTER SEQUENCE foo NOCACHE CYCLE",
             "ALTER SEQUENCE foo NOORDER CACHE 5 NOCYCLE",
@@ -39917,6 +39965,7 @@
         {
           "parser": "sqlglot-rust",
           "rejected_total": 9107,
+          "expected_total": 10962,
           "preview": [
             "ALTER SEQUENCE foo INCREMENT BY 1",
             "ALTER SEQUENCE foo MAXVALUE 7 NO minvalue",

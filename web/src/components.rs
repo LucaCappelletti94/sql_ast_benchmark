@@ -763,7 +763,7 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
                     div { class: "fail-head",
                         span { class: "fail-title",
                             strong { "{dialect}" }
-                            span { class: "fail-count", "{commas(f.rejected_total)} rejected" }
+                            span { class: "fail-count", "{commas(f.rejected_total)} of {commas(f.expected_total)} rejected" }
                         }
                         if let Some(path) = &f.download {
                             a {

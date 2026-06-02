@@ -45,6 +45,10 @@ pub struct ParserFailures {
     pub parser: String,
     /// Total statements this parser rejected that it was expected to accept.
     pub rejected_total: usize,
+    /// Total statements the parser was expected to accept (the denominator), so
+    /// the UI can show "N of M rejected".
+    #[serde(default)]
+    pub expected_total: usize,
     /// A handful of example rejected statements, for in-page display.
     pub preview: Vec<String>,
     /// Path (relative to the site root) of the full `.tsv.zst` download, or
