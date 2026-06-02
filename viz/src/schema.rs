@@ -49,8 +49,10 @@ pub struct ParserFailures {
     /// the UI can show "N of M rejected".
     #[serde(default)]
     pub expected_total: usize,
-    /// A handful of example rejected statements, for in-page display.
-    pub preview: Vec<String>,
+    /// A handful of example rejected statements, pre-rendered to static
+    /// syntax-highlighted HTML at export time so the viewer ships no runtime
+    /// highlighter. Each entry is the inner HTML of one `<pre>` block.
+    pub preview_html: Vec<String>,
     /// Path (relative to the site root) of the full `.tsv.zst` download, or
     /// `None` when there were no failures to ship.
     pub download: Option<String>,

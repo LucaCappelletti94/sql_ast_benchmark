@@ -423,18 +423,18 @@ main { display: block; }
   border-radius: 999px;
   padding: 0.1rem 0.5rem;
 }
-/* Wrapper around dioxus-code's highlighted <pre>; it brings its own theme. */
+/* Pre-rendered highlighted SQL preview (static HTML from the exporter). */
 .fail-code {
   margin: 0.3rem 0;
+  padding: 0.5rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow-x: auto;
-  font-size: 0.82rem;
-}
-.fail-code pre {
-  margin: 0;
-  padding: 0.5rem 0.7rem;
   white-space: pre;
+  font-size: 0.82rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  background: #fbfbfb;
+  color: #1f2328;
 }
 
 /* Tables */
