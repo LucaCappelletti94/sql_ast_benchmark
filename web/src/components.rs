@@ -299,10 +299,12 @@ pub fn Overview() -> Element {
     let b = bundle();
     rsx! {
         section { class: "intro",
-            h1 { "Rust SQL Parser Benchmark" }
-            p { class: "meta",
-                "Snapshot {b.generated_utc}"
-                if let Some(c) = &b.git_commit { " | commit {c}" }
+            h1 {
+                "Rust SQL Parser Benchmark"
+                span { class: "title-meta",
+                    "Snapshot {b.generated_utc}"
+                    if let Some(c) = &b.git_commit { " | commit {c}" }
+                }
             }
         }
         section { class: "abstract intro-abstract",
