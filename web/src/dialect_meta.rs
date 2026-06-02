@@ -3,14 +3,81 @@
 //!
 //! This is a hand-recorded snapshot (see [`SNAPSHOT`]) of public facts about
 //! each engine (vendor, license, first release, latest stable release,
-//! implementation language, and whether the engine itself runs in WebAssembly),
-//! not fetched at runtime. Refresh the figures and the date together.
+//! implementation language, whether the engine itself runs in WebAssembly or on
+//! mobile, its workload model, and its deployment model), not fetched at
+//! runtime. Refresh the figures and the date together.
 
 /// The date the engine figures below were collected (ISO 8601).
 pub const SNAPSHOT: &str = "2026-06-02";
 
 /// The year [`SNAPSHOT`] falls in, for age math.
 const SNAPSHOT_YEAR: u16 = 2026;
+
+/// The primary workload a database engine is built for.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Workload {
+    /// Transactional, row-store: many small reads and writes.
+    Oltp,
+    /// Analytical, columnar: large scans and aggregations.
+    Olap,
+}
+
+impl Workload {
+    /// Short label for the badge.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Workload::Oltp => "OLTP",
+            Workload::Olap => "OLAP",
+        }
+    }
+
+    /// Full sentence for the tooltip.
+    #[must_use]
+    pub const fn description(self) -> &'static str {
+        match self {
+            Workload::Oltp => {
+                "Transactional (OLTP): a row-store engine built for many small reads and writes."
+            }
+            Workload::Olap => {
+                "Analytical (OLAP): a columnar, vectorized engine built for large scans and aggregations."
+            }
+        }
+    }
+}
+
+/// How an engine is run.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Deployment {
+    /// Runs on your own machines, or embeds in your process.
+    SelfHosted,
+    /// A managed cloud service that cannot be self-hosted.
+    CloudOnly,
+}
+
+impl Deployment {
+    /// Short label for the badge.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Deployment::SelfHosted => "self-hosted",
+            Deployment::CloudOnly => "cloud-only",
+        }
+    }
+
+    /// Full sentence for the tooltip.
+    #[must_use]
+    pub const fn description(self) -> &'static str {
+        match self {
+            Deployment::SelfHosted => {
+                "Self-hosted: you can run the engine on your own machines, or embed it yourself."
+            }
+            Deployment::CloudOnly => {
+                "Cloud-only: a managed service that cannot be self-hosted, it runs only on the vendor's cloud."
+            }
+        }
+    }
+}
 
 /// Facts about the database engine behind one SQL dialect.
 pub struct DialectMeta {
@@ -37,6 +104,10 @@ pub struct DialectMeta {
     pub mobile: bool,
     /// A short qualifier for the mobile/embedded reach, or "" when not mobile.
     pub mobile_note: &'static str,
+    /// Primary workload model.
+    pub workload: Workload,
+    /// Deployment model.
+    pub deployment: Deployment,
 }
 
 /// Engine facts for a dialect's `dir_name`, if recorded. The cross-dialect
@@ -56,6 +127,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "PGlite",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Oltp,
+            deployment: Deployment::SelfHosted,
         },
         "mysql" => DialectMeta {
             vendor: "Oracle",
@@ -69,6 +142,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Oltp,
+            deployment: Deployment::SelfHosted,
         },
         "sqlite" => DialectMeta {
             vendor: "Hwaci",
@@ -83,6 +158,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             mobile: true,
             mobile_note:
                 "it ships in every iOS and Android device and runs down to microcontrollers",
+            workload: Workload::Oltp,
+            deployment: Deployment::SelfHosted,
         },
         "clickhouse" => DialectMeta {
             vendor: "ClickHouse",
@@ -96,6 +173,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Olap,
+            deployment: Deployment::SelfHosted,
         },
         "duckdb" => DialectMeta {
             vendor: "DuckDB Labs",
@@ -109,6 +188,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "DuckDB-Wasm",
             mobile: true,
             mobile_note: "it embeds in-process on iOS, Android, and small Linux boards",
+            workload: Workload::Olap,
+            deployment: Deployment::SelfHosted,
         },
         "hive" => DialectMeta {
             vendor: "Apache",
@@ -122,6 +203,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Olap,
+            deployment: Deployment::SelfHosted,
         },
         "spark_sql" => DialectMeta {
             vendor: "Apache",
@@ -135,6 +218,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Olap,
+            deployment: Deployment::SelfHosted,
         },
         "trino" => DialectMeta {
             vendor: "Trino SF",
@@ -148,6 +233,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Olap,
+            deployment: Deployment::SelfHosted,
         },
         "tsql" => DialectMeta {
             vendor: "Microsoft",
@@ -161,6 +248,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Oltp,
+            deployment: Deployment::SelfHosted,
         },
         "oracle" => DialectMeta {
             vendor: "Oracle",
@@ -174,6 +263,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Oltp,
+            deployment: Deployment::SelfHosted,
         },
         "bigquery" => DialectMeta {
             vendor: "Google",
@@ -187,6 +278,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Olap,
+            deployment: Deployment::CloudOnly,
         },
         "redshift" => DialectMeta {
             vendor: "AWS",
@@ -200,6 +293,8 @@ pub fn dialect_meta(dir: &str) -> Option<DialectMeta> {
             wasm_note: "",
             mobile: false,
             mobile_note: "",
+            workload: Workload::Olap,
+            deployment: Deployment::CloudOnly,
         },
         _ => return None,
     })

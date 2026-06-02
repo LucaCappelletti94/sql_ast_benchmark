@@ -6,10 +6,10 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaBox, FaBug, FaBuilding, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit,
-    FaCodeFork, FaCopy, FaCube, FaDatabase, FaDownload, FaFlaskVial, FaHeartPulse, FaMicrochip,
-    FaMobileScreen, FaScaleBalanced, FaShieldHalved, FaStar, FaStopwatch, FaTableCells, FaTag,
-    FaTriangleExclamation, FaUsers, FaVial,
+    FaArrowLeftLong, FaBox, FaBug, FaBuilding, FaCalendarDays, FaChartColumn, FaChartLine, FaCode,
+    FaCodeCommit, FaCodeFork, FaCopy, FaCube, FaDatabase, FaDownload, FaFlaskVial, FaHeartPulse,
+    FaMicrochip, FaMobileScreen, FaScaleBalanced, FaServer, FaShieldHalved, FaStar, FaStopwatch,
+    FaTableCells, FaTag, FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -981,6 +981,8 @@ fn dialect_meta_pills(dir: &str) -> Element {
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCode } }, "language", m.language.to_string(), dm::language_description(m.language))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCube } }, "wasm", if m.wasm { "yes".to_string() } else { "no".to_string() }, dm::wasm_description(m.wasm, m.wasm_note))}
             {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMobileScreen } }, "mobile", if m.mobile { "yes".to_string() } else { "no".to_string() }, dm::mobile_description(m.mobile, m.mobile_note))}
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaChartColumn } }, "workload", m.workload.label().to_string(), m.workload.description().to_string())}
+            {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaServer } }, "deployment", m.deployment.label().to_string(), m.deployment.description().to_string())}
         }
     }
 }
