@@ -4,10 +4,12 @@ use crate::brand::brand;
 use crate::data::bundle;
 use crate::Route;
 use dioxus::prelude::*;
+use dioxus_code::Code;
 use dioxus_free_icons::icons::fa_brands_icons::FaGithub;
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaArrowLeftLong, FaBug, FaCalendarDays, FaChartLine, FaCode, FaCodeCommit, FaCodeFork,
-    FaDatabase, FaDownload, FaScaleBalanced, FaStar, FaStopwatch, FaTableCells, FaUsers, FaVial,
+    FaDatabase, FaDownload, FaScaleBalanced, FaStar, FaStopwatch, FaTableCells,
+    FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -717,9 +719,72 @@ pub fn ParserView(name: String) -> Element {
             }
         }
 
+        {failures_section(b, &parser)}
+
         Link { class: "back", to: Route::Overview {},
             Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaArrowLeftLong }
             "All dialects & parsers"
+        }
+    }
+}
+
+/// The "Failing statements" section for a parser: per dialect it models, the
+/// rejected-statement count, a short syntax-highlighted preview, and a download
+/// link to the full capped `.tsv.zst`. Renders nothing if the parser rejected
+/// nothing anywhere (or has no recorded failure data).
+fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
+    // Gather (dialect display name, failures) for dialects where this parser
+    // has at least one rejected statement.
+    let entries: Vec<(&str, &viz::ParserFailures)> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.failures
+                .iter()
+                .find(|f| f.parser == parser && f.rejected_total > 0)
+                .map(|f| (d.display_name.as_str(), f))
+        })
+        .collect();
+    if entries.is_empty() {
+        return rsx! {};
+    }
+
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaTriangleExclamation }
+                "Failing statements"
+            }
+            p { class: "fail-intro",
+                "Statements this parser was expected to accept but rejected. Each dialect links to the full set (capped at 1,000) as a compressed TSV so the cases can be downloaded and addressed."
+            }
+            for (dialect , f) in entries {
+                div { class: "fail-dialect", key: "{dialect}",
+                    div { class: "fail-head",
+                        span { class: "fail-title",
+                            strong { "{dialect}" }
+                            span { class: "fail-count", "{commas(f.rejected_total)} rejected" }
+                        }
+                        if let Some(path) = &f.download {
+                            a {
+                                class: "dl-btn",
+                                href: "/{path}",
+                                download: true,
+                                Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaDownload }
+                                "TSV"
+                            }
+                        }
+                    }
+                    for (i , stmt) in f.preview.iter().enumerate() {
+                        div { class: "fail-code", key: "{i}",
+                            Code {
+                                src: dioxus_code::SourceCode::new(dioxus_code::Language::Sql, stmt.clone()),
+                                theme: dioxus_code::Theme::GITHUB_LIGHT,
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

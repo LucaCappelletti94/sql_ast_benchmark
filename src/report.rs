@@ -236,6 +236,76 @@ pub fn coverage_dialect(
     (parsers, stats)
 }
 
+/// The statements one parser rejected in one dialect, with the corpus total.
+pub struct ParserFailures {
+    pub parser: BenchParser,
+    /// Statements the parser failed to accept, in corpus order.
+    pub rejected: Vec<String>,
+    /// Total statements graded for the dialect (denominator for the count).
+    pub total: usize,
+}
+
+/// For each parser that supports `dialect`, collect the statements it rejected.
+///
+/// These are the actionable "should parse but did not" cases a parser author
+/// would want to fix. Reference-invalid statements are excluded so the set stays
+/// meaningful: only statements the parser ought to accept (reference-valid, or
+/// provenance-valid where there is no reference).
+///
+/// # Panics
+/// Panics if a worker thread cannot be spawned or panics while grading.
+#[allow(clippy::needless_collect)] // handles must all spawn before any join
+#[must_use]
+pub fn failures_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Vec<ParserFailures> {
+    let stmts = load_dialect(dialect);
+    if stmts.is_empty() {
+        return Vec::new();
+    }
+    let reference = has_reference(dialect);
+    // Only statements the parser is expected to accept count as failures.
+    let expected: Vec<&String> = stmts
+        .iter()
+        .filter(|s| !reference || reference_accepts(s, dialect) == Some(true))
+        .collect();
+    let total = expected.len();
+
+    let parsers: Vec<BenchParser> = all_parsers
+        .iter()
+        .copied()
+        .filter(|p| p.supports(dialect))
+        .collect();
+
+    // One worker per parser: each scans the expected-valid statements and keeps
+    // the rejects. Parsing dominates, so parser-level parallelism is plenty.
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = parsers
+            .iter()
+            .map(|&p| {
+                let expected = &expected;
+                std::thread::Builder::new()
+                    .stack_size(WORKER_STACK)
+                    .spawn_scoped(scope, move || {
+                        let rejected: Vec<String> = expected
+                            .iter()
+                            .filter(|s| p.accepts(s, dialect) != Some(true))
+                            .map(|s| (*s).clone())
+                            .collect();
+                        ParserFailures {
+                            parser: p,
+                            rejected,
+                            total,
+                        }
+                    })
+                    .expect("spawn worker")
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("failure thread panicked"))
+            .collect()
+    })
+}
+
 /// Acceptance counts for one dataset file (None if unreadable or empty).
 fn eval_file(path: &Path, dialect: Dialect, parsers: &[BenchParser]) -> Option<FileCoverage> {
     let name = path.file_name()?.to_string_lossy().into_owned();

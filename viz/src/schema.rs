@@ -31,6 +31,25 @@ pub struct DialectData {
     pub perf: Vec<ParserPerf>,
     /// Per-file acceptance matrix.
     pub coverage: CoverageMatrix,
+    /// Per-parser rejected-statement previews and download info.
+    #[serde(default)]
+    pub failures: Vec<ParserFailures>,
+}
+
+/// A preview of the statements one parser rejected in one dialect, plus the
+/// info needed to offer the full set as a download. The full list is shipped
+/// separately as a committed `.tsv.zst` file (see `download`); only a short
+/// preview is embedded in the JSON to keep it small.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ParserFailures {
+    pub parser: String,
+    /// Total statements this parser rejected that it was expected to accept.
+    pub rejected_total: usize,
+    /// A handful of example rejected statements, for in-page display.
+    pub preview: Vec<String>,
+    /// Path (relative to the site root) of the full `.tsv.zst` download, or
+    /// `None` when there were no failures to ship.
+    pub download: Option<String>,
 }
 
 /// Correctness metrics for one parser in one dialect. Percentages are

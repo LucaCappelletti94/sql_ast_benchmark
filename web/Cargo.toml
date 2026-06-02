@@ -13,5 +13,7 @@ all = "warn"
 [dependencies]
 dioxus = { version = "0.7", features = ["web", "router"] }
 dioxus-free-icons = { version = "0.10", features = ["font-awesome-solid", "font-awesome-brands"] }
+# Runtime SQL syntax highlighting for the failing-statement previews.
+dioxus-code = { version = "0.1", default-features = false, features = ["runtime", "lang-sql"] }
 viz = { path = "../viz" }
 serde_json = "1"

@@ -39,6 +39,8 @@ sqlite3-parser = "0.16.0"
 fallible-iterator = "0.3.0"
 viz = { path = "viz" }
 serde_json = "1"
+# Compress the per-(dialect, parser) rejected-statement TSV downloads.
+zstd = "0.13"
 
 [[bench]]
 name = "parsing"

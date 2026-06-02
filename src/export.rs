@@ -13,10 +13,22 @@ use crate::report::{self, DialectReport};
 use crate::{bench_dist, stats, BenchParser};
 use std::cmp::Ordering;
 use std::path::Path;
-use viz::{Bundle, CoverageFile, CoverageMatrix, DialectData, ParserMetrics, ParserPerf};
+use viz::{
+    Bundle, CoverageFile, CoverageMatrix, DialectData, ParserFailures, ParserMetrics, ParserPerf,
+};
 
 /// Output path (relative to repo root, where `cargo run` runs from).
 const OUT: &str = "web/assets/bench.json";
+
+/// Directory (relative to the site root) for the rejected-statement downloads.
+const FAILURES_DIR: &str = "web/static/failures";
+
+/// Max rejected statements written to each `.tsv.zst` download (a sample when a
+/// parser rejects more, with the true total reported separately).
+const FAIL_CAP: usize = 1000;
+
+/// Rejected statements shown inline as a preview on each parser page.
+const FAIL_PREVIEW: usize = 10;
 
 /// Reference-backed dialects first, then provenance, matching the CLI order.
 const ORDER: [Dialect; 13] = [
@@ -214,6 +226,80 @@ fn git_short() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Collect each parser's rejected statements for `dir`, write the full set
+/// (capped at [`FAIL_CAP`]) to `web/static/failures/{dir}__{parser}.tsv.zst`,
+/// and return the per-parser previews + download paths for the JSON bundle.
+///
+/// The TSV has a header and one statement per row, with embedded tabs/newlines
+/// escaped so each statement stays on a single line.
+fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
+    let Some(dialect) = Dialect::from_dir_name(dir) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for f in report::failures_dialect(dialect, parsers) {
+        let name = f.parser.name();
+        if f.rejected.is_empty() {
+            out.push(ParserFailures {
+                parser: name.to_string(),
+                rejected_total: 0,
+                preview: Vec::new(),
+                download: None,
+            });
+            continue;
+        }
+        let preview = f
+            .rejected
+            .iter()
+            .take(FAIL_PREVIEW)
+            .cloned()
+            .collect::<Vec<_>>();
+        let file = format!("{dir}__{}.tsv.zst", stats::slug(name));
+        match write_failure_tsv(&file, &f.rejected) {
+            Ok(()) => out.push(ParserFailures {
+                parser: name.to_string(),
+                rejected_total: f.rejected.len(),
+                preview,
+                download: Some(format!("failures/{file}")),
+            }),
+            Err(e) => {
+                eprintln!("warning: could not write failures/{file}: {e}");
+                out.push(ParserFailures {
+                    parser: name.to_string(),
+                    rejected_total: f.rejected.len(),
+                    preview,
+                    download: None,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Write up to [`FAIL_CAP`] rejected statements to a zstd-compressed TSV under
+/// [`FAILURES_DIR`]. Tabs and newlines in statements are escaped to keep one
+/// statement per row.
+fn write_failure_tsv(file: &str, rejected: &[String]) -> std::io::Result<()> {
+    std::fs::create_dir_all(FAILURES_DIR)?;
+    let path = Path::new(FAILURES_DIR).join(file);
+
+    let mut tsv = String::from("statement\n");
+    for s in rejected.iter().take(FAIL_CAP) {
+        tsv.push_str(
+            &s.replace('\\', "\\\\")
+                .replace('\t', "\\t")
+                .replace('\n', "\\n"),
+        );
+        tsv.push('\n');
+    }
+
+    let raw = std::fs::File::create(&path)?;
+    let mut enc = zstd::stream::Encoder::new(raw, 19)?;
+    std::io::Write::write_all(&mut enc, tsv.as_bytes())?;
+    enc.finish()?;
+    Ok(())
+}
+
 /// Grade every dialect, gather perf + coverage, and write `web/assets/bench.json`.
 ///
 /// # Errors
@@ -243,6 +329,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             correctness: metrics(&report),
             perf: perf_for(d.dir_name(), &summary),
             coverage: coverage_for(d, &parsers),
+            failures: failures_for(d.dir_name(), &parsers),
         });
     }
 
