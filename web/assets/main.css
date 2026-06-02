@@ -294,6 +294,9 @@ main { display: block; }
 
 /* Charts */
 .charts { display: flex; flex-wrap: wrap; gap: 1rem; }
+/* When a table follows the charts in the same section (the memory section),
+   separate them by the same gap captions use before their content. */
+.charts + .scroll { margin-top: 0.9rem; }
 .chart { flex: 1 1 440px; min-width: 300px; margin: 0; }
 /* The chart-svg is a button so the chart can be clicked to enlarge. */
 .chart-svg {
@@ -318,8 +321,9 @@ main { display: block; }
   margin-top: 0.4rem;
   color: var(--muted);
   font-size: 0.82rem;
-  text-align: justify;
-  text-justify: inter-word;
+  /* Left-aligned, not justified: justify stretches the inter-word spaces of
+     short captions unevenly, which reads as inconsistent spacing. */
+  text-align: left;
   overflow-wrap: break-word;
 }
 /* Download buttons overlaid on the bottom-right of the chart image, stacked. */
@@ -412,9 +416,9 @@ main { display: block; }
 .lightbox-close:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 
 /* Failing-statement previews on parser pages */
-.fail-intro { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; max-width: 70ch; }
+.fail-intro { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.9rem; width: 100%; max-width: none; text-align: justify; text-justify: inter-word; }
 /* Explanatory caption shown under a table section heading. */
-.table-cap { color: var(--muted); font-size: 0.88rem; line-height: 1.5; margin: 0 0 0.9rem; max-width: 80ch; }
+.table-cap { color: var(--muted); font-size: 0.88rem; line-height: 1.5; margin: 0 0 0.9rem; width: 100%; max-width: none; text-align: justify; text-justify: inter-word; }
 .fail-dialect { margin-bottom: 1.4rem; }
 .fail-head {
   display: flex;
@@ -582,6 +586,28 @@ th[scope="row"] { font-weight: 500; white-space: nowrap; }
 }
 
 /* Footer */
+.site-foot { border-top: 1px solid var(--line); margin-top: 3rem; }
+.foot-inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 1.4rem 1.2rem 2.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  color: var(--muted);
+  text-decoration: none;
+}
+.foot-link:hover { color: var(--fg); text-decoration: underline; }
+.foot-note { color: var(--muted); flex: 1 1 22ch; min-width: 22ch; }
+
 /* Collapse the fixed 3-column parser grid on narrower viewports. */
 @media (max-width: 760px) {
   .cards-3 { grid-template-columns: repeat(2, 1fr); }

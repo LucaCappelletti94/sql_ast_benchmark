@@ -147,6 +147,25 @@ pub fn Shell() -> Element {
             }
         }
         main { id: "content", Outlet::<Route> {} }
+        footer { class: "site-foot",
+            div { class: "foot-inner",
+                a { class: "foot-link", href: REPO,
+                    Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaGithub }
+                    "LucaCappelletti94/sql_ast_benchmark"
+                }
+                a { class: "foot-link", href: "{REPO}/blob/main/LICENSE",
+                    Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaScaleBalanced }
+                    "MIT license"
+                }
+                a { class: "foot-link", href: "{REPO}/issues",
+                    Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaBug }
+                    "Report an issue"
+                }
+                span { class: "foot-note",
+                    "Corpus statements are drawn from each engine's own suites and samples, openly licensed (Apache-2.0, MIT, BSD, public domain, or CC-BY)."
+                }
+            }
+        }
         if let Some((filename, svg)) = ZOOM() {
             // The enlarged copy carries its own id so the same download scripts
             // can target it, keeping the PNG/SVG buttons usable while zoomed.
@@ -550,14 +569,14 @@ pub fn DialectView(dir: String) -> Element {
                     &format!("chart-{}-ecdf", d.dir_name),
                     &ecdf,
                     &format!("Empirical CDF of per-statement parse time for {}, one curve per parser.", d.display_name),
-                    "Parse time per statement, one curve per parser. X axis is ns per statement (log), Y axis is the fraction of accepted statements parsed within that time, so further left is faster. In the legend, \"missed\" is reference-valid statements not accepted (one minus recall, or the unaccepted fraction with no reference parser). \"RT\" is the round-trip rate, accepted statements that re-parse unchanged (n/a without a printer).",
+                    "Cumulative parse-time distribution, one curve per parser. Further left is faster (log scale).",
                     &format!("{}-ecdf", d.dir_name),
                 )}
                 {chart_figure(
                     &format!("chart-{}-box", d.dir_name),
                     &boxp,
                     &format!("Box plot of per-statement parse time for {}, one box per parser.", d.display_name),
-                    "Parse time per statement, one box per parser, log scale. Box spans the 25th to 75th percentile with the median inside, whiskers reach the 10th and 90th. In the legend, \"missed\" is reference-valid statements not accepted (one minus recall, or the unaccepted fraction with no reference parser). \"RT\" is the round-trip rate, accepted statements that re-parse unchanged (n/a without a printer).",
+                    "Parse-time spread, one box per parser. Box: quartiles, median line, whiskers: 10th to 90th (log scale).",
                     &format!("{}-boxplot", d.dir_name),
                 )}
             }
@@ -619,12 +638,12 @@ pub fn ParserView(name: String) -> Element {
         .collect();
     let has_charts = !lines.is_empty();
     let ecdf = if has_charts {
-        viz::ecdf_lines(&parser, &lines, 760, 460)
+        viz::ecdf_lines(&parser, &lines, 760, 460, "ns / statement")
     } else {
         String::new()
     };
     let boxp = if has_charts {
-        viz::box_lines(&parser, &lines, 760, 460)
+        viz::box_lines(&parser, &lines, 760, 460, "ns / statement")
     } else {
         String::new()
     };
@@ -692,14 +711,14 @@ pub fn ParserView(name: String) -> Element {
                         &format!("chart-{}-ecdf", slug(&parser)),
                         &ecdf,
                         &format!("Empirical CDF of {parser} parse time, one curve per dialect."),
-                        "Parse time per statement, one curve per dialect this parser models. X axis is ns per statement (log), Y axis is the fraction of accepted statements parsed within that time, so further left is faster. In the legend, \"missed\" is reference-valid statements not accepted (one minus recall, or the unaccepted fraction with no reference parser). \"RT\" is the round-trip rate, accepted statements that re-parse unchanged (n/a without a printer).",
+                        "Cumulative parse-time distribution, one curve per dialect. Further left is faster (log scale).",
                         &format!("{}-ecdf", slug(&parser)),
                     )}
                     {chart_figure(
                         &format!("chart-{}-box", slug(&parser)),
                         &boxp,
                         &format!("Box plot of {parser} parse time, one box per dialect."),
-                        "Parse time per statement, one box per dialect this parser models, log scale. Box spans the 25th to 75th percentile with the median inside, whiskers reach the 10th and 90th. In the legend, \"missed\" is reference-valid statements not accepted (one minus recall, or the unaccepted fraction with no reference parser). \"RT\" is the round-trip rate, accepted statements that re-parse unchanged (n/a without a printer).",
+                        "Parse-time spread, one box per dialect. Box: quartiles, median line, whiskers: 10th to 90th (log scale).",
                         &format!("{}-boxplot", slug(&parser)),
                     )}
                 }
@@ -712,7 +731,7 @@ pub fn ParserView(name: String) -> Element {
                 "Results by dialect"
             }
             p { class: "table-cap",
-                "One row per dialect this parser models. \"accept / recall\" is recall where a reference parser exists (the share of reference-valid statements accepted), otherwise the plain acceptance rate. \"false pos\" is the share of reference-invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that print back to SQL and re-parse unchanged, and \"fidelity\" the share whose printed form matches the original under the reference's canonical form. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster). Click any header to sort."
+                "One row per dialect. \"accept / recall\" is recall where a reference parser exists, otherwise the acceptance rate. \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original. \"median ns\" and \"p90 ns\" are parse times (lower is faster)."
             }
             SortTable {
                 caption: format!("Per-dialect results for {}", parser),
@@ -764,6 +783,46 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
         .iter()
         .map(ToString::to_string)
         .collect();
+    let peak_lines: Vec<viz::Line> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.iter().find(|m| m.parser == parser).map(|m| {
+                viz::mem_line(
+                    d.display_name.clone(),
+                    brand(&d.dir_name).accent_rgb,
+                    &m.peak,
+                )
+            })
+        })
+        .collect();
+    let ret_lines: Vec<viz::Line> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.iter().find(|m| m.parser == parser).map(|m| {
+                viz::mem_line(
+                    d.display_name.clone(),
+                    brand(&d.dir_name).accent_rgb,
+                    &m.retained,
+                )
+            })
+        })
+        .collect();
+    let peak_ecdf = viz::ecdf_lines(
+        &format!("{parser} peak memory"),
+        &peak_lines,
+        760,
+        460,
+        "bytes / statement",
+    );
+    let ret_ecdf = viz::ecdf_lines(
+        &format!("{parser} retained memory"),
+        &ret_lines,
+        760,
+        460,
+        "bytes / statement",
+    );
     rsx! {
         section { class: "block",
             h2 {
@@ -771,7 +830,11 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
                 "Memory by dialect"
             }
             p { class: "table-cap",
-                "One row per dialect this parser models, in bytes per statement over the statements it accepted. \"peak\" is the high-water mark of live memory during a parse, and \"retained\" is what the produced AST (plus the scaffolding it keeps alive) holds afterwards. Click any header to sort."
+                "One row per dialect, bytes per statement. \"peak\" is the high-water mark of live memory during a parse, \"retained\" what the produced AST keeps alive afterwards."
+            }
+            div { class: "charts",
+                {chart_figure(&format!("chart-{}-mempeak-ecdf", slug(parser)), &peak_ecdf, &format!("Empirical CDF of {parser} peak memory, one curve per dialect."), "Peak live memory per parse, one curve per dialect. Further left is leaner (log scale).", &format!("{}-peak-memory-ecdf", slug(parser)))}
+                {chart_figure(&format!("chart-{}-memret-ecdf", slug(parser)), &ret_ecdf, &format!("Empirical CDF of {parser} retained AST memory, one curve per dialect."), "Retained AST memory per parse, one curve per dialect. Further left is leaner (log scale).", &format!("{}-retained-memory-ecdf", slug(parser)))}
             }
             SortTable {
                 caption: format!("Per-dialect memory in bytes for {}", parser),
@@ -812,7 +875,7 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
                 "Failing statements"
             }
             p { class: "fail-intro",
-                "Statements this parser was expected to accept but rejected. Each dialect links to the full set (capped at 1,000) as a compressed TSV so the cases can be downloaded and addressed."
+                "Statements this parser was expected to accept but rejected. Each dialect links to the full set (capped at 1,000) as a compressed TSV."
             }
             for (di , (dialect , f)) in entries.into_iter().enumerate() {
                 div { class: "fail-dialect", key: "{dialect}",
@@ -1422,7 +1485,7 @@ fn perf_table(d: &DialectData) -> Element {
                 "Speed"
             }
             p { class: "table-cap",
-                "One row per parser, measured over the statements it accepted. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster), where p90 means nine in ten statements parse faster than that. \"missed %\" is the share of statements the parser was expected to accept but did not, and \"RT %\" is the round-trip rate, the share of accepted statements that print back to SQL and re-parse unchanged. Click any header to sort."
+                "One row per parser. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster). \"missed %\" is the share of expected statements not accepted, \"RT %\" the round-trip rate, the share of accepted statements that re-parse unchanged."
             }
             SortTable {
                 caption: format!("Per-parser parse time in nanoseconds for {}", d.display_name),
@@ -1443,8 +1506,14 @@ fn memory_table(d: &DialectData) -> Element {
         .iter()
         .map(ToString::to_string)
         .collect();
-    let rows = d
-        .memory
+    // Order parsers the same way as every other plot/table on the page (the
+    // speed order in `d.perf`), so a parser sits in the same legend slot
+    // everywhere.
+    let mems: Vec<&viz::ParserMem> = display_order(d)
+        .iter()
+        .filter_map(|name| d.memory.iter().find(|m| m.parser.as_str() == *name))
+        .collect();
+    let rows = mems
         .iter()
         .map(|m| Row {
             key: m.parser.clone(),
@@ -1457,6 +1526,20 @@ fn memory_table(d: &DialectData) -> Element {
             ],
         })
         .collect();
+    let peak_lines: Vec<viz::Line> = mems
+        .iter()
+        .map(|m| viz::mem_line(m.parser.clone(), parser_rgb(&m.parser), &m.peak))
+        .collect();
+    let ret_lines: Vec<viz::Line> = mems
+        .iter()
+        .map(|m| viz::mem_line(m.parser.clone(), parser_rgb(&m.parser), &m.retained))
+        .collect();
+    let peak_title = format!("{} peak memory", d.display_name);
+    let ret_title = format!("{} retained memory", d.display_name);
+    let peak_ecdf = viz::ecdf_lines(&peak_title, &peak_lines, 760, 460, "bytes / statement");
+    let peak_box = viz::box_lines(&peak_title, &peak_lines, 760, 460, "bytes / statement");
+    let ret_ecdf = viz::ecdf_lines(&ret_title, &ret_lines, 760, 460, "bytes / statement");
+    let ret_box = viz::box_lines(&ret_title, &ret_lines, 760, 460, "bytes / statement");
     rsx! {
         section { class: "block",
             h2 {
@@ -1464,7 +1547,13 @@ fn memory_table(d: &DialectData) -> Element {
                 "Memory"
             }
             p { class: "table-cap",
-                "One row per parser, in bytes per statement over the statements it accepted. \"peak\" is the high-water mark of live memory during the parse, and \"retained\" is what the produced AST (plus the scaffolding it keeps alive) holds afterwards, measured with a counting allocator. The libpg_query bindings are omitted because they parse in C, where the Rust allocator cannot see their memory. Click any header to sort."
+                "Bytes per statement, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" what the produced AST keeps alive afterwards. The libpg_query bindings are omitted (they parse in C, invisible to the Rust allocator)."
+            }
+            div { class: "charts",
+                {chart_figure(&format!("chart-{}-mempeak-ecdf", d.dir_name), &peak_ecdf, &format!("Empirical CDF of peak memory for {}, one curve per parser.", d.display_name), "Peak live memory per parse, one curve per parser. Further left is leaner (log scale).", &format!("{}-peak-memory-ecdf", d.dir_name))}
+                {chart_figure(&format!("chart-{}-mempeak-box", d.dir_name), &peak_box, &format!("Box plot of peak memory for {}, one box per parser.", d.display_name), "Peak-memory spread, one box per parser. Box: quartiles, median line, whiskers: 10th to 90th (log scale).", &format!("{}-peak-memory-boxplot", d.dir_name))}
+                {chart_figure(&format!("chart-{}-memret-ecdf", d.dir_name), &ret_ecdf, &format!("Empirical CDF of retained AST memory for {}, one curve per parser.", d.display_name), "Retained AST memory per parse, one curve per parser. Further left is leaner (log scale).", &format!("{}-retained-memory-ecdf", d.dir_name))}
+                {chart_figure(&format!("chart-{}-memret-box", d.dir_name), &ret_box, &format!("Box plot of retained AST memory for {}, one box per parser.", d.display_name), "Retained-memory spread, one box per parser. Box: quartiles, median line, whiskers: 10th to 90th (log scale).", &format!("{}-retained-memory-boxplot", d.dir_name))}
             }
             SortTable {
                 caption: format!("Per-parser memory in bytes for {}", d.display_name),
@@ -1516,9 +1605,9 @@ fn correctness_table(d: &DialectData) -> Element {
             }
             p { class: "table-cap",
                 if reference {
-                    "One row per parser, graded against the reference parser for this dialect. \"recall\" is the share of reference-valid statements it accepted (this measures agreement with the reference on valid SQL, not whether the parser runs). \"false pos\" is the share of reference-invalid statements it wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that print back to SQL and re-parse unchanged, and \"fidelity\" the share whose printed form matches the original under the reference's canonical form. Click any header to sort."
+                    "One row per parser, graded against this dialect's reference parser. \"recall\" is the share of reference-valid statements accepted (agreement with the reference on valid SQL, not whether the parser runs). \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original."
                 } else {
-                    "One row per parser. This dialect has no reference parser, so every corpus statement is treated as expected-valid. \"accept\" is the share of the corpus the parser accepted, and \"round-trip\" the share of accepted statements that print back to SQL and re-parse unchanged. Click any header to sort."
+                    "One row per parser. With no reference parser here, every statement counts as expected-valid. \"accept\" is the share of the corpus accepted, \"round-trip\" the share of accepted statements that re-parse unchanged."
                 }
             }
             SortTable {

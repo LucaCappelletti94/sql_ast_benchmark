@@ -52,7 +52,8 @@ pub struct ParserMem {
     pub retained: MemDist,
 }
 
-/// A byte distribution: the same percentile set as [`ParserPerf`], in bytes.
+/// A byte distribution: the same percentile set as [`ParserPerf`], in bytes,
+/// plus a downsampled empirical CDF for charting.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MemDist {
     pub min: f64,
@@ -64,6 +65,9 @@ pub struct MemDist {
     pub p99: f64,
     pub max: f64,
     pub mean: f64,
+    /// Downsampled empirical CDF: `[bytes, fraction]` points, ascending.
+    #[serde(default)]
+    pub ecdf: Vec<[f64; 2]>,
 }
 
 /// A preview of the statements one parser rejected in one dialect, plus the
