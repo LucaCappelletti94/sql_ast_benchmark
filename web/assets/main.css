@@ -455,8 +455,6 @@ table.data td:first-child { text-align: left; }
 table.data tbody tr:nth-child(even) { background: #fcfcfd; }
 table.data tbody tr:hover { background: #f4f7fb; }
 th[scope="row"] { font-weight: 500; white-space: nowrap; }
-tr.subtotal th, tr.subtotal td { font-weight: 700; border-top: 2px solid var(--line); background: #f7f9fb; }
-.fname { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.82rem; }
 .dot { display: inline-block; width: 0.7em; height: 0.7em; border-radius: 3px; margin-right: 0.5em; vertical-align: middle; }
 
 /* Small inline dialect mark in per-parser table rows (logo or brand glyph). */
