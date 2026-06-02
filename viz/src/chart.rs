@@ -96,9 +96,10 @@ where
     Ok(())
 }
 
-/// eCDF chart: x = ns (log), y = fraction within t. One curve per [`Line`].
+/// eCDF chart: x = value (log), y = fraction within t. One curve per [`Line`].
+/// `x_desc` labels the x axis (e.g. "ns / statement" or "bytes / statement").
 #[must_use]
-pub fn ecdf_lines(title: &str, lines: &[Line], w: u32, h: u32) -> String {
+pub fn ecdf_lines(title: &str, lines: &[Line], w: u32, h: u32, x_desc: &str) -> String {
     let mut buf = String::new();
     {
         let root = SVGBackend::with_string(&mut buf, (w, h)).into_drawing_area();
@@ -128,7 +129,7 @@ pub fn ecdf_lines(title: &str, lines: &[Line], w: u32, h: u32) -> String {
                 .build_cartesian_2d((xmin..xmax).log_scale(), 0f64..1.02f64)?;
             chart
                 .configure_mesh()
-                .x_desc("ns / statement")
+                .x_desc(x_desc)
                 .y_desc("frac <= t")
                 .x_label_style(("sans-serif", 11))
                 .y_label_style(("sans-serif", 11))
@@ -148,8 +149,9 @@ pub fn ecdf_lines(title: &str, lines: &[Line], w: u32, h: u32) -> String {
 }
 
 /// Box plot: box = p25/median/p75, whiskers = p10/p90, log-y. One box per line.
+/// `y_desc` labels the y axis (e.g. "ns / statement" or "bytes / statement").
 #[must_use]
-pub fn box_lines(title: &str, lines: &[Line], w: u32, h: u32) -> String {
+pub fn box_lines(title: &str, lines: &[Line], w: u32, h: u32, y_desc: &str) -> String {
     let mut buf = String::new();
     {
         let root = SVGBackend::with_string(&mut buf, (w, h)).into_drawing_area();
@@ -182,7 +184,7 @@ pub fn box_lines(title: &str, lines: &[Line], w: u32, h: u32) -> String {
                 .configure_mesh()
                 .disable_x_mesh()
                 .x_labels(0)
-                .y_desc("ns / statement")
+                .y_desc(y_desc)
                 .y_label_style(("sans-serif", 11))
                 .draw()?;
 
@@ -295,13 +297,44 @@ fn dialect_title(d: &DialectData) -> String {
 /// eCDF chart for one dialect (one curve per parser).
 #[must_use]
 pub fn ecdf_svg(d: &DialectData, w: u32, h: u32) -> String {
-    ecdf_lines(&dialect_title(d), &lines_from_dialect(d), w, h)
+    ecdf_lines(
+        &dialect_title(d),
+        &lines_from_dialect(d),
+        w,
+        h,
+        "ns / statement",
+    )
 }
 
 /// Box plot for one dialect (one box per parser).
 #[must_use]
 pub fn box_svg(d: &DialectData, w: u32, h: u32) -> String {
-    box_lines(&dialect_title(d), &lines_from_dialect(d), w, h)
+    box_lines(
+        &dialect_title(d),
+        &lines_from_dialect(d),
+        w,
+        h,
+        "ns / statement",
+    )
+}
+
+/// Build chart [`Line`]s from a labelled set of memory distributions (no eCDF
+/// sub-label), for the per-parser or per-dialect memory charts.
+#[must_use]
+pub fn mem_line(label: String, rgb: (u8, u8, u8), dist: &crate::schema::MemDist) -> Line {
+    Line {
+        label,
+        rgb,
+        sub: None,
+        min: dist.min,
+        p10: dist.p10,
+        p25: dist.p25,
+        median: dist.median,
+        p75: dist.p75,
+        p90: dist.p90,
+        p99: dist.p99,
+        ecdf: dist.ecdf.clone(),
+    }
 }
 
 #[cfg(test)]

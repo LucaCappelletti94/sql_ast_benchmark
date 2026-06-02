@@ -194,6 +194,7 @@ fn dist_from(sorted: &[f64]) -> MemDist {
             p99: 0.0,
             max: 0.0,
             mean: 0.0,
+            ecdf: Vec::new(),
         };
     }
     MemDist {
@@ -206,6 +207,10 @@ fn dist_from(sorted: &[f64]) -> MemDist {
         p99: stats::quantile(sorted, 0.99),
         max: sorted[sorted.len() - 1],
         mean: sorted.iter().sum::<f64>() / sorted.len() as f64,
+        ecdf: stats::ecdf_points(sorted, 200)
+            .into_iter()
+            .map(|(x, y)| [x, y])
+            .collect(),
     }
 }
 

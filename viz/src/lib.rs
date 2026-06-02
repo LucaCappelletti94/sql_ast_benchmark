@@ -11,7 +11,7 @@ pub mod chart;
 pub mod color;
 pub mod schema;
 
-pub use chart::{box_lines, box_svg, ecdf_lines, ecdf_svg, Line};
+pub use chart::{box_lines, box_svg, ecdf_lines, ecdf_svg, mem_line, Line};
 pub use color::{parser_hex, parser_rgb};
 pub use schema::{
     Bundle, CoverageFile, CoverageMatrix, DialectData, MemDist, ParserFailures, ParserMem,

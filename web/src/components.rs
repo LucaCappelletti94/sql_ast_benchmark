@@ -619,12 +619,12 @@ pub fn ParserView(name: String) -> Element {
         .collect();
     let has_charts = !lines.is_empty();
     let ecdf = if has_charts {
-        viz::ecdf_lines(&parser, &lines, 760, 460)
+        viz::ecdf_lines(&parser, &lines, 760, 460, "ns / statement")
     } else {
         String::new()
     };
     let boxp = if has_charts {
-        viz::box_lines(&parser, &lines, 760, 460)
+        viz::box_lines(&parser, &lines, 760, 460, "ns / statement")
     } else {
         String::new()
     };
@@ -764,6 +764,46 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
         .iter()
         .map(ToString::to_string)
         .collect();
+    let peak_lines: Vec<viz::Line> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.iter().find(|m| m.parser == parser).map(|m| {
+                viz::mem_line(
+                    d.display_name.clone(),
+                    brand(&d.dir_name).accent_rgb,
+                    &m.peak,
+                )
+            })
+        })
+        .collect();
+    let ret_lines: Vec<viz::Line> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.iter().find(|m| m.parser == parser).map(|m| {
+                viz::mem_line(
+                    d.display_name.clone(),
+                    brand(&d.dir_name).accent_rgb,
+                    &m.retained,
+                )
+            })
+        })
+        .collect();
+    let peak_ecdf = viz::ecdf_lines(
+        &format!("{parser} peak memory"),
+        &peak_lines,
+        760,
+        460,
+        "bytes / statement",
+    );
+    let ret_ecdf = viz::ecdf_lines(
+        &format!("{parser} retained memory"),
+        &ret_lines,
+        760,
+        460,
+        "bytes / statement",
+    );
     rsx! {
         section { class: "block",
             h2 {
@@ -772,6 +812,10 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
             }
             p { class: "table-cap",
                 "One row per dialect this parser models, in bytes per statement over the statements it accepted. \"peak\" is the high-water mark of live memory during a parse, and \"retained\" is what the produced AST (plus the scaffolding it keeps alive) holds afterwards. Click any header to sort."
+            }
+            div { class: "charts",
+                {chart_figure(&format!("chart-{}-mempeak-ecdf", slug(parser)), &peak_ecdf, &format!("Empirical CDF of {parser} peak memory, one curve per dialect."), &format!("Peak live memory per statement for {parser}, one curve per dialect. X axis is bytes (log), Y is the fraction of statements under that peak."), &format!("{}-peak-memory-ecdf", slug(parser)))}
+                {chart_figure(&format!("chart-{}-memret-ecdf", slug(parser)), &ret_ecdf, &format!("Empirical CDF of {parser} retained AST memory, one curve per dialect."), &format!("Retained AST memory per statement for {parser}, one curve per dialect. X axis is bytes (log), Y is the fraction of statements under that footprint."), &format!("{}-retained-memory-ecdf", slug(parser)))}
             }
             SortTable {
                 caption: format!("Per-dialect memory in bytes for {}", parser),
@@ -1457,6 +1501,22 @@ fn memory_table(d: &DialectData) -> Element {
             ],
         })
         .collect();
+    let peak_lines: Vec<viz::Line> = d
+        .memory
+        .iter()
+        .map(|m| viz::mem_line(m.parser.clone(), parser_rgb(&m.parser), &m.peak))
+        .collect();
+    let ret_lines: Vec<viz::Line> = d
+        .memory
+        .iter()
+        .map(|m| viz::mem_line(m.parser.clone(), parser_rgb(&m.parser), &m.retained))
+        .collect();
+    let peak_title = format!("{} peak memory", d.display_name);
+    let ret_title = format!("{} retained memory", d.display_name);
+    let peak_ecdf = viz::ecdf_lines(&peak_title, &peak_lines, 760, 460, "bytes / statement");
+    let peak_box = viz::box_lines(&peak_title, &peak_lines, 760, 460, "bytes / statement");
+    let ret_ecdf = viz::ecdf_lines(&ret_title, &ret_lines, 760, 460, "bytes / statement");
+    let ret_box = viz::box_lines(&ret_title, &ret_lines, 760, 460, "bytes / statement");
     rsx! {
         section { class: "block",
             h2 {
@@ -1464,7 +1524,13 @@ fn memory_table(d: &DialectData) -> Element {
                 "Memory"
             }
             p { class: "table-cap",
-                "One row per parser, in bytes per statement over the statements it accepted. \"peak\" is the high-water mark of live memory during the parse, and \"retained\" is what the produced AST (plus the scaffolding it keeps alive) holds afterwards, measured with a counting allocator. The libpg_query bindings are omitted because they parse in C, where the Rust allocator cannot see their memory. Click any header to sort."
+                "Bytes per statement over the statements each parser accepted, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" is what the produced AST (plus the scaffolding it keeps alive) holds afterwards. The libpg_query bindings are omitted because they parse in C, where the Rust allocator cannot see their memory."
+            }
+            div { class: "charts",
+                {chart_figure(&format!("chart-{}-mempeak-ecdf", d.dir_name), &peak_ecdf, &format!("Empirical CDF of peak memory for {}, one curve per parser.", d.display_name), &format!("Peak live memory per statement for {}, one curve per parser. X axis is bytes (log), Y is the fraction of statements under that peak, so further left is leaner.", d.display_name), &format!("{}-peak-memory-ecdf", d.dir_name))}
+                {chart_figure(&format!("chart-{}-mempeak-box", d.dir_name), &peak_box, &format!("Box plot of peak memory for {}, one box per parser.", d.display_name), &format!("Peak live memory per statement for {}, one box per parser, log scale. Box spans the 25th to 75th percentile with the median inside, whiskers reach the 10th and 90th.", d.display_name), &format!("{}-peak-memory-boxplot", d.dir_name))}
+                {chart_figure(&format!("chart-{}-memret-ecdf", d.dir_name), &ret_ecdf, &format!("Empirical CDF of retained AST memory for {}, one curve per parser.", d.display_name), &format!("Retained AST memory per statement for {}, one curve per parser. X axis is bytes (log), Y is the fraction of statements under that footprint.", d.display_name), &format!("{}-retained-memory-ecdf", d.dir_name))}
+                {chart_figure(&format!("chart-{}-memret-box", d.dir_name), &ret_box, &format!("Box plot of retained AST memory for {}, one box per parser.", d.display_name), &format!("Retained AST memory per statement for {}, one box per parser, log scale. Box spans the 25th to 75th percentile with the median inside, whiskers reach the 10th and 90th.", d.display_name), &format!("{}-retained-memory-boxplot", d.dir_name))}
             }
             SortTable {
                 caption: format!("Per-parser memory in bytes for {}", d.display_name),
