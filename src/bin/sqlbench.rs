@@ -117,7 +117,7 @@ fn print_report(r: &DialectReport) {
 
 fn run_correctness() {
     println!("Multi-dialect SQL parser correctness");
-    println!("Reference-graded (PostgreSQL=pg_query, SQLite=lemon-rs), acceptance-rate elsewhere.");
+    println!("Reference-graded against the real database engine (committed oracle/labels cache) where one exists, acceptance-rate elsewhere.");
     println!("Each parser run in its best-matching dialect.");
 
     let all = BenchParser::all();
@@ -179,7 +179,7 @@ fn run_coverage() {
         }
         println!();
     }
-    println!("\n(pg_query for PostgreSQL and sqlite3-parser for SQLite are the reference for those dialects.)");
+    println!("\n(Reference dialects are graded against the real database engine, run in Docker by the `oracle` crate and cached under oracle/labels.)");
 }
 
 fn usage() -> ! {

@@ -248,20 +248,31 @@ fn reference_canonical(sql: &str, d: Dialect) -> Option<String> {
     }
 }
 
-/// Does the reference accept this statement? `Some(true/false)` for reference-backed
-/// dialects (`PostgreSQL` via `pg_query`, `SQLite` via lemon-rs), `None` otherwise.
+/// Does the reference accept this statement?
+///
+/// The reference is the real database engine, validated offline and read from
+/// the committed cache (see [`crate::oracle_cache`]). `Some(true/false)` on a
+/// cache hit, `None` if the dialect has no reference engine or the statement is
+/// not in the cache.
 #[must_use]
 pub fn reference_accepts(sql: &str, d: Dialect) -> Option<bool> {
-    match d {
-        Dialect::Postgresql => Some(pg_query::parse(sql).is_ok()),
-        Dialect::Sqlite => Some(sqlite3_try(sql).is_ok()),
-        _ => None,
-    }
+    oracle_cache::reference_accepts(sql, d)
 }
 
-/// Is `d` a reference-backed dialect (has reference for recall/false-positive)?
+/// Is `d` a reference-backed dialect (a real engine cache exists, so recall and
+/// false-positive are graded)?
 #[must_use]
-pub const fn has_reference(d: Dialect) -> bool {
+pub fn has_reference(d: Dialect) -> bool {
+    oracle_cache::has_reference(d)
+}
+
+/// Dialects with a library canonicalizer for the fidelity metric.
+///
+/// `PostgreSQL` via `pg_query`, `SQLite` via `lemon-rs`. This is independent of
+/// the validity reference (the real engine), which only labels statements
+/// valid/invalid.
+#[must_use]
+pub const fn has_canonical(d: Dialect) -> bool {
     matches!(d, Dialect::Postgresql | Dialect::Sqlite)
 }
 
@@ -571,7 +582,7 @@ impl BenchParser {
     /// cannot reprint or the dialect has no reference.
     #[must_use]
     pub fn fidelity(self, sql: &str, dialect: Dialect) -> Option<bool> {
-        if !self.can_reprint(dialect) || !has_reference(dialect) {
+        if !self.can_reprint(dialect) || !has_canonical(dialect) {
             return None;
         }
         let Some(out) = self.reprint(sql, dialect) else {
@@ -591,12 +602,13 @@ pub mod bench_dist;
 pub mod datasets;
 pub mod export;
 pub mod mem;
+pub mod oracle_cache;
 pub mod report;
 pub mod stats;
 
 #[cfg(test)]
 mod tests {
-    use super::{has_reference, reference_accepts, BenchParser};
+    use super::{has_canonical, has_reference, reference_accepts, BenchParser};
     use crate::datasets::Dialect;
 
     const ALL_DIALECTS: [Dialect; 13] = [
@@ -731,24 +743,26 @@ mod tests {
     }
 
     #[test]
-    fn reference_only_for_postgresql_and_sqlite() {
-        assert!(has_reference(Dialect::Sqlite));
-        assert!(!has_reference(Dialect::Mysql));
-        assert!(!has_reference(Dialect::Clickhouse));
-        assert_eq!(reference_accepts("SELECT 1", Dialect::Mysql), None);
-        assert_eq!(reference_accepts("SELECT 1", Dialect::Sqlite), Some(true));
-
-        {
-            assert!(has_reference(Dialect::Postgresql));
-            assert_eq!(
-                reference_accepts("SELECT 1", Dialect::Postgresql),
-                Some(true)
-            );
-            assert_eq!(
-                reference_accepts("SELECT 1 FROM", Dialect::Postgresql),
-                Some(false)
-            );
+    fn reference_excludes_dialects_without_a_real_engine() {
+        // Cloud, heavy-JVM, and Oracle dialects never get a real-engine cache, so
+        // they are never reference-graded and the reference verdict is None,
+        // independent of which label caches happen to be present.
+        for d in [
+            Dialect::Bigquery,
+            Dialect::Redshift,
+            Dialect::Trino,
+            Dialect::Hive,
+            Dialect::SparkSql,
+            Dialect::Oracle,
+            Dialect::Multi,
+        ] {
+            assert!(!has_reference(d), "{d:?} should never be reference-graded");
+            assert_eq!(reference_accepts("SELECT 1", d), None);
         }
+        // PostgreSQL and SQLite keep a library canonicalizer for fidelity,
+        // independent of the validity cache.
+        assert!(has_canonical(Dialect::Postgresql));
+        assert!(has_canonical(Dialect::Sqlite));
     }
 
     #[test]
@@ -762,8 +776,8 @@ mod tests {
             BenchParser::Qusql.roundtrips("SELECT 1", Dialect::Postgresql),
             None
         );
-        // Fidelity needs reference: None on a non-reference dialect even for a
-        // parser that can reprint.
+        // Fidelity needs a library canonicalizer: None on a dialect without one
+        // even for a parser that can reprint.
         assert_eq!(
             BenchParser::Sqlparser.fidelity("SELECT 1", Dialect::Mysql),
             None

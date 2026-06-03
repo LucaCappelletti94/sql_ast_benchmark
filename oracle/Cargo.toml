@@ -1,0 +1,23 @@
+[package]
+name = "oracle"
+version = "0.1.0"
+edition = "2021"
+description = "Real database-engine reference oracle for sql_ast_benchmark (Docker via testcontainers)"
+license = "MIT"
+publish = false
+
+# Run locally with Docker to (re)generate the committed validity caches under
+# oracle/labels/. Not built by `cargo build` (not a default workspace member).
+
+[dependencies]
+sql_ast_benchmark = { path = ".." }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio-postgres = "0.7"
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["postgres"] }
+zstd = "0.13"
+anyhow = "1"
+
+[[bin]]
+name = "oracle"
+path = "src/main.rs"

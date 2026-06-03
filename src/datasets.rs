@@ -55,6 +55,23 @@ pub enum Dialect {
 }
 
 impl Dialect {
+    /// Every dialect, in canonical order.
+    pub const ALL: [Self; 13] = [
+        Self::Postgresql,
+        Self::Mysql,
+        Self::Sqlite,
+        Self::Clickhouse,
+        Self::Hive,
+        Self::Trino,
+        Self::Duckdb,
+        Self::SparkSql,
+        Self::Tsql,
+        Self::Oracle,
+        Self::Bigquery,
+        Self::Redshift,
+        Self::Multi,
+    ];
+
     /// The `datasets/` subdirectory name for this dialect.
     #[must_use]
     pub const fn dir_name(self) -> &'static str {
