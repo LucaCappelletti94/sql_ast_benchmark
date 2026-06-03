@@ -169,6 +169,7 @@ main { display: block; }
 }
 .chip.lg { width: 52px; height: 52px; border-radius: 12px; }
 .chip-light { background: #fff; border: 1px solid var(--line); }
+.chip-dark { background: #0f1115; border: 1px solid #0f1115; }
 .logo-img { width: 74%; height: 74%; object-fit: contain; display: block; }
 .mono { font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
 .card-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }

@@ -89,8 +89,16 @@ fn parser_logo_asset(name: &str) -> Option<Asset> {
         "sqlparser-rs" => asset!("/assets/logos/apache.svg"),
         "databend-common-ast" => asset!("/assets/logos/databend.svg"),
         "pg_query.rs" | "pg_query (summary)" => asset!("/assets/logos/postgresql.svg"),
+        "turso_parser" => asset!("/assets/logos/turso.svg"),
         _ => return None,
     })
+}
+
+/// Whether a parser's logo is a light mark meant for a dark backing (Turso's
+/// mint logo is invisible on white), so its chip uses a dark background instead
+/// of the usual white one.
+fn logo_wants_dark_chip(name: &str) -> bool {
+    name == "turso_parser"
 }
 
 /// A short letter monogram for a parser that has no distinct logo. Kept
@@ -113,8 +121,13 @@ fn parser_monogram(name: &str) -> &'static str {
 /// `mono_px` sizes the monogram so it fits the chip (cards vs. the larger hero).
 fn parser_mark(name: &str, mono_px: u32, chip_extra: &str) -> Element {
     if let Some(logo) = parser_logo_asset(name) {
+        let chip_bg = if logo_wants_dark_chip(name) {
+            "chip-dark"
+        } else {
+            "chip-light"
+        };
         rsx! {
-            span { class: "chip chip-light {chip_extra}", "aria-hidden": "true",
+            span { class: "chip {chip_bg} {chip_extra}", "aria-hidden": "true",
                 img { class: "logo-img", src: logo, alt: "" }
             }
         }
