@@ -184,6 +184,39 @@ fn sqlite3_reprint(sql: &str) -> Option<String> {
     .unwrap_or(None)
 }
 
+fn turso_try(sql: &str) -> Result<(), String> {
+    catch_parse(|| {
+        let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
+        loop {
+            match parser.next_cmd() {
+                Ok(Some(_)) => {}
+                Ok(None) => return Ok(()),
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+    })
+}
+
+fn turso_reprint(sql: &str) -> Option<String> {
+    std::panic::catch_unwind(|| {
+        let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
+        let mut out: Vec<String> = Vec::new();
+        loop {
+            match parser.next_cmd() {
+                Ok(Some(cmd)) => out.push(cmd.to_string()),
+                Ok(None) => break,
+                Err(_) => return None,
+            }
+        }
+        if out.is_empty() {
+            None
+        } else {
+            Some(out.join("; "))
+        }
+    })
+    .unwrap_or(None)
+}
+
 fn sqlglot_reprint(sql: &str, d: Dialect) -> Option<String> {
     std::panic::catch_unwind(|| {
         let stmts = sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(d)).ok()?;
@@ -291,6 +324,7 @@ pub enum BenchParser {
     Orql,
     Sqlglot,
     Sqlite3,
+    Turso,
 }
 
 impl BenchParser {
@@ -307,6 +341,7 @@ impl BenchParser {
             Self::Orql,
             Self::Sqlglot,
             Self::Sqlite3,
+            Self::Turso,
         ]
     }
 
@@ -323,6 +358,7 @@ impl BenchParser {
             Self::Orql => "orql",
             Self::Sqlglot => "sqlglot-rust",
             Self::Sqlite3 => "sqlite3-parser",
+            Self::Turso => "turso_parser",
         }
     }
 
@@ -378,6 +414,7 @@ impl BenchParser {
                     .map_err(|e| e.to_string())
             })),
             Self::Sqlite3 => (dialect == Dialect::Sqlite).then(|| sqlite3_try(sql)),
+            Self::Turso => (dialect == Dialect::Sqlite).then(|| turso_try(sql)),
         }
     }
 
@@ -423,6 +460,16 @@ impl BenchParser {
                     }
                 }
             }
+            Self::Turso => {
+                let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
+                loop {
+                    match parser.next_cmd() {
+                        Ok(Some(_)) => {}
+                        Ok(None) => break true,
+                        Err(_) => break false,
+                    }
+                }
+            }
         }
     }
 
@@ -434,6 +481,7 @@ impl BenchParser {
     /// dialects a parser does not model. Intended for accepted statements, called
     /// single-threaded from the `membench` binary.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn measure_mem(self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
         use std::hint::black_box;
         // (peak, retained) relative to the live total just before the parse.
@@ -526,6 +574,23 @@ impl BenchParser {
                 drop(parser);
                 Some(r)
             }
+            Self::Turso => {
+                if dialect != Dialect::Sqlite {
+                    return None;
+                }
+                let before = mem::live();
+                mem::reset_peak();
+                let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
+                let mut out = Vec::new();
+                while let Ok(Some(cmd)) = parser.next_cmd() {
+                    out.push(cmd);
+                }
+                black_box((&parser, &out));
+                let r = snap(before);
+                drop(out);
+                drop(parser);
+                Some(r)
+            }
         }
     }
 
@@ -541,6 +606,9 @@ impl BenchParser {
             Self::Sqlite3 => (dialect == Dialect::Sqlite)
                 .then(|| sqlite3_reprint(sql))
                 .flatten(),
+            Self::Turso => (dialect == Dialect::Sqlite)
+                .then(|| turso_reprint(sql))
+                .flatten(),
             Self::PgQuery => (dialect == Dialect::Postgresql)
                 .then(|| pg_query::parse(sql).ok().and_then(|p| p.deparse().ok()))
                 .flatten(),
@@ -555,7 +623,7 @@ impl BenchParser {
         match self {
             Self::Sqlparser | Self::Polyglot | Self::Sqlglot => true,
             Self::Databend => databend_dialect_of(dialect).is_some(),
-            Self::Sqlite3 => dialect == Dialect::Sqlite,
+            Self::Sqlite3 | Self::Turso => dialect == Dialect::Sqlite,
             Self::PgQuery => dialect == Dialect::Postgresql,
             _ => false,
         }
@@ -676,6 +744,7 @@ mod tests {
             vec![Dialect::Postgresql, Dialect::Mysql, Dialect::Hive]
         );
         assert_eq!(supported(BenchParser::Sqlite3), vec![Dialect::Sqlite]);
+        assert_eq!(supported(BenchParser::Turso), vec![Dialect::Sqlite]);
         assert_eq!(supported(BenchParser::Orql), vec![Dialect::Oracle]);
     }
 

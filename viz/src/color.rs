@@ -13,6 +13,7 @@ pub const fn parser_rgb(name: &str) -> (u8, u8, u8) {
         b"databend-common-ast" => (0, 155, 119),
         b"sqlglot-rust" => (237, 135, 45),
         b"sqlite3-parser" => (0, 128, 128),
+        b"turso_parser" => (198, 66, 133),
         b"orql" => (139, 69, 19),
         _ => (120, 120, 120),
     }
