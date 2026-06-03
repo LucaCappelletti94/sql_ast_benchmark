@@ -24,7 +24,7 @@ use sql_ast_benchmark::oracle_cache::{statement_hash, LABELS_DIR};
 use sql_ast_benchmark::report::load_dialect_from;
 
 /// Dialects with an adapter implemented so far.
-const IMPLEMENTED: &[&str] = &["postgresql", "sqlite"];
+const IMPLEMENTED: &[&str] = &["postgresql", "sqlite", "mysql", "clickhouse"];
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -51,6 +51,8 @@ async fn main() -> Result<()> {
         let valid = match dialect {
             Dialect::Postgresql => label_postgresql(&stmts).await?,
             Dialect::Sqlite => label_sqlite(&stmts)?,
+            Dialect::Mysql => label_mysql(&stmts).await?,
+            Dialect::Clickhouse => label_clickhouse(&stmts).await?,
             _ => {
                 eprintln!("{name}: no adapter yet, skipping");
                 continue;
@@ -125,6 +127,95 @@ async fn label_postgresql(stmts: &[String]) -> Result<Vec<bool>> {
         valid.push(v);
         if i % 2000 == 0 {
             eprintln!("  postgresql {i}/{}", stmts.len());
+        }
+    }
+    Ok(valid)
+}
+
+/// MySQL: real server in a container. We use `PREPARE`, MySQL's parse-only path:
+/// it parses (and name-resolves) without executing, so there are no side effects
+/// and nothing blocks. Invalid iff `PREPARE` fails with error 1064
+/// (ER_PARSE_ERROR); a missing table/column (1146/1054) or "unsupported in the
+/// prepared-statement protocol" (1295) means it parsed, so it is valid.
+async fn label_mysql(stmts: &[String]) -> Result<Vec<bool>> {
+    use mysql_async::prelude::Queryable;
+    use testcontainers_modules::mysql::Mysql;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
+
+    let node = Mysql::default()
+        .start()
+        .await
+        .context("start mysql container")?;
+    let host = node.get_host().await?;
+    let port = node.get_host_port_ipv4(3306).await?;
+    let url = format!("mysql://root@{host}:{port}/test");
+    let pool = mysql_async::Pool::new(url.as_str());
+    let mut conn = pool.get_conn().await.context("connect mysql")?;
+
+    let mut valid = Vec::with_capacity(stmts.len());
+    for (i, s) in stmts.iter().enumerate() {
+        let stmt = s.trim().trim_end_matches(';');
+        // Bind the statement text as a parameter (no injection), then PREPARE it.
+        let v = match conn.exec_drop("SET @q = ?", (stmt,)).await {
+            Ok(()) => match conn.query_drop("PREPARE _ck FROM @q").await {
+                Ok(()) => {
+                    let _ = conn.query_drop("DEALLOCATE PREPARE _ck").await;
+                    true
+                }
+                Err(mysql_async::Error::Server(e)) => e.code != 1064,
+                Err(_) => true,
+            },
+            Err(_) => true,
+        };
+        valid.push(v);
+        if i % 2000 == 0 {
+            eprintln!("  mysql {i}/{}", stmts.len());
+        }
+    }
+    drop(conn);
+    let _ = pool.disconnect().await;
+    Ok(valid)
+}
+
+/// ClickHouse: real server in a container, queried over HTTP. `EXPLAIN AST`
+/// parses only (no execution, no tables needed). Invalid iff the exception code
+/// is 62 (SYNTAX_ERROR); any other code (unknown table/identifier, not
+/// implemented) means it parsed, so it is valid.
+async fn label_clickhouse(stmts: &[String]) -> Result<Vec<bool>> {
+    use testcontainers_modules::clickhouse::ClickHouse;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
+
+    let node = ClickHouse::default()
+        .start()
+        .await
+        .context("start clickhouse container")?;
+    let host = node.get_host().await?;
+    let port = node.get_host_port_ipv4(8123).await?;
+    let url = format!("http://{host}:{port}/");
+    let client = reqwest::Client::new();
+
+    let mut valid = Vec::with_capacity(stmts.len());
+    for (i, s) in stmts.iter().enumerate() {
+        let query = format!("EXPLAIN AST {}", s.trim().trim_end_matches(';'));
+        let v = match client.post(&url).body(query).send().await {
+            Ok(resp) if resp.status().is_success() => true,
+            Ok(resp) => {
+                let code = resp
+                    .headers()
+                    .get("x-clickhouse-exception-code")
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.parse::<i32>().ok());
+                match code {
+                    Some(62) => false,
+                    Some(_) => true,
+                    None => !resp.text().await.unwrap_or_default().contains("Code: 62."),
+                }
+            }
+            Err(_) => true,
+        };
+        valid.push(v);
+        if i % 5000 == 0 {
+            eprintln!("  clickhouse {i}/{}", stmts.len());
         }
     }
     Ok(valid)
