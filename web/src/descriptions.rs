@@ -42,6 +42,7 @@ pub fn parser_blurb(name: &str) -> &'static str {
         "orql" => "[orql](https://codeberg.org/xitep/orql) is a pure-Rust Oracle SQL parser focused on SELECT statements, added at its author's request. It models only the Oracle dialect, so it appears on the Oracle results alone. It does not pretty-print, so round-trip and fidelity are n/a.",
         "sqlglot-rust" => "[sqlglot-rust](https://crates.io/crates/sqlglot-rust) is a Rust parser and transpiler in the spirit of Python's [SQLGlot](https://github.com/tobymao/sqlglot), covering many dialects. It regenerates its AST as SQL, so it is graded for round-trip and fidelity across the dialects it models.",
         "sqlite3-parser" => "[sqlite3-parser](https://crates.io/crates/sqlite3-parser) (also known as [lemon-rs](https://github.com/gwenn/lemon-rs)) is a pure-Rust streaming lexer and LALR parser reimplementing SQLite's grammar. It models only SQLite and provides the SQLite reference. It can reprint statements, so it is graded for round-trip on SQLite.",
+        "turso_parser" => "[turso_parser](https://crates.io/crates/turso_parser) is the SQL front end of [Turso](https://github.com/tursodatabase/turso), a from-scratch Rust rewrite of SQLite (formerly Limbo). It pairs a lemon-generated token table with a hand-written recursive-descent parser for SQLite's grammar, so unlike sqlite3-parser's LALR tables the parsing is hand-rolled. It models only SQLite and can reprint statements, so it is graded for round-trip on SQLite.",
         _ => "",
     }
 }
