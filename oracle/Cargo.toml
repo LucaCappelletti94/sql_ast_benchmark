@@ -11,15 +11,22 @@ publish = false
 
 [dependencies]
 sql_ast_benchmark = { path = ".." }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 tokio-postgres = "0.7"
+tokio-util = { version = "0.7", features = ["compat"] }
 mysql_async = "0.37"
 reqwest = { version = "0.13", default-features = false }
+tiberius = { version = "0.12", default-features = false, features = [
+    "tds73",
+    "rustls",
+] }
+duckdb = { version = "1", features = ["bundled"] }
 testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = [
     "postgres",
     "mysql",
     "clickhouse",
+    "mssql_server",
 ] }
 zstd = "0.13"
 anyhow = "1"

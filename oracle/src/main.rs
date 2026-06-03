@@ -9,9 +9,11 @@
 //!   cargo run --release -p oracle              # all implemented dialects
 //!   cargo run --release -p oracle -- sqlite    # one or more by dir name
 //!
-//! Server engines (PostgreSQL) connect over a mapped port via testcontainers.
-//! CLI engines (SQLite) are driven by a one-shot container reading a script on
-//! stdin, since they have no network protocol.
+//! Server engines (PostgreSQL, MySQL, ClickHouse, SQL Server) run in
+//! testcontainers and connect over a mapped port; SQLite runs as the `sqlite3`
+//! CLI in a one-shot container; DuckDB, which has no server and whose CLI errors
+//! carry no line numbers, links the real `libduckdb` in-process via the `duckdb`
+//! crate. Each uses the engine's parse-only path where one exists.
 
 use std::collections::HashMap;
 use std::io::Write as _;
@@ -24,7 +26,14 @@ use sql_ast_benchmark::oracle_cache::{statement_hash, LABELS_DIR};
 use sql_ast_benchmark::report::load_dialect_from;
 
 /// Dialects with an adapter implemented so far.
-const IMPLEMENTED: &[&str] = &["postgresql", "sqlite", "mysql", "clickhouse"];
+const IMPLEMENTED: &[&str] = &[
+    "postgresql",
+    "sqlite",
+    "mysql",
+    "clickhouse",
+    "tsql",
+    "duckdb",
+];
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -53,6 +62,8 @@ async fn main() -> Result<()> {
             Dialect::Sqlite => label_sqlite(&stmts)?,
             Dialect::Mysql => label_mysql(&stmts).await?,
             Dialect::Clickhouse => label_clickhouse(&stmts).await?,
+            Dialect::Tsql => label_tsql(&stmts).await?,
+            Dialect::Duckdb => label_duckdb(&stmts)?,
             _ => {
                 eprintln!("{name}: no adapter yet, skipping");
                 continue;
@@ -216,6 +227,83 @@ async fn label_clickhouse(stmts: &[String]) -> Result<Vec<bool>> {
         valid.push(v);
         if i % 5000 == 0 {
             eprintln!("  clickhouse {i}/{}", stmts.len());
+        }
+    }
+    Ok(valid)
+}
+
+/// SQL Server (T-SQL): real server in a container. `SET PARSEONLY ON` parses
+/// every batch without compiling or executing it (and without resolving object
+/// names), so the only errors that can surface are syntax errors. A statement is
+/// therefore valid iff it runs without error.
+async fn label_tsql(stmts: &[String]) -> Result<Vec<bool>> {
+    use testcontainers_modules::mssql_server::MssqlServer;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
+    use tiberius::{AuthMethod, Client, Config};
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+    let node = MssqlServer::default()
+        .with_accept_eula()
+        .start()
+        .await
+        .context("start sql server container")?;
+    let host = node.get_host().await?;
+    let port = node.get_host_port_ipv4(1433).await?;
+
+    let mut config = Config::new();
+    config.host(host.to_string());
+    config.port(port);
+    config.authentication(AuthMethod::sql_server(
+        "sa",
+        MssqlServer::DEFAULT_SA_PASSWORD,
+    ));
+    config.trust_cert();
+    let tcp = tokio::net::TcpStream::connect(config.get_addr())
+        .await
+        .context("tcp connect sql server")?;
+    tcp.set_nodelay(true)?;
+    let mut client = Client::connect(config, tcp.compat_write())
+        .await
+        .context("connect sql server")?;
+    // Parse-only for the rest of the session: only syntax errors will surface.
+    client
+        .simple_query("SET PARSEONLY ON")
+        .await?
+        .into_results()
+        .await?;
+
+    let mut valid = Vec::with_capacity(stmts.len());
+    for (i, s) in stmts.iter().enumerate() {
+        let v = match client.simple_query(s.as_str()).await {
+            Ok(stream) => stream.into_results().await.is_ok(),
+            Err(_) => false,
+        };
+        valid.push(v);
+        if i % 2000 == 0 {
+            eprintln!("  tsql {i}/{}", stmts.len());
+        }
+    }
+    Ok(valid)
+}
+
+/// DuckDB: real engine via the in-process `duckdb` crate (the actual libduckdb).
+/// DuckDB has no server, and its CLI errors carry no line numbers (so the
+/// container batch-correlation used for SQLite is unreliable), so we link the
+/// real engine directly. `prepare` parses and binds without executing; a
+/// "Parser Error" is a syntax error (invalid), while a "Binder"/"Catalog Error"
+/// (unknown table or column) means it parsed, so it is valid.
+fn label_duckdb(stmts: &[String]) -> Result<Vec<bool>> {
+    let conn = duckdb::Connection::open_in_memory().context("open duckdb")?;
+    let mut valid = Vec::with_capacity(stmts.len());
+    for (i, s) in stmts.iter().enumerate() {
+        let stmt = s.trim().trim_end_matches(';');
+        let v = match conn.prepare(stmt) {
+            Ok(_) => true,
+            Err(e) => !e.to_string().contains("Parser Error"),
+        };
+        valid.push(v);
+        if i % 5000 == 0 {
+            eprintln!("  duckdb {i}/{}", stmts.len());
         }
     }
     Ok(valid)
