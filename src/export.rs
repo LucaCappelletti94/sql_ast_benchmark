@@ -129,7 +129,7 @@ fn metrics(report: &DialectReport) -> Vec<ParserMetrics> {
             } else {
                 None
             },
-            fidelity_pct: if reference && s.can_reprint {
+            fidelity_pct: if crate::has_canonical(report.dialect) && s.can_reprint {
                 pct(s.fidelity_ok, s.accepted_valid)
             } else {
                 None
@@ -516,6 +516,7 @@ mod tests {
     #[test]
     fn metrics_reference_dialect_sets_recall_and_fp() {
         let mut report = DialectReport::empty(Dialect::Postgresql, &[BenchParser::Sqlparser]);
+        report.has_reference = true; // exercise the reference metrics path directly
         report.valid_total = 10;
         report.invalid_total = 4;
         report.stats[0].accepted_valid = 8;
@@ -529,7 +530,8 @@ mod tests {
 
     #[test]
     fn metrics_provenance_dialect_sets_accept_only() {
-        let mut report = DialectReport::empty(Dialect::Clickhouse, &[BenchParser::Sqlparser]);
+        let mut report = DialectReport::empty(Dialect::Multi, &[BenchParser::Sqlparser]);
+        report.has_reference = false; // provenance dialect: accept-rate only
         report.valid_total = 4;
         report.stats[0].accepted_valid = 3;
         let m = metrics(&report);
