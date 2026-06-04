@@ -22,9 +22,9 @@ On their home dialect the reference bindings are exact by construction, so the m
 
 | Parser | Version | Source | Implementation | Dialects |
 | --- | --- | --- | --- | --- |
-| **[sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)** | 0.62.0 | git [`182eae8`](https://github.com/sqlparser-rs/sqlparser-rs/commit/182eae8191962985d3e668895c66841e420d6258) | Pure Rust, handwritten recursive descent | 14 dedicated dialects |
-| **[sqlglot-rust](https://crates.io/crates/sqlglot-rust)** | 0.9.37 | crates.io | Pure Rust, standalone port of Python sqlglot | 30 (parser currently dialect-agnostic) |
-| **[polyglot-sql](https://github.com/tobilg/polyglot)** | 0.4.1 | git [`dbdead6`](https://github.com/tobilg/polyglot/commit/dbdead65405449825923b3834a09bfc0d2c8bc4e) | Pure Rust, transpiler | 32 |
+| **[sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)** | 0.62.0 | git [`575ee26`](https://github.com/sqlparser-rs/sqlparser-rs/commit/575ee264dffa3c5039dc3d15abd903fd420eba2b) | Pure Rust, handwritten recursive descent | 14 dedicated dialects |
+| **[sqlglot-rust](https://crates.io/crates/sqlglot-rust)** | 0.10.0 | crates.io | Pure Rust, standalone port of Python sqlglot | 30 (parser currently dialect-agnostic) |
+| **[polyglot-sql](https://github.com/tobilg/polyglot)** | 0.4.4 | git [`320cfa8`](https://github.com/tobilg/polyglot/commit/320cfa8a148d624caeff2145f2e5bf1432ec8604) | Pure Rust, transpiler | 32 |
 | **[pg_query.rs](https://github.com/pganalyze/pg_query.rs)** | 6.1.1 | git [`7e189a9`](https://github.com/pganalyze/pg_query.rs/commit/7e189a9dd1d4e441a2d44e6655c793f101bba3fa) | Rust FFI to C (libpg_query) | PostgreSQL |
 | **[qusql-parse](https://crates.io/crates/qusql-parse)** | 0.8.0 | crates.io | Pure Rust, zero-copy | PostgreSQL, MariaDB/MySQL, SQLite |
 | **[databend-common-ast](https://github.com/datafuselabs/databend)** | 0.2.5 | crates.io | Pure Rust, zero-copy, Pratt | PostgreSQL, MySQL, Hive |
