@@ -12,6 +12,8 @@
 //!                              prints the per-dataset acceptance matrix instead
 //!                              of per-dialect reference metrics.
 //!   export                     write `web/assets/bench.json` for the explorer.
+//!   regen                      run the whole data pipeline (timing + memory
+//!                              benches, then export) with one command.
 //!
 //! The grading logic lives in the library (`report`). This binary is argument
 //! dispatch plus table formatting.
@@ -182,10 +184,56 @@ fn run_coverage() {
     println!("\n(Reference dialects are graded against the real database engine, run in Docker by the `oracle` crate and cached under oracle/labels.)");
 }
 
+// regen (run the whole data pipeline with one command).
+
+/// Run every input producer for `bench.json` in order, then export.
+///
+/// The memory bench installs a custom global allocator, so it must run in its
+/// own process, separate from the timing bench (which must stay on the default
+/// allocator for fair numbers) and from export. That is why this shells out to
+/// the timing and memory benches rather than calling them in-process; export
+/// runs in-process at the end since it needs no special allocator.
+fn run_regen() {
+    if let Err(e) = sql_ast_benchmark::datasets::ensure_corpus() {
+        eprintln!("ERROR: could not prepare datasets/: {e}");
+        std::process::exit(1);
+    }
+    // Each step writes under target/, which export then reads.
+    let steps: [(&str, &[&str]); 3] = [
+        ("cargo", &["bench"]), // target/bench_dist/ + target/batch_dist/
+        ("cargo", &["run", "--release", "-p", "membench"]), // target/mem_dist/
+        (
+            "cargo",
+            &["run", "--release", "-p", "membench", "--", "batch"],
+        ), // target/batch_mem_dist/
+    ];
+    let total = steps.len() + 1;
+    for (i, (cmd, args)) in steps.iter().enumerate() {
+        eprintln!("\n[regen {}/{total}] {cmd} {}", i + 1, args.join(" "));
+        let status = std::process::Command::new(cmd)
+            .args(*args)
+            .status()
+            .unwrap_or_else(|e| {
+                eprintln!("ERROR: could not launch `{cmd} {}`: {e}", args.join(" "));
+                std::process::exit(1);
+            });
+        if !status.success() {
+            eprintln!("ERROR: step failed: `{cmd} {}`", args.join(" "));
+            std::process::exit(1);
+        }
+    }
+    eprintln!("\n[regen {total}/{total}] export");
+    if let Err(e) = export::run() {
+        eprintln!("ERROR: {e}");
+        std::process::exit(1);
+    }
+}
+
 fn usage() -> ! {
     eprintln!("usage: sqlbench <subcommand>");
     eprintln!("  correctness [--per-file]   grade parsers over datasets/");
     eprintln!("  export                     write web/assets/bench.json for the site");
+    eprintln!("  regen                      run timing + memory benches, then export");
     std::process::exit(2);
 }
 
@@ -217,6 +265,7 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Some("regen") => run_regen(),
         Some("-h" | "--help" | "help") => usage(),
         Some(other) => {
             eprintln!("unknown subcommand: {other}");

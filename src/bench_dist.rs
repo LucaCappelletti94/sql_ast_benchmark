@@ -13,6 +13,12 @@ pub const DIST_DIR: &str = "target/bench_dist";
 /// Directory where `membench` writes raw per-statement memory files.
 pub const MEM_DIR: &str = "target/mem_dist";
 
+/// Directory where the batch (whole-script) time bench writes its summary.
+pub const BATCH_DIST_DIR: &str = "target/batch_dist";
+
+/// Directory where `membench -- batch` writes its batch-memory summary.
+pub const BATCH_MEM_DIR: &str = "target/batch_mem_dist";
+
 /// Ascending-sorted byte values for one `(dialect, parser, kind)`, where `kind`
 /// is `"peak"` or `"retained"`, from `target/mem_dist/{dialect}__{slug}.{kind}.txt`
 /// (empty if absent).

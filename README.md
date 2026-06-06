@@ -38,18 +38,28 @@ Per-parser repository metadata (stars, contributors, fuzzing, test and benchmark
 
 311,594 statements across 34 files and 13 dialects, committed compressed as `datasets.tar.zst` (5.3 MB) and unpacked to `datasets/{dialect}/{name}.txt`, one statement per line. The commands below extract it automatically on first use. All sources are openly licensed (Apache-2.0, MIT, BSD, public domain or CC-BY), drawn from each engine's own regression suites and official samples. Natural-language-with-embedded-SQL datasets are intentionally excluded.
 
-Correctness is defined per dialect. Dialects with a runnable engine are graded against that real database engine, run in Docker via testcontainers by the `oracle` crate: a statement is valid unless the engine reports a syntax error (a missing table or column still counts as parsed). The validity labels are computed once and committed under `oracle/labels`, so grading and CI need no Docker. That reference splits the corpus into valid and invalid and scores recall, false positives, round-trip, and fidelity. Dialects with no runnable engine (cloud services, heavy JVM engines) have no reference, so their statements count as provenance-valid (sourced from each engine's own suites) and the metric is acceptance rate. Speed is a per-statement parse-time distribution over every accepted statement, timed with an adaptive iteration count on a no-`catch_unwind` path.
+Correctness is defined per dialect. Dialects with a runnable engine are graded against that real database engine, run in Docker via testcontainers by the `oracle` crate: a statement is valid unless the engine reports a syntax error (a missing table or column still counts as parsed). The validity labels are computed once and committed under `oracle/labels`, so grading and CI need no Docker. That reference splits the corpus into valid and invalid and scores recall, false positives, round-trip, and fidelity. Dialects with no runnable engine (cloud services, heavy JVM engines) have no reference, so their statements count as provenance-valid (sourced from each engine's own suites) and the metric is acceptance rate. Speed is a per-statement parse-time distribution over every accepted statement, timed with an adaptive iteration count on a no-`catch_unwind` path. Memory is measured separately with a counting allocator, as peak live bytes and retained (AST) bytes per statement. A companion batch axis parses each parser's whole accepted set as one script and normalizes the time and memory by the statement count, showing what bulk parsing amortizes against parsing one statement at a time. A batch that does not parse the whole set (a parser that bails out partway) is dropped rather than reported, and parsers without a multi-statement entry point (databend-common-ast) sit out the batch axis.
 
 ## Running
 
-The corpus auto-extracts on first use, so just run:
+The corpus auto-extracts on first use. To rebuild the whole explorer snapshot (`web/assets/bench.json`) with one command:
+
+```bash
+cargo regen   # timing benches + memory benches + export, in order
+```
+
+That is an alias (see `.cargo/config.toml`) for `cargo run --release --bin sqlbench -- regen`. The memory measurement installs a counting global allocator, so it has to run in its own process, separate from the timing bench (which must stay on the default allocator for fair numbers). The `regen` command orchestrates that sequence so you do not have to. The individual steps, if you want to run one on its own:
 
 ```bash
 cargo run --release --bin sqlbench correctness --per-file    # per-file acceptance, every dialect
 cargo run --release --bin sqlbench correctness               # reference + provenance correctness
-cargo bench                                                  # parse-throughput, every dialect
+cargo bench                                                  # parse time (per-statement and batch), every dialect
+cargo run --release -p membench                              # per-statement memory (peak + retained bytes)
+cargo run --release -p membench -- batch                     # whole-script (batch) memory, per statement
 cargo run --release --bin sqlbench export                    # regenerate web/assets/bench.json for the explorer
 ```
+
+`cargo bench` runs both the per-statement (`parsing`) and whole-script (`batch_parsing`) timing benches. Add `--bench batch_parsing` to run only the batch one. `export` reads whatever the benches left under `target/`, warning rather than failing for any missing source, so the memory and batch columns stay empty until their producers have run.
 
 Validity labels for the reference dialects are produced by the `oracle` crate (real engines in Docker via testcontainers) and committed under `oracle/labels`, so `correctness` and `export` need no Docker. Regenerate them with `cargo run --release -p oracle`.
 

@@ -11,7 +11,14 @@
 //! window. The libpg_query bindings parse in C and report `None` (their memory
 //! is invisible to the Rust allocator).
 //!
-//! Run locally: `cargo run --release -p membench`
+//! A `batch` subcommand measures whole-script memory instead: per (parser,
+//! dialect) it concatenates the accepted set into one script, parses it holding
+//! every AST live, and records peak/retained bytes normalized per statement to
+//! `target/batch_mem_dist/summary.csv`. Databend has no batch entry point and
+//! is skipped there.
+//!
+//! Run locally: `cargo run --release -p membench`            (per-statement)
+//!              `cargo run --release -p membench -- batch`    (whole-script)
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::fmt::Write as _;
@@ -19,6 +26,7 @@ use std::fs;
 use std::io::Write as _;
 use std::path::Path;
 
+use sql_ast_benchmark::batch::join_batch;
 use sql_ast_benchmark::datasets::{ensure_corpus, Dialect};
 use sql_ast_benchmark::stats::slug;
 use sql_ast_benchmark::BenchParser;
@@ -59,6 +67,7 @@ unsafe impl GlobalAlloc for Counting {
 static GLOBAL: Counting = Counting;
 
 const OUT_DIR: &str = "target/mem_dist";
+const BATCH_OUT_DIR: &str = "target/batch_mem_dist";
 
 /// Deep statements can overflow the stack in recursive-descent parsers, so run
 /// the whole measurement on a large stack (and a single thread).
@@ -163,11 +172,79 @@ fn run() {
     }
 }
 
+/// Whole-script (batch) memory: one (peak, retained) pair per (parser, dialect),
+/// normalized per statement, written to a single summary file. Only parsers with
+/// a batch entry point whose memory is visible to the Rust allocator take part.
+fn run_batch() {
+    fs::create_dir_all(BATCH_OUT_DIR).expect("create batch_mem_dist dir");
+    let mut summary =
+        fs::File::create(format!("{BATCH_OUT_DIR}/summary.csv")).expect("create summary.csv");
+    writeln!(
+        summary,
+        "dialect,parser,n_accepted,n_parsed,peak_bytes,retained_bytes,peak_per_stmt,retained_per_stmt"
+    )
+    .expect("write header");
+
+    for &dialect in DIALECTS {
+        let stmts = load_dialect(dialect);
+        if stmts.is_empty() {
+            continue;
+        }
+        for parser in BenchParser::all() {
+            if !parser.can_batch() || !parser.supports(dialect) {
+                continue;
+            }
+            let accepted: Vec<&str> = stmts
+                .iter()
+                .filter(|s| parser.accepts(s, dialect) == Some(true))
+                .map(String::as_str)
+                .collect();
+            if accepted.is_empty() {
+                continue;
+            }
+            let batch = join_batch(&accepted);
+            // Warm up: let one-time caches/lazy statics allocate first, so they
+            // raise the baseline rather than this measurement. Also skips
+            // parsers whose memory is invisible to the Rust allocator (None).
+            if parser.measure_mem_batch(&batch, dialect).is_none() {
+                continue;
+            }
+            let Some((peak, retained)) = parser.measure_mem_batch(&batch, dialect) else {
+                continue;
+            };
+            // Statements the parser actually consumed from the script, so the
+            // export can drop a pair whose batch parse bailed out early.
+            let n_parsed = parser.parse_batch(&batch, dialect).unwrap_or(0);
+
+            let n = accepted.len() as f64;
+            writeln!(
+                summary,
+                "{},{},{},{n_parsed},{peak},{retained},{:.1},{:.1}",
+                dialect.dir_name(),
+                parser.name(),
+                accepted.len(),
+                peak as f64 / n,
+                retained as f64 / n,
+            )
+            .expect("write row");
+            summary.flush().expect("flush summary");
+            let coverage = 100.0 * n_parsed as f64 / n;
+            eprintln!(
+                "batch-mem {} {}: n={} seen={n_parsed} ({coverage:.0}%) peak={peak} retained={retained}",
+                dialect.dir_name(),
+                parser.name(),
+                accepted.len(),
+            );
+        }
+    }
+}
+
 fn main() {
     ensure_corpus().expect("dataset corpus");
+    let batch = std::env::args().any(|a| a == "batch");
     std::thread::Builder::new()
         .stack_size(WORKER_STACK)
-        .spawn(run)
+        .spawn(move || if batch { run_batch() } else { run() })
         .expect("spawn worker")
         .join()
         .expect("measurement thread panicked");
