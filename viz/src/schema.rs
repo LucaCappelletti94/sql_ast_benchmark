@@ -37,6 +37,36 @@ pub struct DialectData {
     /// Per-parser memory distribution (peak and retained bytes per statement).
     #[serde(default)]
     pub memory: Vec<ParserMem>,
+    /// Per-parser whole-script (batch) results: the cost of parsing the whole
+    /// accepted set as one script, normalized per statement.
+    #[serde(default)]
+    pub batch: Vec<ParserBatch>,
+}
+
+/// Whole-script (batch) parse results for one parser in one dialect.
+///
+/// The parser's whole accepted set is concatenated into a single script and
+/// parsed in one call; the cost is divided by the statement count. This
+/// complements the per-statement [`ParserPerf`]/[`ParserMem`], exposing the
+/// amortization a batch API gains or loses (a grown `Vec` of statements, all
+/// ASTs held at once). The values are means (total over count), so they compare
+/// to the per-statement `mean`. Fields are `Option` because the batch time and
+/// batch memory benches run separately and either may be absent (and the
+/// `libpg_query` bindings have batch time but no Rust-visible batch memory).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ParserBatch {
+    pub parser: String,
+    /// Statements fed into the batch (the parser's accepted set).
+    pub n_accepted: usize,
+    /// Whole-script parse time divided by statement count (ns).
+    #[serde(default)]
+    pub ns_per_stmt: Option<f64>,
+    /// Peak live bytes during the whole-script parse, per statement.
+    #[serde(default)]
+    pub peak_per_stmt: Option<f64>,
+    /// Retained bytes after the whole-script parse, per statement.
+    #[serde(default)]
+    pub retained_per_stmt: Option<f64>,
 }
 
 /// Per-statement memory distribution for one parser in one dialect. Bytes,

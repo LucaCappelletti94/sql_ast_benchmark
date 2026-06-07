@@ -473,6 +473,83 @@ impl BenchParser {
         }
     }
 
+    /// Whether this parser exposes a multi-statement (batch) parse entry point,
+    /// so it can consume a whole script in one call. Only `databend-common-ast`
+    /// parses a single statement at a time, so it is excluded from the batch
+    /// benchmark (reported n/a there).
+    #[must_use]
+    pub const fn can_batch(self) -> bool {
+        !matches!(self, Self::Databend)
+    }
+
+    /// Parse a whole multi-statement script `sql` in `dialect` for batch timing,
+    /// WITHOUT panic protection (like [`Self::parse_once`]). Returns the number
+    /// of statements the parser reports parsing, or `None` if the parser does
+    /// not model the dialect or has no batch entry point ([`Self::can_batch`]).
+    ///
+    /// Fail-fast parsers (those returning a `Vec` or erroring on the first bad
+    /// statement) yield `0` if the whole batch fails; streaming parsers
+    /// (`sqlite3-parser`, `turso_parser`) yield the count parsed before the
+    /// first error or EOF. Batches are built from already-accepted statements,
+    /// so a clean run parses all of them; the count is kept for coverage.
+    #[must_use]
+    pub fn parse_batch(self, sql: &str, dialect: Dialect) -> Option<usize> {
+        match self {
+            Self::Sqlparser => {
+                Some(Parser::parse_sql(&*sqlparser_dialect(dialect), sql).map_or(0, |v| v.len()))
+            }
+            Self::PgQuery => (dialect == Dialect::Postgresql)
+                .then(|| pg_query::parse(sql).map_or(0, |r| r.protobuf.stmts.len())),
+            Self::PgQuerySummary => (dialect == Dialect::Postgresql)
+                .then(|| pg_query::summary(sql, -1).map_or(0, |r| r.statement_types.len())),
+            Self::Qusql => qusql_dialect(dialect).map(|d| {
+                let opts = ParseOptions::new()
+                    .dialect(d)
+                    .arguments(qusql_parse::SQLArguments::Dollar);
+                let mut issues = Issues::new(sql);
+                let stmts = parse_statements(sql, &mut issues, &opts);
+                // Resilient parser: report a full count only when error-free.
+                if issues.get().iter().any(|i| i.level == Level::Error) {
+                    0
+                } else {
+                    stmts.len()
+                }
+            }),
+            Self::Polyglot => {
+                Some(polyglot_parse(sql, polyglot_dialect(dialect)).map_or(0, |v| v.len()))
+            }
+            // Single-statement parser: no batch entry point.
+            Self::Databend => None,
+            Self::Orql => {
+                (dialect == Dialect::Oracle).then(|| orql_parser::parse(sql).map_or(0, |v| v.len()))
+            }
+            Self::Sqlglot => Some(
+                sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect))
+                    .map_or(0, |v| v.len()),
+            ),
+            Self::Sqlite3 => (dialect == Dialect::Sqlite).then(|| {
+                let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+                let mut n = 0;
+                loop {
+                    match parser.next() {
+                        Ok(Some(_)) => n += 1,
+                        Ok(None) | Err(_) => break n,
+                    }
+                }
+            }),
+            Self::Turso => (dialect == Dialect::Sqlite).then(|| {
+                let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
+                let mut n = 0;
+                loop {
+                    match parser.next_cmd() {
+                        Ok(Some(_)) => n += 1,
+                        Ok(None) | Err(_) => break n,
+                    }
+                }
+            }),
+        }
+    }
+
     /// Parse `sql` while the `membench` allocator is active and return
     /// `(peak, retained)` bytes: the high-water mark of live allocations during
     /// the parse, and the bytes still live afterwards (the produced AST plus any
@@ -594,6 +671,22 @@ impl BenchParser {
         }
     }
 
+    /// Like [`Self::measure_mem`], but for a whole multi-statement script: it
+    /// holds every statement's AST live at once, so the `(peak, retained)` it
+    /// reports reflects batch parsing (a grown `Vec` of statements, all ASTs
+    /// retained together). `None` when the parser has no batch entry point
+    /// ([`Self::can_batch`], so databend), when its memory is invisible to the
+    /// Rust allocator (the `libpg_query` bindings), or when it does not model
+    /// `dialect`. Called single-threaded from the `membench` binary; under any
+    /// other binary the counters are zero and it returns `Some((0, 0))`.
+    #[must_use]
+    pub fn measure_mem_batch(self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+        if !self.can_batch() {
+            return None;
+        }
+        self.measure_mem(sql, dialect)
+    }
+
     /// Parse and pretty-print, returning `None` if the parser has no printer, does not
     /// model `dialect`, or fails to parse `sql`.
     #[must_use]
@@ -666,6 +759,7 @@ impl BenchParser {
     }
 }
 
+pub mod batch;
 pub mod bench_dist;
 pub mod datasets;
 pub mod export;
@@ -858,5 +952,80 @@ mod tests {
         assert!(BenchParser::Sqlparser
             .fidelity("SELECT 1", Dialect::Sqlite)
             .is_some());
+    }
+
+    #[test]
+    fn can_batch_excludes_only_databend() {
+        // databend-common-ast parses one statement per call; every other parser
+        // has a multi-statement entry point.
+        assert!(!BenchParser::Databend.can_batch());
+        for p in BenchParser::all() {
+            if p != BenchParser::Databend {
+                assert!(p.can_batch(), "{} should support batch parsing", p.name());
+            }
+        }
+    }
+
+    #[test]
+    fn parse_batch_counts_a_three_statement_script() {
+        let script = "SELECT 1; SELECT 2; SELECT 3";
+        // Multi-dialect Vec parsers count every statement.
+        assert_eq!(
+            BenchParser::Sqlparser.parse_batch(script, Dialect::Postgresql),
+            Some(3)
+        );
+        // Streaming SQLite parsers count every statement too.
+        assert_eq!(
+            BenchParser::Sqlite3.parse_batch(script, Dialect::Sqlite),
+            Some(3)
+        );
+        assert_eq!(
+            BenchParser::Turso.parse_batch(script, Dialect::Sqlite),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn parse_batch_is_none_when_unavailable() {
+        // No batch entry point, even on a dialect databend models.
+        assert_eq!(
+            BenchParser::Databend.parse_batch("SELECT 1", Dialect::Postgresql),
+            None
+        );
+        // Unsupported dialect for a dialect-specific parser.
+        assert_eq!(
+            BenchParser::Sqlite3.parse_batch("SELECT 1", Dialect::Postgresql),
+            None
+        );
+        assert_eq!(
+            BenchParser::Orql.parse_batch("SELECT 1", Dialect::Postgresql),
+            None
+        );
+    }
+
+    #[test]
+    fn measure_mem_batch_gating() {
+        // The counting allocator only exists in the membench binary, so under
+        // cargo test these assert the gating (Some vs None), not byte values.
+        let script = "SELECT 1; SELECT 2";
+        // Batch-capable, Rust-visible parser: Some (value is (0, 0) here).
+        assert!(BenchParser::Sqlparser
+            .measure_mem_batch(script, Dialect::Postgresql)
+            .is_some());
+        // No batch entry point.
+        assert_eq!(
+            BenchParser::Databend.measure_mem_batch(script, Dialect::Postgresql),
+            None
+        );
+        // Memory invisible to the Rust allocator (parses in C).
+        assert_eq!(
+            BenchParser::PgQuery.measure_mem_batch(script, Dialect::Postgresql),
+            None
+        );
+        // Unsupported dialect for a dialect-specific parser.
+        assert_eq!(
+            BenchParser::Sqlite3.measure_mem_batch(script, Dialect::Postgresql),
+            None
+        );
     }
 }

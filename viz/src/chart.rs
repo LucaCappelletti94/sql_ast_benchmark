@@ -377,6 +377,7 @@ mod tests {
             },
             failures: vec![],
             memory: vec![],
+            batch: vec![],
         }
     }
 
