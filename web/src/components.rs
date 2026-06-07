@@ -803,10 +803,14 @@ fn VersionHistory(parser: String) -> Element {
         .collect();
     let mut time_series = Vec::new();
     let mut peak_series = Vec::new();
+    let mut recall_series = Vec::new();
+    let mut fp_series = Vec::new();
     for (dir, name) in &dialects {
         let rgb = brand(dir).accent_rgb;
         let mut time_points = Vec::new();
         let mut peak_points = Vec::new();
+        let mut recall_points = Vec::new();
+        let mut fp_points = Vec::new();
         for v in &hist.versions {
             let Some(x) = viz::year_frac(&v.released) else {
                 continue;
@@ -820,6 +824,19 @@ fn VersionHistory(parser: String) -> Element {
             if let Some(m) = dr.memory.as_ref() {
                 peak_points.push((x, m.peak.median, m.peak.p25, m.peak.p75));
             }
+            if let Some(c) = dr.correctness.as_ref() {
+                let accept = if dr.has_reference {
+                    c.recall_pct
+                } else {
+                    c.accept_pct
+                };
+                if let Some(val) = accept {
+                    recall_points.push((x, val, val, val));
+                }
+                if let Some(fp) = c.false_positive_pct {
+                    fp_points.push((x, fp, fp, fp));
+                }
+            }
         }
         time_series.push(viz::TrendSeries {
             label: name.clone(),
@@ -831,6 +848,20 @@ fn VersionHistory(parser: String) -> Element {
             rgb,
             points: peak_points,
         });
+        if !recall_points.is_empty() {
+            recall_series.push(viz::TrendSeries {
+                label: name.clone(),
+                rgb,
+                points: recall_points,
+            });
+        }
+        if !fp_points.is_empty() {
+            fp_series.push(viz::TrendSeries {
+                label: name.clone(),
+                rgb,
+                points: fp_points,
+            });
+        }
     }
     let time_trend = viz::trend_lines(
         &format!("{parser} parse time"),
@@ -846,6 +877,25 @@ fn VersionHistory(parser: String) -> Element {
         460,
         "bytes / statement",
     );
+    let recall_trend = viz::pct_trend_lines(
+        &format!("{parser} accept / recall"),
+        &recall_series,
+        760,
+        460,
+        "% accepted",
+    );
+    let has_fp = !fp_series.is_empty();
+    let fp_trend = if has_fp {
+        viz::pct_trend_lines(
+            &format!("{parser} false positives"),
+            &fp_series,
+            760,
+            460,
+            "% of invalid accepted",
+        )
+    } else {
+        String::new()
+    };
 
     // Selected version: full per-dialect charts and a results table.
     let run = &hist.versions[sel];
@@ -967,11 +1017,15 @@ fn VersionHistory(parser: String) -> Element {
                 "Across versions"
             }
             p { class: "table-cap",
-                "How {parser} changed across releases, each version placed at its release date. Each point is the median over a dialect's accepted statements with an interquartile (p25 to p75) bar on a log scale, so the heavily right-skewed parse-time and memory tails do not distort it: lower is faster for time and leaner for memory. Pick a version to see its full charts and results below."
+                "How {parser} changed across releases, each version placed at its release date. For time and memory each point is the median over a dialect's accepted statements with an interquartile (p25 to p75) bar on a log scale, so the heavily right-skewed tails do not distort it: lower is faster and leaner. The quality trends show the share of expected statements accepted (recall where a reference engine exists, acceptance rate elsewhere) and, on reference dialects, the share of invalid statements wrongly accepted (lower is better). Pick a version to see its full charts and results below."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{pslug}-time-trend"), &time_trend, &format!("Parse-time trend for {parser} across releases, one line per dialect."), "Median parse time by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-time-trend"))}
                 {chart_figure(&format!("chart-{pslug}-mem-trend"), &peak_trend, &format!("Peak-memory trend for {parser} across releases, one line per dialect."), "Median peak memory by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-mem-trend"))}
+                {chart_figure(&format!("chart-{pslug}-recall-trend"), &recall_trend, &format!("Accept and recall trend for {parser} across releases, one line per dialect."), "Share of expected statements accepted by release date (recall on reference dialects, acceptance rate elsewhere). Higher is better.", &format!("{pslug}-recall-trend"))}
+                if has_fp {
+                    {chart_figure(&format!("chart-{pslug}-fp-trend"), &fp_trend, &format!("False-positive trend for {parser} across releases, one line per reference dialect."), "Share of reference-invalid statements wrongly accepted, by release date. Lower is better.", &format!("{pslug}-fp-trend"))}
+                }
             }
             div { class: "version-picker",
                 span { class: "version-picker-label", "version" }

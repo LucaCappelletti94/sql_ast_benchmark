@@ -12,7 +12,8 @@ pub mod color;
 pub mod schema;
 
 pub use chart::{
-    box_lines, box_svg, ecdf_lines, ecdf_svg, mem_line, trend_lines, year_frac, Line, TrendSeries,
+    box_lines, box_svg, ecdf_lines, ecdf_svg, mem_line, pct_trend_lines, trend_lines, year_frac,
+    Line, TrendSeries,
 };
 pub use color::{parser_hex, parser_rgb};
 pub use schema::{

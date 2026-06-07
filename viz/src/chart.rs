@@ -477,6 +477,100 @@ pub fn trend_lines(title: &str, series: &[TrendSeries], w: u32, h: u32, y_desc: 
     buf
 }
 
+/// Percentage trend chart: x = release date, y = a rate in percent on a linear
+/// axis, one line per series. Each point's `median` slot carries the value (the
+/// p25/p75 slots are ignored, since a rate is a single number rather than a
+/// distribution). Used for the accept/recall and false-positive trends. The y
+/// range hugs the data so small changes between releases stay visible.
+#[must_use]
+pub fn pct_trend_lines(
+    title: &str,
+    series: &[TrendSeries],
+    w: u32,
+    h: u32,
+    y_desc: &str,
+) -> String {
+    let legend: Vec<Line> = series
+        .iter()
+        .map(|s| Line {
+            label: s.label.clone(),
+            rgb: s.rgb,
+            sub: None,
+            min: 0.0,
+            p10: 0.0,
+            p25: 0.0,
+            median: 0.0,
+            p75: 0.0,
+            p90: 0.0,
+            p99: 0.0,
+            ecdf: Vec::new(),
+        })
+        .collect();
+
+    let mut buf = String::new();
+    {
+        let root = SVGBackend::with_string(&mut buf, (w, h)).into_drawing_area();
+        let _: Res = (|| {
+            root.fill(&WHITE)?;
+            let (plot, legend_area) = root.split_horizontally(w as i32 - legend_width(&legend));
+
+            let mut xmin = f64::MAX;
+            let mut xmax = f64::MIN;
+            let mut ymin = f64::MAX;
+            let mut ymax = f64::MIN;
+            for s in series {
+                for &(x, v, _, _) in &s.points {
+                    xmin = xmin.min(x);
+                    xmax = xmax.max(x);
+                    ymin = ymin.min(v);
+                    ymax = ymax.max(v);
+                }
+            }
+            if !xmin.is_finite() || !xmax.is_finite() || !ymin.is_finite() {
+                return Ok(()); // no data
+            }
+            let xpad = ((xmax - xmin) * 0.08).max(0.08);
+            let (xlo, xhi) = (xmin - xpad, xmax + xpad);
+            let ylo = (ymin - 2.0).max(0.0);
+            let yhi = (ymax + 2.0).min(102.0).max(ylo + 1.0);
+
+            let mut chart = ChartBuilder::on(&plot)
+                .caption(title, ("sans-serif", 16))
+                .margin(10)
+                .x_label_area_size(40)
+                .y_label_area_size(52)
+                .build_cartesian_2d(xlo..xhi, ylo..yhi)?;
+            chart
+                .configure_mesh()
+                .x_desc("release date")
+                .y_desc(y_desc)
+                .x_labels(6)
+                .x_label_formatter(&|x| frac_to_ym(*x))
+                .x_label_style(("sans-serif", 10))
+                .y_label_style(("sans-serif", 11))
+                .draw()?;
+
+            for s in series {
+                chart.draw_series(LineSeries::new(
+                    s.points.iter().map(|&(x, v, _, _)| (x, v)),
+                    rgb(s.rgb).stroke_width(2),
+                ))?;
+                for &(x, v, _, _) in &s.points {
+                    chart.draw_series(std::iter::once(Circle::new(
+                        (x, v),
+                        3,
+                        rgb(s.rgb).filled(),
+                    )))?;
+                }
+            }
+            draw_legend(&legend_area, &legend)?;
+            root.present()?;
+            Ok(())
+        })();
+    }
+    buf
+}
+
 #[cfg(test)]
 mod tests {
     use super::{box_svg, ecdf_svg};
