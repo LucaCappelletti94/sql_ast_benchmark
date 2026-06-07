@@ -353,7 +353,7 @@ fn label_sqlite(stmts: &[String]) -> Result<Vec<bool>> {
         if let Some((lineno, msg)) = parse_sqlite_err(line) {
             if lineno >= 2 {
                 let idx = lineno - 2;
-                if idx < stmts.len() && is_sqlite_syntax(msg) {
+                if idx < stmts.len() && is_sqlite_invalid(msg) {
                     valid[idx] = false;
                 }
             }
@@ -370,9 +370,53 @@ fn parse_sqlite_err(line: &str) -> Option<(usize, &str)> {
     Some((num.trim().parse().ok()?, msg.trim()))
 }
 
-/// Whether a sqlite3 error message denotes a syntax (parse) failure rather than
-/// a semantic one (a missing table or column means it parsed fine).
-fn is_sqlite_syntax(msg: &str) -> bool {
+/// Whether a sqlite3 prepare error marks the statement invalid.
+///
+/// `EXPLAIN` resolves names, so the only errors that mean "it parsed fine, it
+/// just references objects we did not create" are missing-object and binding
+/// errors (no such table/column/function/..., ambiguous column). Every other
+/// prepare error is a real rejection: not only "syntax error" but the
+/// grammar/semantic errors SQLite reports regardless of schema, such as
+/// "ORDER BY clause should come after INTERSECT not before" (gwenn/lemon-rs#102)
+/// or "RIGHT and FULL OUTER JOINs are not currently supported". The previous
+/// allow-list of a few syntax phrases mislabeled all of those as valid.
+fn is_sqlite_invalid(msg: &str) -> bool {
     let m = msg.to_ascii_lowercase();
-    m.contains("syntax error") || m.contains("incomplete input") || m.contains("unrecognized token")
+    !(m.contains("no such") || m.contains("ambiguous column"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_sqlite_invalid, parse_sqlite_err};
+
+    #[test]
+    fn missing_object_errors_are_valid() {
+        // The statement parsed; it only references objects we did not create.
+        assert!(!is_sqlite_invalid("no such table: documents"));
+        assert!(!is_sqlite_invalid("no such column: x"));
+        assert!(!is_sqlite_invalid("no such function: my_udf"));
+        assert!(!is_sqlite_invalid("ambiguous column name: id"));
+    }
+
+    #[test]
+    fn parse_and_grammar_errors_are_invalid() {
+        assert!(is_sqlite_invalid("near \"FROM\": syntax error"));
+        assert!(is_sqlite_invalid("incomplete input"));
+        // The errors the old allow-list missed (gwenn/lemon-rs#102).
+        assert!(is_sqlite_invalid(
+            "ORDER BY clause should come after INTERSECT not before"
+        ));
+        assert!(is_sqlite_invalid(
+            "RIGHT and FULL OUTER JOINs are not currently supported"
+        ));
+    }
+
+    #[test]
+    fn parse_sqlite_err_extracts_line_and_message() {
+        assert_eq!(
+            parse_sqlite_err("Parse error near line 3: no such table: t"),
+            Some((3, "no such table: t"))
+        );
+        assert_eq!(parse_sqlite_err("just some output"), None);
+    }
 }
