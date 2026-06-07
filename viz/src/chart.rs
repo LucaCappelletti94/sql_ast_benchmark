@@ -337,6 +337,146 @@ pub fn mem_line(label: String, rgb: (u8, u8, u8), dist: &crate::schema::MemDist)
     }
 }
 
+/// Fractional year of an ISO `YYYY-MM-DD` date, for placing trend points on a
+/// time x-axis. `None` if the string does not parse. The intra-month term keeps
+/// releases days apart visibly distinct without needing a calendar library.
+#[must_use]
+pub fn year_frac(date: &str) -> Option<f64> {
+    let mut it = date.split('-');
+    let y: f64 = it.next()?.parse().ok()?;
+    let m: f64 = it.next()?.parse().ok()?;
+    let d: f64 = it.next().unwrap_or("1").parse().unwrap_or(1.0);
+    Some(y + (m - 1.0) / 12.0 + (d - 1.0) / 31.0 / 12.0)
+}
+
+/// Format a fractional year as `YYYY-MM` for an axis tick.
+fn frac_to_ym(f: f64) -> String {
+    let year = f.floor();
+    let mut month = ((f - year) * 12.0).round() as i64 + 1;
+    let mut y = year as i64;
+    if month > 12 {
+        month -= 12;
+        y += 1;
+    }
+    if month < 1 {
+        month = 1;
+    }
+    format!("{y}-{month:02}")
+}
+
+/// One labelled series for a [`trend_lines`] chart: a robust summary at each
+/// release. Each point is `(x, median, p25, p75)` with `x` a fractional year.
+pub struct TrendSeries {
+    pub label: String,
+    pub rgb: (u8, u8, u8),
+    /// `(x, median, p25, p75)` per release this series has data for, ascending x.
+    pub points: Vec<(f64, f64, f64, f64)>,
+}
+
+/// Trend chart: x = release date, y = median on a log scale with an
+/// interquartile (p25-p75) bar at each release, one line per series. Median and
+/// IQR are used (not mean and std) because parse-time and memory distributions
+/// are heavily right-skewed, so the mean is outlier-dominated.
+#[must_use]
+pub fn trend_lines(title: &str, series: &[TrendSeries], w: u32, h: u32, y_desc: &str) -> String {
+    let legend: Vec<Line> = series
+        .iter()
+        .map(|s| Line {
+            label: s.label.clone(),
+            rgb: s.rgb,
+            sub: None,
+            min: 0.0,
+            p10: 0.0,
+            p25: 0.0,
+            median: 0.0,
+            p75: 0.0,
+            p90: 0.0,
+            p99: 0.0,
+            ecdf: Vec::new(),
+        })
+        .collect();
+
+    let mut buf = String::new();
+    {
+        let root = SVGBackend::with_string(&mut buf, (w, h)).into_drawing_area();
+        let _: Res = (|| {
+            root.fill(&WHITE)?;
+            let (plot, legend_area) = root.split_horizontally(w as i32 - legend_width(&legend));
+
+            let mut xmin = f64::MAX;
+            let mut xmax = f64::MIN;
+            let mut ymin = f64::MAX;
+            let mut ymax = 0.0_f64;
+            for s in series {
+                for &(x, median, p25, p75) in &s.points {
+                    xmin = xmin.min(x);
+                    xmax = xmax.max(x);
+                    if p25 > 0.0 {
+                        ymin = ymin.min(p25);
+                    }
+                    if median > 0.0 {
+                        ymin = ymin.min(median);
+                    }
+                    ymax = ymax.max(p75.max(median));
+                }
+            }
+            if !xmin.is_finite() || !xmax.is_finite() {
+                return Ok(()); // no data
+            }
+            // Pad the x range; a single-release family still gets a sane window.
+            let xpad = ((xmax - xmin) * 0.08).max(0.08);
+            let (xlo, xhi) = (xmin - xpad, xmax + xpad);
+            if !ymin.is_finite() || ymin <= 0.0 {
+                ymin = 1.0;
+            }
+            let ylo = (ymin * 0.8).max(1.0);
+            let yhi = (ymax * 1.3).max(ylo * 10.0);
+
+            let mut chart = ChartBuilder::on(&plot)
+                .caption(title, ("sans-serif", 16))
+                .margin(10)
+                .x_label_area_size(40)
+                .y_label_area_size(52)
+                .build_cartesian_2d(xlo..xhi, (ylo..yhi).log_scale())?;
+            chart
+                .configure_mesh()
+                .x_desc("release date")
+                .y_desc(y_desc)
+                .x_labels(6)
+                .x_label_formatter(&|x| frac_to_ym(*x))
+                .y_label_style(("sans-serif", 11))
+                .x_label_style(("sans-serif", 10))
+                .draw()?;
+
+            for s in series {
+                // Median line across the releases this series covers.
+                chart.draw_series(LineSeries::new(
+                    s.points.iter().map(|&(x, m, _, _)| (x, m)),
+                    rgb(s.rgb).stroke_width(2),
+                ))?;
+                // Interquartile bar and a marker at each release.
+                for &(x, median, p25, p75) in &s.points {
+                    let lo = p25.max(ylo);
+                    let hi = p75.max(lo);
+                    chart.draw_series(std::iter::once(PathElement::new(
+                        vec![(x, lo), (x, hi)],
+                        rgb(s.rgb).mix(0.5).stroke_width(1),
+                    )))?;
+                    chart.draw_series(std::iter::once(Circle::new(
+                        (x, median),
+                        3,
+                        rgb(s.rgb).filled(),
+                    )))?;
+                }
+            }
+            draw_legend(&legend_area, &legend)?;
+            root.present()?;
+            Ok(())
+        })();
+    }
+    buf
+}
+
 #[cfg(test)]
 mod tests {
     use super::{box_svg, ecdf_svg};
@@ -356,6 +496,7 @@ mod tests {
             p99: 9000.0,
             max: 50000.0,
             mean: 1500.0,
+            std: 800.0,
             roundtrip_pct: Some(100.0),
             ecdf: (0..50)
                 .map(|i| [300.0 + f64::from(i) * 100.0, f64::from(i) / 49.0])

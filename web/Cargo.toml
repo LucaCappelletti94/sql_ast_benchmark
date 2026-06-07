@@ -15,3 +15,6 @@ dioxus = { version = "0.7", features = ["web", "router"] }
 dioxus-free-icons = { version = "0.10", features = ["font-awesome-solid", "font-awesome-brands"] }
 viz = { path = "../viz" }
 serde_json = "1"
+# Pure-Rust zstd decoder so the embedded time-machine history decompresses in
+# wasm with no native dependency and no runtime fetch.
+ruzstd = "0.7"

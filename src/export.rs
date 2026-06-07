@@ -1,7 +1,7 @@
 #![allow(clippy::cast_precision_loss, clippy::tuple_array_conversions)]
 
-//! Exports the committed results snapshot (`web/assets/bench.json`) that the
-//! Dioxus viewer renders.
+//! Exports the committed results snapshot (`web/assets/bench.json.zst`, a
+//! zstd-compressed JSON bundle) that the Dioxus viewer embeds and decompresses.
 //!
 //! Reuses the threaded grading and per-file coverage in [`crate::report`], the
 //! perf percentiles in `target/bench_dist/summary.csv`, the raw timings (for
@@ -10,7 +10,7 @@
 
 use crate::datasets::Dialect;
 use crate::report::{self, DialectReport};
-use crate::{bench_dist, stats, BenchParser};
+use crate::{bench_dist, stats, BenchParser, Parser};
 use std::cmp::Ordering;
 use std::path::Path;
 use viz::{
@@ -19,7 +19,7 @@ use viz::{
 };
 
 /// Output path (relative to repo root, where `cargo run` runs from).
-const OUT: &str = "web/assets/bench.json";
+const OUT: &str = "web/assets/bench.json.zst";
 
 /// Directory (relative to the site root) for the rejected-statement downloads.
 const FAILURES_DIR: &str = "web/static/failures";
@@ -111,7 +111,8 @@ fn metrics(report: &DialectReport) -> Vec<ParserMetrics> {
         .iter()
         .zip(&report.stats)
         .map(|(p, s)| ParserMetrics {
-            parser: p.name().to_string(),
+            parser: p.family.to_string(),
+            version: p.version.to_string(),
             accepted_valid: s.accepted_valid,
             accepted_invalid: s.accepted_invalid,
             recall_pct: if reference {
@@ -149,20 +150,22 @@ fn perf_for(dir: &str, rows: &[PerfRow]) -> Vec<ParserPerf> {
         .iter()
         .filter(|r| r.dialect == dir)
         .map(|r| {
-            let ecdf = stats::ecdf_points(&bench_dist::load_times(dir, &r.parser), 200)
+            let raw = bench_dist::load_times(dir, &r.parser);
+            let ecdf = stats::ecdf_points(&raw, 200)
                 .into_iter()
                 .map(|(x, y)| [x, y])
                 .collect();
-            perf_row_to_perf(r, ecdf)
+            perf_row_to_perf(r, stats::std_dev(&raw), ecdf)
         })
         .collect();
     v.sort_by(|a, b| a.median.partial_cmp(&b.median).unwrap_or(Ordering::Equal));
     v
 }
 
-/// Map a parsed `summary.csv` row plus its eCDF points to a `ParserPerf`. Pure,
-/// so the percentile-to-field wiring is testable without the timing files.
-fn perf_row_to_perf(r: &PerfRow, ecdf: Vec<[f64; 2]>) -> ParserPerf {
+/// Map a parsed `summary.csv` row, its standard deviation, and its eCDF points to
+/// a `ParserPerf`. Pure, so the percentile-to-field wiring is testable without
+/// the timing files.
+fn perf_row_to_perf(r: &PerfRow, std: f64, ecdf: Vec<[f64; 2]>) -> ParserPerf {
     ParserPerf {
         parser: r.parser.clone(),
         n_total: r.n_total,
@@ -176,42 +179,16 @@ fn perf_row_to_perf(r: &PerfRow, ecdf: Vec<[f64; 2]>) -> ParserPerf {
         p99: r.pct[6],
         max: r.pct[7],
         mean: r.pct[8],
+        std,
         roundtrip_pct: r.roundtrip_pct,
         ecdf,
     }
 }
 
 /// Build a byte distribution from an ascending-sorted sample (empty -> zeros).
+/// Thin wrapper over the shared [`stats::dist_from`].
 fn dist_from(sorted: &[f64]) -> MemDist {
-    if sorted.is_empty() {
-        return MemDist {
-            min: 0.0,
-            p10: 0.0,
-            p25: 0.0,
-            median: 0.0,
-            p75: 0.0,
-            p90: 0.0,
-            p99: 0.0,
-            max: 0.0,
-            mean: 0.0,
-            ecdf: Vec::new(),
-        };
-    }
-    MemDist {
-        min: sorted[0],
-        p10: stats::quantile(sorted, 0.10),
-        p25: stats::quantile(sorted, 0.25),
-        median: stats::quantile(sorted, 0.50),
-        p75: stats::quantile(sorted, 0.75),
-        p90: stats::quantile(sorted, 0.90),
-        p99: stats::quantile(sorted, 0.99),
-        max: sorted[sorted.len() - 1],
-        mean: sorted.iter().sum::<f64>() / sorted.len() as f64,
-        ecdf: stats::ecdf_points(sorted, 200)
-            .into_iter()
-            .map(|(x, y)| [x, y])
-            .collect(),
-    }
+    stats::dist_from(sorted)
 }
 
 /// Per-parser memory distributions for a dialect, read from `target/mem_dist`.
@@ -356,9 +333,9 @@ fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<Parse
         .collect()
 }
 
-fn coverage_for(dialect: Dialect, all_parsers: &[BenchParser]) -> CoverageMatrix {
+fn coverage_for(dialect: Dialect, all_parsers: &[&dyn Parser]) -> CoverageMatrix {
     let (parsers, files) = report::coverage_dialect(dialect, all_parsers);
-    let cols: Vec<String> = parsers.iter().map(|p| p.name().to_string()).collect();
+    let cols: Vec<String> = parsers.iter().map(|p| p.family.to_string()).collect();
     build_coverage_matrix(cols, &files)
 }
 
@@ -422,13 +399,13 @@ fn git_short() -> Option<String> {
 ///
 /// The TSV has a header and one statement per row, with embedded tabs/newlines
 /// escaped so each statement stays on a single line.
-fn failures_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserFailures> {
+fn failures_for(dir: &str, parsers: &[&dyn Parser]) -> Vec<ParserFailures> {
     let Some(dialect) = Dialect::from_dir_name(dir) else {
         return Vec::new();
     };
     let mut out = Vec::new();
     for f in report::failures_dialect(dialect, parsers) {
-        let name = f.parser.name();
+        let name = f.parser.family;
         if f.rejected.is_empty() {
             out.push(ParserFailures {
                 parser: name.to_string(),
@@ -562,12 +539,14 @@ fn format_failure_tsv(rejected: &[String], reasons: &[String], cap: usize) -> St
     tsv
 }
 
-/// Grade every dialect, gather perf + coverage, and write `web/assets/bench.json`.
+/// Grade every dialect, gather perf + coverage, and write `web/assets/bench.json.zst`.
 ///
 /// # Errors
 /// Returns an error if serialization or writing the output file fails.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let parsers = BenchParser::all();
+    // The grading/coverage/failure functions are generic over `&dyn Parser`.
+    let dyn_parsers: Vec<&dyn Parser> = parsers.iter().map(|p| p as &dyn Parser).collect();
     let summary = read_summary();
     if summary.is_empty() {
         eprintln!(
@@ -587,7 +566,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut dialects = Vec::new();
     for &d in &ORDER {
-        let Some(report) = report::grade_dialect(d, &parsers) else {
+        let Some(report) = report::grade_dialect(d, &dyn_parsers) else {
             continue;
         };
         eprintln!("exported {}", d.dir_name());
@@ -599,8 +578,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             invalid_total: report.invalid_total,
             correctness: metrics(&report),
             perf: perf_for(d.dir_name(), &summary),
-            coverage: coverage_for(d, &parsers),
-            failures: failures_for(d.dir_name(), &parsers),
+            coverage: coverage_for(d, &dyn_parsers),
+            failures: failures_for(d.dir_name(), &dyn_parsers),
             memory: mem_for(d.dir_name(), &parsers),
             batch: batch_for(d.dir_name(), &batch_perf, &batch_mem),
         });
@@ -613,13 +592,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         dialects,
     };
 
-    let json = serde_json::to_string_pretty(&bundle)?;
+    // Compact JSON, zstd-compressed: the viewer embeds and decompresses it in
+    // wasm (~25x smaller than raw, no runtime fetch).
+    let json = serde_json::to_vec(&bundle)?;
+    let compressed = zstd::stream::encode_all(json.as_slice(), 19)?;
     let out = Path::new(OUT);
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(out, json)?;
-    println!("Wrote {OUT} ({} dialects)", bundle.dialects.len());
+    std::fs::write(out, &compressed)?;
+    println!(
+        "Wrote {OUT} ({} dialects, {} KB compressed from {} KB)",
+        bundle.dialects.len(),
+        compressed.len() / 1024,
+        json.len() / 1024,
+    );
     Ok(())
 }
 
@@ -631,7 +618,7 @@ mod tests {
     };
     use crate::datasets::Dialect;
     use crate::report::{DialectReport, FileCoverage};
-    use crate::BenchParser;
+    use crate::{BenchParser, Parser};
 
     fn perf_row(parser: &str) -> PerfRow {
         PerfRow {
@@ -646,7 +633,9 @@ mod tests {
 
     #[test]
     fn metrics_reference_dialect_sets_recall_and_fp() {
-        let mut report = DialectReport::empty(Dialect::Postgresql, &[BenchParser::Sqlparser]);
+        let sp = BenchParser::Sqlparser;
+        let parsers: [&dyn Parser; 1] = [&sp];
+        let mut report = DialectReport::empty(Dialect::Postgresql, &parsers);
         report.has_reference = true; // exercise the reference metrics path directly
         report.valid_total = 10;
         report.invalid_total = 4;
@@ -661,7 +650,9 @@ mod tests {
 
     #[test]
     fn metrics_provenance_dialect_sets_accept_only() {
-        let mut report = DialectReport::empty(Dialect::Multi, &[BenchParser::Sqlparser]);
+        let sp = BenchParser::Sqlparser;
+        let parsers: [&dyn Parser; 1] = [&sp];
+        let mut report = DialectReport::empty(Dialect::Multi, &parsers);
         report.has_reference = false; // provenance dialect: accept-rate only
         report.valid_total = 4;
         report.stats[0].accepted_valid = 3;
@@ -673,7 +664,7 @@ mod tests {
 
     #[test]
     fn perf_row_maps_percentile_columns_in_order() {
-        let p = perf_row_to_perf(&perf_row("sqlparser-rs"), vec![[1.0, 0.5]]);
+        let p = perf_row_to_perf(&perf_row("sqlparser-rs"), 1.5, vec![[1.0, 0.5]]);
         assert_eq!(p.parser, "sqlparser-rs");
         assert_eq!(p.n_total, 10);
         assert!((p.min - 1.0).abs() < 1e-9);

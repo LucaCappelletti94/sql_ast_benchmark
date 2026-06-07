@@ -1,5 +1,5 @@
 //! Dioxus -> WASM viewer for the sql_ast_benchmark results. Reads the committed
-//! `assets/bench.json` snapshot and renders interactive per-dialect pages: the
+//! `assets/bench.json.zst` snapshot and renders interactive per-dialect pages: the
 //! eCDF and box charts (rendered in-browser by `viz` via plotters) plus the
 //! correctness, perf, and per-file coverage tables.
 

@@ -53,6 +53,88 @@ pub fn slug(name: &str) -> String {
         .collect()
 }
 
+/// Population standard deviation of a sample. `0.0` for an empty slice.
+#[must_use]
+pub fn std_dev(sample: &[f64]) -> f64 {
+    let n = sample.len();
+    if n == 0 {
+        return 0.0;
+    }
+    let mean = sample.iter().sum::<f64>() / n as f64;
+    let var = sample.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n as f64;
+    var.sqrt()
+}
+
+/// Build a [`viz::MemDist`] from an ascending-sorted sample.
+///
+/// Percentiles, mean, std, and a downsampled eCDF. Empty input yields an
+/// all-zero distribution. Shared by `export` and the `timemachine` runners so
+/// both summarize identically.
+#[must_use]
+pub fn dist_from(sorted: &[f64]) -> viz::MemDist {
+    if sorted.is_empty() {
+        return viz::MemDist {
+            min: 0.0,
+            p10: 0.0,
+            p25: 0.0,
+            median: 0.0,
+            p75: 0.0,
+            p90: 0.0,
+            p99: 0.0,
+            max: 0.0,
+            mean: 0.0,
+            std: 0.0,
+            ecdf: Vec::new(),
+        };
+    }
+    viz::MemDist {
+        min: sorted[0],
+        p10: quantile(sorted, 0.10),
+        p25: quantile(sorted, 0.25),
+        median: quantile(sorted, 0.50),
+        p75: quantile(sorted, 0.75),
+        p90: quantile(sorted, 0.90),
+        p99: quantile(sorted, 0.99),
+        max: sorted[sorted.len() - 1],
+        mean: sorted.iter().sum::<f64>() / sorted.len() as f64,
+        std: std_dev(sorted),
+        ecdf: ecdf_points(sorted, 200)
+            .into_iter()
+            .map(<[f64; 2]>::from)
+            .collect(),
+    }
+}
+
+/// Build a [`viz::ParserPerf`] from an ascending-sorted per-statement sample,
+/// reusing [`dist_from`] for the numeric core. Used by the `timemachine` runners.
+#[must_use]
+pub fn perf_from(
+    parser: String,
+    n_total: usize,
+    n_accepted: usize,
+    roundtrip_pct: Option<f64>,
+    sorted: &[f64],
+) -> viz::ParserPerf {
+    let d = dist_from(sorted);
+    viz::ParserPerf {
+        parser,
+        n_total,
+        n_accepted,
+        min: d.min,
+        p10: d.p10,
+        p25: d.p25,
+        median: d.median,
+        p75: d.p75,
+        p90: d.p90,
+        p99: d.p99,
+        max: d.max,
+        mean: d.mean,
+        std: d.std,
+        roundtrip_pct,
+        ecdf: d.ecdf,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ecdf_points, quantile, slug};

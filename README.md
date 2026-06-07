@@ -42,24 +42,28 @@ Correctness is defined per dialect. Dialects with a runnable engine are graded a
 
 ## Running
 
-The corpus auto-extracts on first use. To rebuild the whole explorer snapshot (`web/assets/bench.json`) with one command:
+The corpus auto-extracts on first use. To rebuild the whole explorer snapshot (`web/assets/bench.json.zst`) with one command:
 
 ```bash
-cargo regen   # timing benches + memory benches + export, in order
+cargo regen   # timing benches + memory benches + time-machine + export, in order
 ```
 
 That is an alias (see `.cargo/config.toml`) for `cargo run --release --bin sqlbench -- regen`. The memory measurement installs a counting global allocator, so it has to run in its own process, separate from the timing bench (which must stay on the default allocator for fair numbers). The `regen` command orchestrates that sequence so you do not have to. The individual steps, if you want to run one on its own:
 
 ```bash
-cargo run --release --bin sqlbench correctness --per-file    # per-file acceptance, every dialect
-cargo run --release --bin sqlbench correctness               # reference + provenance correctness
-cargo bench                                                  # parse time (per-statement and batch), every dialect
-cargo run --release -p membench                              # per-statement memory (peak + retained bytes)
-cargo run --release -p membench -- batch                     # whole-script (batch) memory, per statement
-cargo run --release --bin sqlbench export                    # regenerate web/assets/bench.json for the explorer
+cargo run --release --bin sqlbench correctness --per-file       # per-file acceptance, every dialect
+cargo run --release --bin sqlbench correctness                  # reference + provenance correctness
+cargo bench                                                     # parse time (per-statement and batch), every dialect
+cargo run --release -p membench                                 # per-statement memory (peak + retained bytes)
+cargo run --release -p membench -- batch                        # whole-script (batch) memory, per statement
+cargo run --release -p timemachine --bin timemachine-mem -- --full   # per-version memory (writes a sidecar)
+cargo run --release -p timemachine --bin timemachine -- --full       # per-version time + correctness, writes history
+cargo run --release --bin sqlbench export                       # regenerate web/assets/bench.json.zst for the explorer
 ```
 
 `cargo bench` runs both the per-statement (`parsing`) and whole-script (`batch_parsing`) timing benches. Add `--bench batch_parsing` to run only the batch one. `export` reads whatever the benches left under `target/`, warning rather than failing for any missing source, so the memory and batch columns stay empty until their producers have run.
+
+The `timemachine` crate benchmarks several historical versions of each pure-Rust parser at once (via `package`-rename aliases in `timemachine/Cargo.toml`) and writes a compressed `web/assets/history.json.zst` that the explorer embeds and decompresses in the browser. Each parser page then shows how that library's time, memory, and correctness changed across releases, with a version picker. Cargo can only host semver-incompatible versions side by side, so the milestones are one release per `0.x` minor: `sqlparser-rs` and `qusql-parse` get five points each, `sqlite3-parser` four, `polyglot-sql` three, `sqlglot-rust` and `databend-common-ast` two, while `turso_parser` and `orql` have a single published release and so show one point. The FFI parsers (`pg_query`) are excluded because two builds of libpg_query collide at link. Without `--full` the runners use a small per-dialect sample, which is a fast pipeline check rather than publishable numbers.
 
 Validity labels for the reference dialects are produced by the `oracle` crate (real engines in Docker via testcontainers) and committed under `oracle/labels`, so `correctness` and `export` need no Docker. Regenerate them with `cargo run --release -p oracle`.
 

@@ -14,7 +14,7 @@ No unsafe code is allowed (`unsafe_code = "forbid"`). Clippy runs with pedantic 
 
 ## Results website
 
-The site under `web/` is a Dioxus -> WASM app that renders a committed snapshot, `web/assets/bench.json`, produced by `sqlbench export`. CI (`.github/workflows/pages.yml`) only builds and deploys the committed crates, so regenerate the snapshot manually after changing the corpus or parsers:
+The site under `web/` is a Dioxus -> WASM app that renders a committed snapshot, `web/assets/bench.json.zst`, produced by `sqlbench export`. CI (`.github/workflows/pages.yml`) only builds and deploys the committed crates, so regenerate the snapshot manually after changing the corpus or parsers:
 
 ```bash
 cargo regen          # one command: timing benches + memory benches + export (long)
@@ -27,12 +27,24 @@ cd web && dx serve   # preview at http://127.0.0.1:8080/sql_ast_benchmark/
 cargo bench                              # write target/bench_dist/ + target/batch_dist/ timings
 cargo run --release -p membench          # write target/mem_dist/ per-statement memory
 cargo run --release -p membench -- batch # write target/batch_mem_dist/ whole-script memory
-cargo run --bin sqlbench -- export       # read all of the above, write web/assets/bench.json
+cargo run --bin sqlbench -- export       # read all of the above, write web/assets/bench.json.zst
 ```
 
 `export` reads whatever timing, memory, and batch summaries are present under `target/` and warns (rather than fails) for any that are missing, so the memory and batch columns stay empty until their producers have been run.
 
 The charts are rendered in the browser from the JSON by the shared `viz` crate (plotters, SVG backend), so no chart images are committed.
+
+## Time machine (per-version history)
+
+The `timemachine` crate benchmarks several historical versions of each pure-Rust parser and writes `web/assets/history.json.zst` (committed, embedded and decompressed in wasm with `ruzstd`, so the site still does no runtime fetch). It hosts many versions of one crate at once with `package`-rename aliases, which works because different `0.x` minors are semver-incompatible. The FFI parsers (`pg_query`) are excluded: two libpg_query builds export the same C symbols and collide at link.
+
+Every version implements the `sql_ast_benchmark::Parser` trait (the same trait `BenchParser` uses), so the main crate's grading, timing, and memory code drive the whole history unchanged. Adding a version is three lines:
+
+1. a `package`-rename alias in `timemachine/Cargo.toml`, e.g. `sqlparser_v0_58 = { package = "sqlparser", version = "=0.58.0" }`
+2. one macro invocation in `timemachine/src/families/<family>.rs`, e.g. `sqlparser_version!(SqlparserV0_58, sqlparser_v0_58, "0.58.0", "2025-01-01")` (an API break gets its own hand-written `impl Parser` instead)
+3. one entry in `timemachine/src/registry.rs`
+
+A new family is a new `families/<name>.rs` with its own adapter (each library has a different parse API) plus its aliases and registry entries.
 
 ## Coverage
 

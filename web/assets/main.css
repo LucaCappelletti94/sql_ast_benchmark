@@ -535,6 +535,38 @@ table.data thead th {
 .sort-ind { font-size: 0.78em; opacity: 0.3; }
 .sort-ind.active { opacity: 1; color: var(--accent); }
 
+/* Time-machine version selector */
+.version-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 1rem;
+}
+.version-picker-label {
+  font-size: 0.85em;
+  color: #5a6573;
+  margin-right: 0.2rem;
+}
+.version-btn {
+  font: inherit;
+  font-size: 0.85em;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid #d4dae2;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.version-btn:hover { border-color: var(--accent); background: #eef2f7; }
+.version-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.version-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 table.data th[scope="col"]:first-child,
 table.data th[scope="row"],
 table.data td:first-child { text-align: left; }

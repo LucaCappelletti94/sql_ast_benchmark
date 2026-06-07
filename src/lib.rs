@@ -5,7 +5,7 @@ use orql::parser as orql_parser;
 use polyglot_sql::{parse as polyglot_parse, DialectType, Generator as PolyglotGenerator};
 use qusql_parse::{parse_statements, Issues, Level, ParseOptions, SQLDialect};
 use sqlparser::dialect::PostgreSqlDialect;
-use sqlparser::parser::Parser;
+use sqlparser::parser::Parser as SqlparserParser;
 
 use crate::datasets::Dialect;
 use fallible_iterator::FallibleIterator as _;
@@ -236,7 +236,7 @@ fn sqlglot_reprint(sql: &str, d: Dialect) -> Option<String> {
 
 fn sqlparser_reprint(sql: &str, d: Dialect) -> Option<String> {
     let dialect = sqlparser_dialect(d);
-    let stmts = Parser::parse_sql(&*dialect, sql).ok()?;
+    let stmts = SqlparserParser::parse_sql(&*dialect, sql).ok()?;
     if stmts.is_empty() {
         return None;
     }
@@ -362,6 +362,24 @@ impl BenchParser {
         }
     }
 
+    /// The version string of the currently benchmarked build of this parser, the
+    /// "head" point on the time-machine trend. For git dependencies this is the
+    /// nominal release the pinned commit corresponds to (see the README table).
+    #[must_use]
+    pub const fn current_version(self) -> &'static str {
+        match self {
+            Self::Sqlparser => "0.62.0",
+            Self::PgQuery | Self::PgQuerySummary => "6.1.1",
+            Self::Qusql => "0.8.0",
+            Self::Polyglot => "0.4.4",
+            Self::Databend => "0.2.5",
+            Self::Orql => "0.1.0",
+            Self::Sqlglot => "0.10.0",
+            Self::Sqlite3 => "0.16.0",
+            Self::Turso => "0.6.1",
+        }
+    }
+
     /// Does this parser model `dialect`? (acceptance returns `Some` iff true)
     #[must_use]
     pub fn supports(self, dialect: Dialect) -> bool {
@@ -383,7 +401,7 @@ impl BenchParser {
     pub fn try_parse(self, sql: &str, dialect: Dialect) -> Option<Result<(), String>> {
         match self {
             Self::Sqlparser => Some(
-                Parser::parse_sql(&*sqlparser_dialect(dialect), sql)
+                SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql)
                     .map(|_| ())
                     .map_err(|e| e.to_string()),
             ),
@@ -426,7 +444,9 @@ impl BenchParser {
     #[must_use]
     pub fn parse_once(self, sql: &str, dialect: Dialect) -> bool {
         match self {
-            Self::Sqlparser => Parser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok(),
+            Self::Sqlparser => {
+                SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok()
+            }
             Self::PgQuery => pg_query::parse(sql).is_ok(),
             Self::PgQuerySummary => pg_query::summary(sql, -1).is_ok(),
             Self::Qusql => {
@@ -495,9 +515,10 @@ impl BenchParser {
     #[must_use]
     pub fn parse_batch(self, sql: &str, dialect: Dialect) -> Option<usize> {
         match self {
-            Self::Sqlparser => {
-                Some(Parser::parse_sql(&*sqlparser_dialect(dialect), sql).map_or(0, |v| v.len()))
-            }
+            Self::Sqlparser => Some(
+                SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql)
+                    .map_or(0, |v| v.len()),
+            ),
             Self::PgQuery => (dialect == Dialect::Postgresql)
                 .then(|| pg_query::parse(sql).map_or(0, |r| r.protobuf.stmts.len())),
             Self::PgQuerySummary => (dialect == Dialect::Postgresql)
@@ -574,7 +595,7 @@ impl BenchParser {
             Self::Sqlparser => {
                 let before = mem::live();
                 mem::reset_peak();
-                let ast = Parser::parse_sql(&*sqlparser_dialect(dialect), sql);
+                let ast = SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql);
                 black_box(&ast);
                 let r = snap(before);
                 drop(ast);
@@ -756,6 +777,149 @@ impl BenchParser {
             (Some(a), Some(b)) => Some(a == b),
             _ => Some(false),
         }
+    }
+}
+
+/// Identity of one benchmarked parser build: which library and which version.
+///
+/// The grading and reporting layers key results by this instead of a bare name,
+/// so the same machinery serves the current build and the historical versions in
+/// the `timemachine` crate. `released` is an ISO date used to order the
+/// time-machine trend (empty when unknown, which is fine for the current build
+/// since the trend sources its dates from the `timemachine` registry).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParserId {
+    pub family: &'static str,
+    pub version: &'static str,
+    pub released: &'static str,
+}
+
+/// A benchmarked parser, abstracted over the concrete library build.
+///
+/// [`BenchParser`] implements this for the current builds; the `timemachine`
+/// crate implements it for historical versions. The grading, timing, and memory
+/// drivers operate over `&dyn Parser`, so one implementation serves both.
+///
+/// Implementors provide the required methods; `accepts`, `measure_mem_batch`,
+/// `roundtrips`, and `fidelity` have default implementations built on them
+/// (mirroring [`BenchParser`]'s inherent methods), so a historical version only
+/// needs the core parse hooks.
+pub trait Parser: Sync {
+    /// Library and version identity.
+    fn id(&self) -> ParserId;
+    /// Whether this parser models `dialect`.
+    fn supports(&self, dialect: Dialect) -> bool;
+    /// Parse `sql`, capturing the rejection reason. See [`BenchParser::try_parse`].
+    fn try_parse(&self, sql: &str, dialect: Dialect) -> Option<Result<(), String>>;
+    /// Timing parse with no panic protection. See [`BenchParser::parse_once`].
+    fn parse_once(&self, sql: &str, dialect: Dialect) -> bool;
+    /// Whole-script parse for batch timing. See [`BenchParser::parse_batch`].
+    fn parse_batch(&self, sql: &str, dialect: Dialect) -> Option<usize>;
+    /// Whether this parser has a multi-statement entry point.
+    fn can_batch(&self) -> bool;
+    /// `(peak, retained)` bytes under the membench allocator. See
+    /// [`BenchParser::measure_mem`].
+    fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)>;
+    /// Parse and pretty-print, if the parser has a printer for `dialect`.
+    fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String>;
+    /// Whether this parser can pretty-print in `dialect`.
+    fn can_reprint(&self, dialect: Dialect) -> bool;
+
+    /// `Some(true)` accepted, `Some(false)` rejected, `None` dialect unsupported.
+    fn accepts(&self, sql: &str, dialect: Dialect) -> Option<bool> {
+        self.try_parse(sql, dialect).map(|r| r.is_ok())
+    }
+
+    /// Whole-script `(peak, retained)`, gated on a batch entry point.
+    fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+        if self.can_batch() {
+            self.measure_mem(sql, dialect)
+        } else {
+            None
+        }
+    }
+
+    /// Round-trip stability: `reprint(sql) == reprint(reprint(sql))`.
+    fn roundtrips(&self, sql: &str, dialect: Dialect) -> Option<bool> {
+        if !self.can_reprint(dialect) {
+            return None;
+        }
+        let Some(first) = self.reprint(sql, dialect) else {
+            return Some(false);
+        };
+        Some(
+            self.reprint(&first, dialect)
+                .is_some_and(|second| first == second),
+        )
+    }
+
+    /// Reference fidelity: the reference canonical form of the parser's output
+    /// equals that of the input. `None` without a printer or reference.
+    fn fidelity(&self, sql: &str, dialect: Dialect) -> Option<bool> {
+        if !self.can_reprint(dialect) || !has_canonical(dialect) {
+            return None;
+        }
+        let Some(out) = self.reprint(sql, dialect) else {
+            return Some(false);
+        };
+        match (
+            reference_canonical(sql, dialect),
+            reference_canonical(&out, dialect),
+        ) {
+            (Some(a), Some(b)) => Some(a == b),
+            _ => Some(false),
+        }
+    }
+}
+
+/// Delegation shim: every method forwards to [`BenchParser`]'s inherent method,
+/// so the current build's behavior is exactly unchanged. The trait defaults are
+/// overridden here too, so concrete `BenchParser` grading stays byte-identical.
+impl Parser for BenchParser {
+    fn id(&self) -> ParserId {
+        ParserId {
+            family: self.name(),
+            version: self.current_version(),
+            // The current build's release date is filled by the timemachine
+            // registry (which owns the trend's dates); empty here is fine.
+            released: "",
+        }
+    }
+    fn supports(&self, dialect: Dialect) -> bool {
+        (*self).supports(dialect)
+    }
+    fn try_parse(&self, sql: &str, dialect: Dialect) -> Option<Result<(), String>> {
+        (*self).try_parse(sql, dialect)
+    }
+    fn parse_once(&self, sql: &str, dialect: Dialect) -> bool {
+        (*self).parse_once(sql, dialect)
+    }
+    fn parse_batch(&self, sql: &str, dialect: Dialect) -> Option<usize> {
+        (*self).parse_batch(sql, dialect)
+    }
+    fn can_batch(&self) -> bool {
+        (*self).can_batch()
+    }
+    fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+        (*self).measure_mem(sql, dialect)
+    }
+    fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {
+        (*self).reprint(sql, dialect)
+    }
+    fn can_reprint(&self, dialect: Dialect) -> bool {
+        (*self).can_reprint(dialect)
+    }
+    fn accepts(&self, sql: &str, dialect: Dialect) -> Option<bool> {
+        (*self).accepts(sql, dialect)
+    }
+    fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+        (*self).measure_mem_batch(sql, dialect)
+    }
+    fn roundtrips(&self, sql: &str, dialect: Dialect) -> Option<bool> {
+        (*self).roundtrips(sql, dialect)
+    }
+    fn fidelity(&self, sql: &str, dialect: Dialect) -> Option<bool> {
+        (*self).fidelity(sql, dialect)
     }
 }
 

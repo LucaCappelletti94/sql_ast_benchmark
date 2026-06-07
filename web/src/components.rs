@@ -762,11 +762,243 @@ pub fn ParserView(name: String) -> Element {
 
         {parser_memory_section(b, &parser)}
 
+        VersionHistory { parser: parser.clone() }
+
         {failures_section(b, &parser)}
 
         Link { class: "back", to: Route::Overview {},
             Icon { width: 14, height: 14, fill: "currentColor".to_string(), icon: FaArrowLeftLong }
             "All dialects & parsers"
+        }
+    }
+}
+
+/// The "Across versions" section: time and memory trends over the benchmarked
+/// versions of this family (median with an interquartile bar, one line per
+/// dialect), plus a selector that shows the chosen version's full per-dialect
+/// charts and table. Renders nothing for families with no time-machine history.
+#[component]
+fn VersionHistory(parser: String) -> Element {
+    let mut selected = use_signal(|| usize::MAX); // MAX => default to newest
+    let Some(hist) = crate::data::history(&parser) else {
+        return rsx! {};
+    };
+    if hist.versions.is_empty() {
+        return rsx! {};
+    }
+    let n = hist.versions.len();
+    let sel = if selected() == usize::MAX {
+        n - 1
+    } else {
+        selected().min(n - 1)
+    };
+
+    let versions: Vec<String> = hist.versions.iter().map(|v| v.version.clone()).collect();
+
+    // Per-dialect trend series, dialect order taken from the newest version.
+    let dialects: Vec<(String, String)> = hist.versions[n - 1]
+        .dialects
+        .iter()
+        .map(|d| (d.dir_name.clone(), d.display_name.clone()))
+        .collect();
+    let mut time_series = Vec::new();
+    let mut peak_series = Vec::new();
+    for (dir, name) in &dialects {
+        let rgb = brand(dir).accent_rgb;
+        let mut time_points = Vec::new();
+        let mut peak_points = Vec::new();
+        for v in &hist.versions {
+            let Some(x) = viz::year_frac(&v.released) else {
+                continue;
+            };
+            let Some(dr) = v.dialects.iter().find(|d| &d.dir_name == dir) else {
+                continue;
+            };
+            if let Some(p) = dr.perf.as_ref() {
+                time_points.push((x, p.median, p.p25, p.p75));
+            }
+            if let Some(m) = dr.memory.as_ref() {
+                peak_points.push((x, m.peak.median, m.peak.p25, m.peak.p75));
+            }
+        }
+        time_series.push(viz::TrendSeries {
+            label: name.clone(),
+            rgb,
+            points: time_points,
+        });
+        peak_series.push(viz::TrendSeries {
+            label: name.clone(),
+            rgb,
+            points: peak_points,
+        });
+    }
+    let time_trend = viz::trend_lines(
+        &format!("{parser} parse time"),
+        &time_series,
+        760,
+        460,
+        "ns / statement",
+    );
+    let peak_trend = viz::trend_lines(
+        &format!("{parser} peak memory"),
+        &peak_series,
+        760,
+        460,
+        "bytes / statement",
+    );
+
+    // Selected version: full per-dialect charts and a results table.
+    let run = &hist.versions[sel];
+    let time_lines: Vec<viz::Line> = run
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.perf.as_ref().map(|p| viz::Line {
+                label: d.display_name.clone(),
+                rgb: brand(&d.dir_name).accent_rgb,
+                sub: None,
+                min: p.min,
+                p10: p.p10,
+                p25: p.p25,
+                median: p.median,
+                p75: p.p75,
+                p90: p.p90,
+                p99: p.p99,
+                ecdf: p.ecdf.clone(),
+            })
+        })
+        .collect();
+    let mem_lines: Vec<viz::Line> = run
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.as_ref().map(|m| {
+                viz::mem_line(
+                    d.display_name.clone(),
+                    brand(&d.dir_name).accent_rgb,
+                    &m.peak,
+                )
+            })
+        })
+        .collect();
+    let has_time = !time_lines.is_empty();
+    let has_mem = !mem_lines.is_empty();
+    let sel_ecdf = if has_time {
+        viz::ecdf_lines(
+            &format!("{parser} {}", run.version),
+            &time_lines,
+            760,
+            460,
+            "ns / statement",
+        )
+    } else {
+        String::new()
+    };
+    let sel_box = if has_time {
+        viz::box_lines(
+            &format!("{parser} {}", run.version),
+            &time_lines,
+            760,
+            460,
+            "ns / statement",
+        )
+    } else {
+        String::new()
+    };
+    let sel_mem = if has_mem {
+        viz::ecdf_lines(
+            &format!("{parser} {} peak", run.version),
+            &mem_lines,
+            760,
+            460,
+            "bytes / statement",
+        )
+    } else {
+        String::new()
+    };
+
+    let columns: Vec<String> = [
+        "accept / recall",
+        "false pos",
+        "round-trip",
+        "fidelity",
+        "mean ns",
+        "batch ns/stmt",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+    let rows: Vec<Row> = run
+        .dialects
+        .iter()
+        .map(|d| {
+            let m = d.correctness.as_ref();
+            Row {
+                key: d.dir_name.clone(),
+                head: Head::Dialect {
+                    dir: d.dir_name.clone(),
+                    name: d.display_name.clone(),
+                },
+                cells: vec![
+                    Cell::pct(m.and_then(|m| {
+                        if d.has_reference {
+                            m.recall_pct
+                        } else {
+                            m.accept_pct
+                        }
+                    })),
+                    Cell::pct(m.and_then(|m| m.false_positive_pct)),
+                    Cell::pct(m.and_then(|m| m.roundtrip_pct)),
+                    Cell::pct(m.and_then(|m| m.fidelity_pct)),
+                    Cell::ns(d.perf.as_ref().map(|p| p.mean)),
+                    Cell::ns(d.batch.as_ref().and_then(|b| b.ns_per_stmt)),
+                ],
+            }
+        })
+        .collect();
+    let sel_version = run.version.clone();
+    let pslug = slug(&parser);
+    let vslug = slug(&sel_version);
+
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaChartLine }
+                "Across versions"
+            }
+            p { class: "table-cap",
+                "How {parser} changed across releases, each version placed at its release date. Each point is the median over a dialect's accepted statements with an interquartile (p25 to p75) bar on a log scale, so the heavily right-skewed parse-time and memory tails do not distort it: lower is faster for time and leaner for memory. Pick a version to see its full charts and results below."
+            }
+            div { class: "charts",
+                {chart_figure(&format!("chart-{pslug}-time-trend"), &time_trend, &format!("Parse-time trend for {parser} across releases, one line per dialect."), "Median parse time by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-time-trend"))}
+                {chart_figure(&format!("chart-{pslug}-mem-trend"), &peak_trend, &format!("Peak-memory trend for {parser} across releases, one line per dialect."), "Median peak memory by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-mem-trend"))}
+            }
+            div { class: "version-picker",
+                span { class: "version-picker-label", "version" }
+                for (i, v) in versions.iter().enumerate() {
+                    button {
+                        class: if i == sel { "version-btn active" } else { "version-btn" },
+                        onclick: move |_| selected.set(i),
+                        "{v}"
+                    }
+                }
+            }
+            div { class: "charts",
+                if has_time {
+                    {chart_figure(&format!("chart-{pslug}-{vslug}-ecdf"), &sel_ecdf, &format!("Parse-time eCDF for {parser} {sel_version}, one curve per dialect."), "Per-statement parse time for the selected version, one curve per dialect (log scale).", &format!("{pslug}-{vslug}-ecdf"))}
+                    {chart_figure(&format!("chart-{pslug}-{vslug}-box"), &sel_box, &format!("Parse-time box plot for {parser} {sel_version}, one box per dialect."), "Parse-time spread for the selected version, one box per dialect (log scale).", &format!("{pslug}-{vslug}-box"))}
+                }
+                if has_mem {
+                    {chart_figure(&format!("chart-{pslug}-{vslug}-mem"), &sel_mem, &format!("Peak-memory eCDF for {parser} {sel_version}, one curve per dialect."), "Peak memory for the selected version, one curve per dialect (log scale).", &format!("{pslug}-{vslug}-mem"))}
+                }
+            }
+            SortTable {
+                caption: format!("{parser} {sel_version} per-dialect results"),
+                corner: "dialect".to_string(),
+                columns,
+                rows,
+                footer: None,
+            }
         }
     }
 }
