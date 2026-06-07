@@ -11,7 +11,7 @@
 //!                              exists, acceptance rate otherwise). `--per-file`
 //!                              prints the per-dataset acceptance matrix instead
 //!                              of per-dialect reference metrics.
-//!   export                     write `web/assets/bench.json` for the explorer.
+//!   export                     write `web/assets/bench.json.zst` for the explorer.
 //!   regen                      run the whole data pipeline (timing + memory
 //!                              benches, then export) with one command.
 //!
@@ -20,7 +20,7 @@
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::report::{self, DialectReport};
-use sql_ast_benchmark::{export, BenchParser};
+use sql_ast_benchmark::{export, BenchParser, Parser};
 
 /// Reference-backed dialects first, then the provenance dialects.
 const ORDER: [Dialect; 13] = [
@@ -59,7 +59,7 @@ fn print_report(r: &DialectReport) {
     let nw = r
         .parsers
         .iter()
-        .map(|p| p.name().len())
+        .map(|p| p.family.len())
         .max()
         .unwrap_or(22)
         .max(22);
@@ -96,7 +96,7 @@ fn print_report(r: &DialectReport) {
             } else {
                 NA.to_string()
             };
-            println!("{:<nw$}  {recall:>7}  {fp:>7}  {rt:>7}  {fid:>8}", p.name());
+            println!("{:<nw$}  {recall:>7}  {fp:>7}  {rt:>7}  {fid:>8}", p.family);
         }
     } else {
         println!(
@@ -112,7 +112,7 @@ fn print_report(r: &DialectReport) {
             } else {
                 NA.to_string()
             };
-            println!("{:<nw$}  {acc:>8}  {rt:>7}", p.name());
+            println!("{:<nw$}  {acc:>8}  {rt:>7}", p.family);
         }
     }
 }
@@ -123,9 +123,10 @@ fn run_correctness() {
     println!("Each parser run in its best-matching dialect.");
 
     let all = BenchParser::all();
+    let dyn_all: Vec<&dyn Parser> = all.iter().map(|p| p as &dyn Parser).collect();
     for dialect in ORDER {
         eprintln!("processing {}...", dialect.dir_name());
-        if let Some(r) = report::grade_dialect(dialect, &all) {
+        if let Some(r) = report::grade_dialect(dialect, &dyn_all) {
             print_report(&r);
         }
     }
@@ -146,8 +147,9 @@ fn run_coverage() {
     println!("\nPer-file acceptance rate per parser (parser run in matching dialect)");
 
     let all = BenchParser::all();
+    let dyn_all: Vec<&dyn Parser> = all.iter().map(|p| p as &dyn Parser).collect();
     for dialect in ORDER {
-        let (parsers, stats) = report::coverage_dialect(dialect, &all);
+        let (parsers, stats) = report::coverage_dialect(dialect, &dyn_all);
         if stats.is_empty() {
             continue;
         }
@@ -157,7 +159,7 @@ fn run_coverage() {
         println!("\n=== {} ===", dialect.dir_name());
         print!("{:<name_w$}  {:>8}", "dataset", "total");
         for p in &parsers {
-            print!("  {:>col_w$}", truncate(p.name(), col_w));
+            print!("  {:>col_w$}", truncate(p.family, col_w));
         }
         println!();
         let line = "-".repeat(name_w + 10 + (col_w + 2) * parsers.len());
@@ -186,7 +188,7 @@ fn run_coverage() {
 
 // regen (run the whole data pipeline with one command).
 
-/// Run every input producer for `bench.json` in order, then export.
+/// Run every input producer for `bench.json.zst` in order, then export.
 ///
 /// The memory bench installs a custom global allocator, so it must run in its
 /// own process, separate from the timing bench (which must stay on the default
@@ -198,14 +200,43 @@ fn run_regen() {
         eprintln!("ERROR: could not prepare datasets/: {e}");
         std::process::exit(1);
     }
-    // Each step writes under target/, which export then reads.
-    let steps: [(&str, &[&str]); 3] = [
+    // Each step writes under target/ (read by export) or, for the time-machine,
+    // straight to web/assets/history.json.zst. The memory passes install a global
+    // allocator, so they are separate processes; the time-machine memory pass
+    // runs before its timing pass, which merges the memory sidecar.
+    let steps: [(&str, &[&str]); 5] = [
         ("cargo", &["bench"]), // target/bench_dist/ + target/batch_dist/
         ("cargo", &["run", "--release", "-p", "membench"]), // target/mem_dist/
         (
             "cargo",
             &["run", "--release", "-p", "membench", "--", "batch"],
         ), // target/batch_mem_dist/
+        (
+            "cargo",
+            &[
+                "run",
+                "--release",
+                "-p",
+                "timemachine",
+                "--bin",
+                "timemachine-mem",
+                "--",
+                "--full",
+            ],
+        ), // target/timemachine/*.mem.json
+        (
+            "cargo",
+            &[
+                "run",
+                "--release",
+                "-p",
+                "timemachine",
+                "--bin",
+                "timemachine",
+                "--",
+                "--full",
+            ],
+        ), // web/assets/history.json.zst
     ];
     let total = steps.len() + 1;
     for (i, (cmd, args)) in steps.iter().enumerate() {
@@ -232,7 +263,7 @@ fn run_regen() {
 fn usage() -> ! {
     eprintln!("usage: sqlbench <subcommand>");
     eprintln!("  correctness [--per-file]   grade parsers over datasets/");
-    eprintln!("  export                     write web/assets/bench.json for the site");
+    eprintln!("  export                     write web/assets/bench.json.zst for the site");
     eprintln!("  regen                      run timing + memory benches, then export");
     std::process::exit(2);
 }

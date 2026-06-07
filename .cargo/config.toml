@@ -1,4 +1,4 @@
-# `cargo regen` rebuilds every input to web/assets/bench.json with one command:
+# `cargo regen` rebuilds every input to web/assets/bench.json.zst with one command:
 # the timing benches, the two memory benches (a separate process each, since
 # they install a counting global allocator), and finally the export.
 [alias]

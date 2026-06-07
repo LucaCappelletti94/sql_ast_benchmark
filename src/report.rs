@@ -9,7 +9,7 @@
 //! partial reports for speed.
 
 use crate::datasets::Dialect;
-use crate::{has_reference, reference_accepts, BenchParser};
+use crate::{has_reference, reference_accepts, Parser, ParserId};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -50,20 +50,21 @@ pub struct DialectReport {
     pub has_reference: bool,
     pub valid_total: usize,
     pub invalid_total: usize,
-    pub parsers: Vec<BenchParser>,
+    /// Identity (family + version) of each graded parser, aligned with `stats`.
+    pub parsers: Vec<ParserId>,
     pub stats: Vec<ParserStat>,
 }
 
 impl DialectReport {
     /// Zeroed report with `can_reprint` precomputed per parser.
     #[must_use]
-    pub fn empty(dialect: Dialect, parsers: &[BenchParser]) -> Self {
+    pub fn empty(dialect: Dialect, parsers: &[&dyn Parser]) -> Self {
         Self {
             dialect,
             has_reference: has_reference(dialect),
             valid_total: 0,
             invalid_total: 0,
-            parsers: parsers.to_vec(),
+            parsers: parsers.iter().map(|p| p.id()).collect(),
             stats: parsers
                 .iter()
                 .map(|p| ParserStat {
@@ -88,7 +89,7 @@ impl DialectReport {
 /// SQLite) split valid/invalid by the reference, while provenance dialects treat
 /// every statement as valid.
 #[must_use]
-pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[BenchParser]) -> DialectReport {
+pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[&dyn Parser]) -> DialectReport {
     let reference = has_reference(dialect);
     let mut report = DialectReport::empty(dialect, parsers);
 
@@ -133,7 +134,7 @@ pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[BenchParser]) 
 
 /// Number of statements `parser` accepts in `dialect` (per-file coverage).
 #[must_use]
-pub fn count_accepted(stmts: &[&str], dialect: Dialect, parser: BenchParser) -> usize {
+pub fn count_accepted(stmts: &[&str], dialect: Dialect, parser: &dyn Parser) -> usize {
     stmts
         .iter()
         .filter(|s| parser.accepts(s, dialect) == Some(true))
@@ -147,12 +148,12 @@ pub fn count_accepted(stmts: &[&str], dialect: Dialect, parser: BenchParser) -> 
 /// # Panics
 /// Panics if a worker thread cannot be spawned or panics while grading.
 #[must_use]
-pub fn grade_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Option<DialectReport> {
+pub fn grade_dialect(dialect: Dialect, all_parsers: &[&dyn Parser]) -> Option<DialectReport> {
     let stmts = load_dialect(dialect);
     if stmts.is_empty() {
         return None;
     }
-    let parsers: Vec<BenchParser> = all_parsers
+    let parsers: Vec<&dyn Parser> = all_parsers
         .iter()
         .copied()
         .filter(|p| p.supports(dialect))
@@ -203,9 +204,9 @@ pub struct FileCoverage {
 #[must_use]
 pub fn coverage_dialect(
     dialect: Dialect,
-    all_parsers: &[BenchParser],
-) -> (Vec<BenchParser>, Vec<FileCoverage>) {
-    let parsers: Vec<BenchParser> = all_parsers
+    all_parsers: &[&dyn Parser],
+) -> (Vec<ParserId>, Vec<FileCoverage>) {
+    let parsers: Vec<&dyn Parser> = all_parsers
         .iter()
         .copied()
         .filter(|p| p.supports(dialect))
@@ -213,7 +214,7 @@ pub fn coverage_dialect(
 
     let dir = Path::new("datasets").join(dialect.dir_name());
     let Ok(entries) = fs::read_dir(&dir) else {
-        return (parsers, Vec::new());
+        return (parsers.iter().map(|p| p.id()).collect(), Vec::new());
     };
     let mut files: Vec<PathBuf> = entries
         .filter_map(Result::ok)
@@ -238,12 +239,13 @@ pub fn coverage_dialect(
             .filter_map(|h| h.join().ok().flatten())
             .collect()
     });
-    (parsers, stats)
+    let ids = parsers.iter().map(|p| p.id()).collect();
+    (ids, stats)
 }
 
 /// The statements one parser rejected in one dialect, with the corpus total.
 pub struct ParserFailures {
-    pub parser: BenchParser,
+    pub parser: ParserId,
     /// Statements the parser failed to accept, in corpus order.
     pub rejected: Vec<String>,
     /// The parser's error message for each rejected statement, aligned with
@@ -263,7 +265,7 @@ pub struct ParserFailures {
 /// # Panics
 /// Panics if a worker thread cannot be spawned or panics while grading.
 #[must_use]
-pub fn failures_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Vec<ParserFailures> {
+pub fn failures_dialect(dialect: Dialect, all_parsers: &[&dyn Parser]) -> Vec<ParserFailures> {
     failures_dialect_from(Path::new("datasets"), dialect, all_parsers)
 }
 
@@ -276,7 +278,7 @@ pub fn failures_dialect(dialect: Dialect, all_parsers: &[BenchParser]) -> Vec<Pa
 pub fn failures_dialect_from(
     root: &Path,
     dialect: Dialect,
-    all_parsers: &[BenchParser],
+    all_parsers: &[&dyn Parser],
 ) -> Vec<ParserFailures> {
     let stmts = load_dialect_from(root, dialect);
     if stmts.is_empty() {
@@ -290,7 +292,7 @@ pub fn failures_dialect_from(
         .collect();
     let total = expected.len();
 
-    let parsers: Vec<BenchParser> = all_parsers
+    let parsers: Vec<&dyn Parser> = all_parsers
         .iter()
         .copied()
         .filter(|p| p.supports(dialect))
@@ -317,7 +319,7 @@ pub fn failures_dialect_from(
                             }
                         }
                         ParserFailures {
-                            parser: p,
+                            parser: p.id(),
                             rejected,
                             reasons,
                             total,
@@ -334,7 +336,7 @@ pub fn failures_dialect_from(
 }
 
 /// Acceptance counts for one dataset file (None if unreadable or empty).
-fn eval_file(path: &Path, dialect: Dialect, parsers: &[BenchParser]) -> Option<FileCoverage> {
+fn eval_file(path: &Path, dialect: Dialect, parsers: &[&dyn Parser]) -> Option<FileCoverage> {
     let name = path.file_name()?.to_string_lossy().into_owned();
     let content = fs::read_to_string(path).ok()?;
     let stmts: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
@@ -389,7 +391,7 @@ pub fn load_dialect_from(root: &Path, dialect: Dialect) -> Vec<String> {
 mod tests {
     use super::{count_accepted, eval_file, grade_chunk, load_dialect_from, DialectReport};
     use crate::datasets::Dialect;
-    use crate::BenchParser;
+    use crate::{BenchParser, Parser};
     use std::fs;
     use std::path::PathBuf;
 
@@ -398,7 +400,9 @@ mod tests {
         let root = temp_root("evalfile");
         let p = root.join("q.txt");
         fs::write(&p, "SELECT 1\n\nSELECT 1 FROM\n").unwrap();
-        let fc = eval_file(&p, Dialect::Postgresql, &[BenchParser::Sqlparser]).unwrap();
+        let sp = BenchParser::Sqlparser;
+        let parsers: [&dyn Parser; 1] = [&sp];
+        let fc = eval_file(&p, Dialect::Postgresql, &parsers).unwrap();
         assert_eq!(fc.total, 2); // two non-blank lines
         assert_eq!(fc.accepted[0], 1); // sqlparser accepts "SELECT 1", rejects truncated
         let _ = fs::remove_dir_all(&root);
@@ -418,7 +422,8 @@ mod tests {
     #[test]
     fn provenance_dialect_treats_everything_as_valid() {
         let stmts = vec!["SELECT 1".to_string()];
-        let parsers = vec![BenchParser::Sqlparser];
+        let sp = BenchParser::Sqlparser;
+        let parsers: [&dyn Parser; 1] = [&sp];
         // "Multi" never has a reference engine, so it stays provenance-graded.
         let r = grade_chunk(&stmts, Dialect::Multi, &parsers);
 
@@ -438,10 +443,12 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("q.txt"), "SELECT 1\nSELECT 1 FROM\n").unwrap();
 
-        let fails = super::failures_dialect_from(&root, Dialect::Multi, &[BenchParser::Sqlparser]);
+        let bp = BenchParser::Sqlparser;
+        let parsers: [&dyn Parser; 1] = [&bp];
+        let fails = super::failures_dialect_from(&root, Dialect::Multi, &parsers);
         let sp = fails
             .iter()
-            .find(|f| f.parser == BenchParser::Sqlparser)
+            .find(|f| f.parser.family == "sqlparser-rs")
             .unwrap();
         // Both statements are expected (provenance treats all as valid).
         assert_eq!(sp.total, 2);
@@ -454,14 +461,17 @@ mod tests {
     #[test]
     fn failures_empty_for_missing_corpus() {
         let root = temp_root("failures_missing");
-        let fails = super::failures_dialect_from(&root, Dialect::Trino, &[BenchParser::Sqlparser]);
+        let bp = BenchParser::Sqlparser;
+        let parsers: [&dyn Parser; 1] = [&bp];
+        let fails = super::failures_dialect_from(&root, Dialect::Trino, &parsers);
         assert!(fails.is_empty());
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn merge_sums_tallies() {
-        let parsers = vec![BenchParser::Sqlparser];
+        let bp = BenchParser::Sqlparser;
+        let parsers: [&dyn Parser; 1] = [&bp];
         let mut a = DialectReport::empty(Dialect::Mysql, &parsers);
         a.valid_total = 2;
         a.stats[0].accepted_valid = 1;
@@ -476,8 +486,9 @@ mod tests {
     #[test]
     fn count_accepted_counts_only_accepted() {
         let stmts = ["SELECT 1", "SELECT 1 FROM"];
+        let sp = BenchParser::Sqlparser;
         assert_eq!(
-            count_accepted(&stmts, Dialect::Postgresql, BenchParser::Sqlparser),
+            count_accepted(&stmts, Dialect::Postgresql, &sp as &dyn Parser),
             1
         );
     }

@@ -10,7 +10,7 @@
 //! measurement. Accepted statements are known not to panic.
 //!
 //! Outputs (under `target/bench_dist/`), consumed by `sqlbench export` to build
-//! `web/assets/bench.json` for the explorer:
+//! `web/assets/bench.json.zst` for the explorer:
 //!   - `{dialect}__{parser}.txt` : raw per-statement times (ns, one per line),
 //!     downsampled into the eCDF curves without re-running the benchmark.
 //!   - `summary.csv`             : per-pair percentiles + round-trip rate.

@@ -4,7 +4,7 @@
 //! `sql_ast_benchmark::mem`, then, for every (parser, dialect) pair, measures
 //! the peak live bytes and the retained (AST) bytes for each accepted statement.
 //! Results are written one value per line to `target/mem_dist/`, consumed by
-//! `sqlbench export` to build the memory section of `web/assets/bench.json`.
+//! `sqlbench export` to build the memory section of `web/assets/bench.json.zst`.
 //!
 //! Measurement is single-threaded by design: the allocator counters are
 //! process-wide, so concurrent allocations from other threads would corrupt a

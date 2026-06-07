@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Top-level results bundle (one committed `bench.json`).
+/// Top-level results bundle (one committed `bench.json.zst`).
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Bundle {
     /// RFC3339 timestamp of when the snapshot was exported.
@@ -95,6 +95,10 @@ pub struct MemDist {
     pub p99: f64,
     pub max: f64,
     pub mean: f64,
+    /// Standard deviation of the sample (0 in older snapshots). Used for the
+    /// time-machine trend's error band.
+    #[serde(default)]
+    pub std: f64,
     /// Downsampled empirical CDF: `[bytes, fraction]` points, ascending.
     #[serde(default)]
     pub ecdf: Vec<[f64; 2]>,
@@ -132,6 +136,10 @@ pub struct ParserFailures {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ParserMetrics {
     pub parser: String,
+    /// Benchmarked version of this parser (the time-machine point). Empty in
+    /// older snapshots, where it is simply not shown.
+    #[serde(default)]
+    pub version: String,
     pub accepted_valid: usize,
     pub accepted_invalid: usize,
     /// Reference dialects: accepted among reference-valid.
@@ -161,6 +169,10 @@ pub struct ParserPerf {
     pub p99: f64,
     pub max: f64,
     pub mean: f64,
+    /// Standard deviation of the per-statement times (0 in older snapshots).
+    /// Used for the time-machine trend's error band.
+    #[serde(default)]
+    pub std: f64,
     /// Display round-trip rate among accepted (None without a printer).
     pub roundtrip_pct: Option<f64>,
     /// Downsampled empirical CDF: `[ns, fraction]` points, ascending.
@@ -185,4 +197,43 @@ pub struct CoverageFile {
     pub total: usize,
     /// Per-column accepted counts, same order as `CoverageMatrix::parsers`.
     pub accepted: Vec<usize>,
+}
+
+/// Time-machine history for one parser family (e.g. all benchmarked sqlparser-rs
+/// versions). Shipped as a per-family file fetched on demand by the parser page,
+/// so it stays off the initial load.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FamilyHistory {
+    /// Display name of the family (matches `ParserPerf::parser` / the page name).
+    pub family: String,
+    /// One run per benchmarked version, oldest first.
+    pub versions: Vec<VersionRun>,
+}
+
+/// One benchmarked version of a family, across the dialects it models.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VersionRun {
+    pub version: String,
+    /// ISO release date, used to order and place points on the trend x-axis.
+    pub released: String,
+    /// One entry per dialect this version models, in display order.
+    pub dialects: Vec<DialectRun>,
+}
+
+/// One version's results in one dialect. The same per-parser shapes as the main
+/// snapshot, so the parser page can render a selected version with the existing
+/// charts and tables. Any axis not measured is `None`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DialectRun {
+    pub dir_name: String,
+    pub display_name: String,
+    pub has_reference: bool,
+    #[serde(default)]
+    pub perf: Option<ParserPerf>,
+    #[serde(default)]
+    pub memory: Option<ParserMem>,
+    #[serde(default)]
+    pub batch: Option<ParserBatch>,
+    #[serde(default)]
+    pub correctness: Option<ParserMetrics>,
 }
