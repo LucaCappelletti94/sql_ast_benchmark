@@ -382,7 +382,11 @@ fn parse_sqlite_err(line: &str) -> Option<(usize, &str)> {
 /// allow-list of a few syntax phrases mislabeled all of those as valid.
 fn is_sqlite_invalid(msg: &str) -> bool {
     let m = msg.to_ascii_lowercase();
-    !(m.contains("no such") || m.contains("ambiguous column"))
+    // Missing-object / binding errors mean the statement parsed and only
+    // references objects we did not create (a table, column, function,
+    // collation, module, ..., or an attached database alias). Everything else
+    // that errors is a real parse or grammar rejection.
+    !(m.contains("no such") || m.contains("ambiguous column") || m.contains("unknown database"))
 }
 
 #[cfg(test)]
@@ -396,6 +400,9 @@ mod tests {
         assert!(!is_sqlite_invalid("no such column: x"));
         assert!(!is_sqlite_invalid("no such function: my_udf"));
         assert!(!is_sqlite_invalid("ambiguous column name: id"));
+        // An attached-database alias that is not attached (e.g. CREATE TABLE
+        // db2.t(x) without ATTACH) parsed fine, the alias is just absent.
+        assert!(!is_sqlite_invalid("unknown database db2"));
     }
 
     #[test]
