@@ -339,9 +339,21 @@ pub fn run_timing(versions: &[Box<dyn Parser>], full: bool) -> Vec<String> {
 }
 
 /// Run the memory pass and write per-family memory sidecars.
+///
+/// The sidecars double as per-family checkpoints: a family whose sidecar
+/// already exists is skipped, so an interrupted run resumes where it stopped.
+/// Delete `target/timemachine/` for a from-scratch measurement.
 pub fn run_memory(versions: &[Box<dyn Parser>], full: bool) {
     let corpus = load_corpus(full);
     for (family, vs) in by_family(versions) {
+        let checkpoint = sidecar_path(family);
+        if checkpoint.exists() {
+            eprintln!(
+                "skipping {family}: checkpoint {} exists (delete it to re-measure)",
+                checkpoint.display()
+            );
+            continue;
+        }
         let mut version_runs = Vec::new();
         for p in vs {
             let id = p.id();

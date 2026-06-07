@@ -19,35 +19,73 @@ serde_json = "1"
 # decompresses it with a pure-Rust decoder), keeping the site fetch-free.
 zstd = "0.13"
 
-# sqlparser-rs milestones. Each rename pins one release; cargo keeps them side by
-# side because different 0.x minors are semver-incompatible.
+# sqlparser-rs, the latest patch of every minor the shared adapter compiles
+# against. Each rename pins one release; cargo keeps them side by side because
+# different 0.x minors are semver-incompatible.
+sqlparser_v0_30 = { package = "sqlparser", version = "=0.30.0" }
+sqlparser_v0_31 = { package = "sqlparser", version = "=0.31.0" }
+sqlparser_v0_32 = { package = "sqlparser", version = "=0.32.0" }
+sqlparser_v0_33 = { package = "sqlparser", version = "=0.33.0" }
+sqlparser_v0_34 = { package = "sqlparser", version = "=0.34.0" }
+sqlparser_v0_35 = { package = "sqlparser", version = "=0.35.0" }
+sqlparser_v0_36 = { package = "sqlparser", version = "=0.36.1" }
+sqlparser_v0_37 = { package = "sqlparser", version = "=0.37.0" }
+sqlparser_v0_38 = { package = "sqlparser", version = "=0.38.0" }
+sqlparser_v0_39 = { package = "sqlparser", version = "=0.39.0" }
 sqlparser_v0_40 = { package = "sqlparser", version = "=0.40.0" }
+sqlparser_v0_41 = { package = "sqlparser", version = "=0.41.0" }
+sqlparser_v0_42 = { package = "sqlparser", version = "=0.42.0" }
+sqlparser_v0_43 = { package = "sqlparser", version = "=0.43.1" }
+sqlparser_v0_44 = { package = "sqlparser", version = "=0.44.0" }
 sqlparser_v0_45 = { package = "sqlparser", version = "=0.45.0" }
+sqlparser_v0_46 = { package = "sqlparser", version = "=0.46.0" }
+sqlparser_v0_47 = { package = "sqlparser", version = "=0.47.0" }
+sqlparser_v0_48 = { package = "sqlparser", version = "=0.48.0" }
+sqlparser_v0_49 = { package = "sqlparser", version = "=0.49.0" }
 sqlparser_v0_50 = { package = "sqlparser", version = "=0.50.0" }
+sqlparser_v0_51 = { package = "sqlparser", version = "=0.51.0" }
+sqlparser_v0_52 = { package = "sqlparser", version = "=0.52.0" }
+sqlparser_v0_53 = { package = "sqlparser", version = "=0.53.0" }
+sqlparser_v0_54 = { package = "sqlparser", version = "=0.54.0" }
 sqlparser_v0_55 = { package = "sqlparser", version = "=0.55.0" }
+sqlparser_v0_56 = { package = "sqlparser", version = "=0.56.0" }
+sqlparser_v0_57 = { package = "sqlparser", version = "=0.57.0" }
+sqlparser_v0_58 = { package = "sqlparser", version = "=0.58.0" }
+sqlparser_v0_59 = { package = "sqlparser", version = "=0.59.0" }
+sqlparser_v0_60 = { package = "sqlparser", version = "=0.60.0" }
+sqlparser_v0_61 = { package = "sqlparser", version = "=0.61.0" }
 sqlparser_v0_62 = { package = "sqlparser", version = "=0.62.0" }
 
 # sqlglot-rust minors (0.9 and 0.10 are the two semver-incompatible groups).
 sqlglot_v0_9 = { package = "sqlglot-rust", version = "=0.9.37" }
 sqlglot_v0_10 = { package = "sqlglot-rust", version = "=0.10.0" }
 
-# polyglot-sql minors.
-polyglot_v0_1 = { package = "polyglot-sql", version = "=0.1.7" }
+# polyglot-sql minors (latest patch of each).
+polyglot_v0_1 = { package = "polyglot-sql", version = "=0.1.15" }
+polyglot_v0_2 = { package = "polyglot-sql", version = "=0.2.3" }
 polyglot_v0_3 = { package = "polyglot-sql", version = "=0.3.11" }
 polyglot_v0_4 = { package = "polyglot-sql", version = "=0.4.4" }
 
-# databend-common-ast minors (single-statement parser; 0.0.x is pre-stable).
+# databend-common-ast minors (single-statement parser).
+databend_v0_0 = { package = "databend-common-ast", version = "=0.0.3" }
 databend_v0_1 = { package = "databend-common-ast", version = "=0.1.3" }
 databend_v0_2 = { package = "databend-common-ast", version = "=0.2.5" }
 
 # sqlite3-parser (lemon-rs) minors that share the fallible_iterator 0.3 API.
+sqlite3_v0_9 = { package = "sqlite3-parser", version = "=0.9.0" }
+sqlite3_v0_10 = { package = "sqlite3-parser", version = "=0.10.0" }
+sqlite3_v0_11 = { package = "sqlite3-parser", version = "=0.11.0" }
+sqlite3_v0_12 = { package = "sqlite3-parser", version = "=0.12.0" }
 sqlite3_v0_13 = { package = "sqlite3-parser", version = "=0.13.0" }
 sqlite3_v0_14 = { package = "sqlite3-parser", version = "=0.14.0" }
 sqlite3_v0_15 = { package = "sqlite3-parser", version = "=0.15.0" }
 sqlite3_v0_16 = { package = "sqlite3-parser", version = "=0.16.0" }
 fallible-iterator = "0.3.0"
 
-# qusql-parse minors.
+# qusql-parse minors. 0.1.0 is excluded: its parser effectively hangs on parts
+# of the MySQL corpus (pathological parse time at full-corpus scale).
+qusql_v0_2 = { package = "qusql-parse", version = "=0.2.1" }
+qusql_v0_3 = { package = "qusql-parse", version = "=0.3.0" }
 qusql_v0_4 = { package = "qusql-parse", version = "=0.4.0" }
 qusql_v0_5 = { package = "qusql-parse", version = "=0.5.0" }
 qusql_v0_6 = { package = "qusql-parse", version = "=0.6.0" }

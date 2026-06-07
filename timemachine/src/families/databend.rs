@@ -99,5 +99,6 @@ macro_rules! databend_version {
     };
 }
 
+databend_version!(DatabendV0_0, databend_v0_0, "0.0.3", "2024-08-20");
 databend_version!(DatabendV0_1, databend_v0_1, "0.1.3", "2024-12-31");
 databend_version!(DatabendV0_2, databend_v0_2, "0.2.5", "2026-03-12");

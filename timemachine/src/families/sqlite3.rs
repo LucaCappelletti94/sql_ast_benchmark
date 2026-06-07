@@ -126,6 +126,10 @@ macro_rules! sqlite3_version {
     };
 }
 
+sqlite3_version!(Sqlite3V0_9, sqlite3_v0_9, "0.9.0", "2023-06-10");
+sqlite3_version!(Sqlite3V0_10, sqlite3_v0_10, "0.10.0", "2023-08-20");
+sqlite3_version!(Sqlite3V0_11, sqlite3_v0_11, "0.11.0", "2023-08-21");
+sqlite3_version!(Sqlite3V0_12, sqlite3_v0_12, "0.12.0", "2023-11-11");
 sqlite3_version!(Sqlite3V0_13, sqlite3_v0_13, "0.13.0", "2024-07-20");
 sqlite3_version!(Sqlite3V0_14, sqlite3_v0_14, "0.14.0", "2025-01-19");
 sqlite3_version!(Sqlite3V0_15, sqlite3_v0_15, "0.15.0", "2025-05-26");

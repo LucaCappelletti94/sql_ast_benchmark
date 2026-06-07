@@ -112,6 +112,9 @@ macro_rules! qusql_version {
     };
 }
 
+// 0.1.0 is excluded: it effectively hangs on parts of the MySQL corpus.
+qusql_version!(QusqlV0_2, qusql_v0_2, "0.2.1", "2026-03-27");
+qusql_version!(QusqlV0_3, qusql_v0_3, "0.3.0", "2026-03-28");
 qusql_version!(QusqlV0_4, qusql_v0_4, "0.4.0", "2026-04-15");
 qusql_version!(QusqlV0_5, qusql_v0_5, "0.5.0", "2026-04-19");
 qusql_version!(QusqlV0_6, qusql_v0_6, "0.6.0", "2026-04-22");
