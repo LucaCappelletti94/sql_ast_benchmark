@@ -3,7 +3,7 @@
 //! Both the main bundle and the time-machine history are zstd-compressed and
 //! embedded via `include_bytes!`, then decompressed in wasm with `ruzstd`.
 //! Embedding (rather than a runtime fetch) keeps the viewer immune to GitHub
-//! Pages base-path fetch pitfalls; compressing keeps the wasm payload small
+//! Pages base-path fetch pitfalls. Compressing keeps the wasm payload small
 //! (the bundle is ~25x smaller compressed).
 
 use std::sync::OnceLock;

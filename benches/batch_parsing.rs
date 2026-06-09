@@ -14,7 +14,7 @@
 //! parses in that dialect), so the two numbers are directly comparable.
 //!
 //! Only parsers with a multi-statement entry point take part (see
-//! `BenchParser::can_batch`); `databend-common-ast` parses one statement per
+//! `BenchParser::can_batch`). `databend-common-ast` parses one statement per
 //! call and is simply skipped here.
 //!
 //! Output (under `target/batch_dist/`), self-contained for now (not yet wired
@@ -157,7 +157,7 @@ fn main() {
         return;
     }
 
-    // Acceptance checks are panic-guarded; suppress the default panic message so
+    // Acceptance checks are panic-guarded. Suppress the default panic message so
     // a caught panic does not spam stderr.
     std::panic::set_hook(Box::new(|_| {}));
 

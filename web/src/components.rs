@@ -485,7 +485,7 @@ fn download_js(fig_id: &str, filename: &str, png: bool) -> String {
 
 /// A chart figure: the inline SVG plus a caption and PNG/SVG download buttons.
 /// `id` must be unique per figure on the page (the download script locates the
-/// SVG by it); `filename` is the saved file's base name (no extension).
+/// SVG by it). `filename` is the saved file's base name (no extension).
 fn chart_figure(id: &str, svg: &str, aria_label: &str, caption: &str, filename: &str) -> Element {
     let png_js = download_js(id, filename, true);
     let svg_js = download_js(id, filename, false);

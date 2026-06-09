@@ -194,7 +194,7 @@ fn run_coverage() {
 /// The memory bench installs a custom global allocator, so it must run in its
 /// own process, separate from the timing bench (which must stay on the default
 /// allocator for fair numbers) and from export. That is why this shells out to
-/// the timing and memory benches rather than calling them in-process; export
+/// the timing and memory benches rather than calling them in-process. Export
 /// runs in-process at the end since it needs no special allocator.
 fn run_regen() {
     if let Err(e) = sql_ast_benchmark::datasets::ensure_corpus() {
@@ -203,7 +203,7 @@ fn run_regen() {
     }
     // Each step writes under target/ (read by export) or, for the time-machine,
     // straight to web/assets/history.json.zst. The memory passes install a global
-    // allocator, so they are separate processes; the time-machine memory pass
+    // allocator, so they are separate processes. The time-machine memory pass
     // runs before its timing pass, which merges the memory sidecar.
     let steps: [(&str, &[&str]); 7] = [
         // Static source-feature scan and recursion-depth probe, writing the

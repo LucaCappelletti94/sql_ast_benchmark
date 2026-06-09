@@ -221,7 +221,7 @@ pub struct MemDist {
 
 /// A preview of the statements one parser rejected in one dialect, plus the
 /// info needed to offer the full set as a download. The full list is shipped
-/// separately as a committed `.tsv.zst` file (see `download`); only a short
+/// separately as a committed `.tsv.zst` file (see `download`). Only a short
 /// preview is embedded in the JSON to keep it small.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ParserFailures {

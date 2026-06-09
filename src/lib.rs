@@ -412,7 +412,7 @@ impl BenchParser {
     /// `Some(Err(msg))` = rejected with the parser's own error message (or a
     /// panic message for parsers that abort on edge-case input). Panic-protected
     /// like [`Self::accepts`], so it never unwinds the caller. A panic and an
-    /// honest `Err` both map to `Some(Err(..))` here; use [`Self::parse_outcome`]
+    /// honest `Err` both map to `Some(Err(..))` here. Use [`Self::parse_outcome`]
     /// when the distinction matters (the empirical panic-rate metric).
     #[must_use]
     pub fn try_parse(self, sql: &str, dialect: Dialect) -> Option<Result<(), String>> {
@@ -547,10 +547,10 @@ impl BenchParser {
     /// not model the dialect or has no batch entry point ([`Self::can_batch`]).
     ///
     /// Fail-fast parsers (those returning a `Vec` or erroring on the first bad
-    /// statement) yield `0` if the whole batch fails; streaming parsers
+    /// statement) yield `0` if the whole batch fails. Streaming parsers
     /// (`sqlite3-parser`, `turso_parser`) yield the count parsed before the
     /// first error or EOF. Batches are built from already-accepted statements,
-    /// so a clean run parses all of them; the count is kept for coverage.
+    /// so a clean run parses all of them. The count is kept for coverage.
     #[must_use]
     pub fn parse_batch(self, sql: &str, dialect: Dialect) -> Option<usize> {
         match self {
@@ -737,7 +737,7 @@ impl BenchParser {
     /// retained together). `None` when the parser has no batch entry point
     /// ([`Self::can_batch`], so databend), when its memory is invisible to the
     /// Rust allocator (the `libpg_query` bindings), or when it does not model
-    /// `dialect`. Called single-threaded from the `membench` binary; under any
+    /// `dialect`. Called single-threaded from the `membench` binary. Under any
     /// other binary the counters are zero and it returns `Some((0, 0))`.
     #[must_use]
     pub fn measure_mem_batch(self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
@@ -835,11 +835,11 @@ pub struct ParserId {
 
 /// A benchmarked parser, abstracted over the concrete library build.
 ///
-/// [`BenchParser`] implements this for the current builds; the `timemachine`
+/// [`BenchParser`] implements this for the current builds. The `timemachine`
 /// crate implements it for historical versions. The grading, timing, and memory
 /// drivers operate over `&dyn Parser`, so one implementation serves both.
 ///
-/// Implementors provide the required methods; `accepts`, `measure_mem_batch`,
+/// Implementors provide the required methods. `accepts`, `measure_mem_batch`,
 /// `roundtrips`, and `fidelity` have default implementations built on them
 /// (mirroring [`BenchParser`]'s inherent methods), so a historical version only
 /// needs the core parse hooks.
@@ -871,7 +871,7 @@ pub trait Parser: Sync {
 
     /// Parse, distinguishing a caught panic from an honest rejection. The default
     /// is built on `try_parse`, which has already folded any panic into `Err`, so
-    /// it never reports `Panicked`; the current build ([`BenchParser`]) overrides
+    /// it never reports `Panicked`. The current build ([`BenchParser`]) overrides
     /// it with a panic-detecting implementation. Historical versions keep the
     /// default (their panic rate is not measured, only the current build's is).
     fn parse_outcome(&self, sql: &str, dialect: Dialect) -> ParseOutcome {
@@ -933,7 +933,7 @@ impl Parser for BenchParser {
             family: self.name(),
             version: self.current_version(),
             // The current build's release date is filled by the timemachine
-            // registry (which owns the trend's dates); empty here is fine.
+            // registry (which owns the trend's dates). Empty here is fine.
             released: "",
         }
     }
@@ -1213,7 +1213,7 @@ mod tests {
 
     #[test]
     fn can_batch_excludes_only_databend() {
-        // databend-common-ast parses one statement per call; every other parser
+        // databend-common-ast parses one statement per call. Every other parser
         // has a multi-statement entry point.
         assert!(!BenchParser::Databend.can_batch());
         for p in BenchParser::all() {

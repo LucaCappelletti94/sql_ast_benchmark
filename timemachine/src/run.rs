@@ -5,7 +5,7 @@
 //! ([`stats::perf_from`], [`stats::dist_from`]) so the history is computed the
 //! same way as the current snapshot. Timing and memory run as separate binaries
 //! (the memory one installs a global allocator), each producing part of the
-//! history; the timing binary merges in the memory sidecar and writes the final
+//! history. The timing binary merges in the memory sidecar and writes the final
 //! per-family file.
 
 use sql_ast_benchmark::batch::join_batch;

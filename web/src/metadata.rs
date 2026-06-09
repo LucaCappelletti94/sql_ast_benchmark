@@ -245,7 +245,7 @@ pub struct ParserMeta {
 }
 
 /// Releases at least this recent count as actively maintained. Roughly twelve
-/// months before [`SNAPSHOT`]; `"YYYY-MM"` strings order by date.
+/// months before [`SNAPSHOT`]. `"YYYY-MM"` strings order by date.
 const MAINTAINED_SINCE: &str = "2025-05";
 
 /// Whether the crate's latest release is recent enough to look maintained.

@@ -2,7 +2,7 @@
 //!
 //! Adding a version is three lines: a Cargo alias, one `sqlparser_version!`
 //! invocation here, and one entry in the registry. Versions that share the
-//! public API are covered by the macro; an API break would get its own block.
+//! public API are covered by the macro. An API break would get its own block.
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::{Parser, ParserId};
