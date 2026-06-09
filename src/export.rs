@@ -140,6 +140,9 @@ fn metrics(report: &DialectReport) -> Vec<ParserMetrics> {
             } else {
                 pct(s.accepted_valid, report.valid_total)
             },
+            attempted: s.attempted,
+            panicked: s.panicked,
+            panic_pct: pct(s.panicked, s.attempted),
         })
         .collect()
 }

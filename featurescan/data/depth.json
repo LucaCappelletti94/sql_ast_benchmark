@@ -1,0 +1,97 @@
+{
+  "note": "Recursion-depth probe (nested parens, 8 MiB worker stack, ceiling 50000). Each (parser, depth) trial runs in a child process. A clean exit means the depth was handled, a signal kill means a stack overflow. `crash_depth` is the smallest overflowing depth (null = never crashed up to the ceiling). `limit_depth` is the smallest depth the parser rejects instead of accepting (its graceful recursion limit, null = accepts up to the boundary). `guarded` = it rejects deep input cleanly and never crashes. Regenerate with `cargo run -p featurescan --bin featurescan-depth`.",
+  "stack_bytes": 8388608,
+  "ceil": 50000,
+  "parsers": [
+    {
+      "parser": "sqlparser-rs",
+      "dialect": "postgresql",
+      "guarded": true,
+      "shape_rejected": false,
+      "limit_depth": 48,
+      "crash_depth": null,
+      "ceil": 50000
+    },
+    {
+      "parser": "pg_query.rs",
+      "dialect": "postgresql",
+      "guarded": true,
+      "shape_rejected": false,
+      "limit_depth": 9994,
+      "crash_depth": null,
+      "ceil": 50000
+    },
+    {
+      "parser": "pg_query (summary)",
+      "dialect": "postgresql",
+      "guarded": true,
+      "shape_rejected": false,
+      "limit_depth": 9994,
+      "crash_depth": null,
+      "ceil": 50000
+    },
+    {
+      "parser": "qusql-parse",
+      "dialect": "postgresql",
+      "guarded": false,
+      "shape_rejected": false,
+      "limit_depth": null,
+      "crash_depth": 8578,
+      "ceil": 50000
+    },
+    {
+      "parser": "polyglot-sql",
+      "dialect": "postgresql",
+      "guarded": false,
+      "shape_rejected": false,
+      "limit_depth": null,
+      "crash_depth": 232,
+      "ceil": 50000
+    },
+    {
+      "parser": "databend-common-ast",
+      "dialect": "postgresql",
+      "guarded": false,
+      "shape_rejected": false,
+      "limit_depth": null,
+      "crash_depth": 421,
+      "ceil": 50000
+    },
+    {
+      "parser": "orql",
+      "dialect": "oracle",
+      "guarded": false,
+      "shape_rejected": true,
+      "limit_depth": null,
+      "crash_depth": 5184,
+      "ceil": 50000
+    },
+    {
+      "parser": "sqlglot-rust",
+      "dialect": "postgresql",
+      "guarded": false,
+      "shape_rejected": false,
+      "limit_depth": null,
+      "crash_depth": 548,
+      "ceil": 50000
+    },
+    {
+      "parser": "sqlite3-parser",
+      "dialect": "sqlite",
+      "guarded": true,
+      "shape_rejected": false,
+      "limit_depth": null,
+      "crash_depth": null,
+      "ceil": 50000
+    },
+    {
+      "parser": "turso_parser",
+      "dialect": "sqlite",
+      "guarded": false,
+      "shape_rejected": false,
+      "limit_depth": null,
+      "crash_depth": 2199,
+      "ceil": 50000
+    }
+  ]
+}

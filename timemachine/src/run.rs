@@ -159,6 +159,12 @@ fn metrics_of(report: &report::DialectReport, dialect: Dialect) -> ParserMetrics
         } else {
             pct(s.accepted_valid, report.valid_total)
         },
+        // The time machine does not measure the empirical panic rate (only the
+        // current build does, via BenchParser's panic-detecting parse_outcome), so
+        // it is left unmeasured rather than reported as a misleading zero.
+        attempted: s.attempted,
+        panicked: 0,
+        panic_pct: None,
     }
 }
 

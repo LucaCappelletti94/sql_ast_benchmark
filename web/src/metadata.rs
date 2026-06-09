@@ -264,16 +264,6 @@ pub const fn pure_rust_description(pure: bool) -> &'static str {
     }
 }
 
-/// A full sentence describing the crate's use of `unsafe`.
-#[must_use]
-pub fn unsafe_description(note: &str) -> String {
-    if note.is_empty() {
-        "Memory safe: the crate contains no unsafe code, so the compiler vouches for its memory safety.".to_string()
-    } else {
-        format!("Uses unsafe code for {note}, stepping outside the compiler's memory-safety guarantees.")
-    }
-}
-
 /// A full sentence describing how recently the crate was released.
 #[must_use]
 pub fn maintenance_description(last_release: &str) -> String {

@@ -6,11 +6,11 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaArrowsRotate, FaBox, FaBug, FaBuilding, FaCalendarDays, FaChartColumn,
-    FaChartLine, FaCode, FaCodeCommit, FaCodeFork, FaCopy, FaCube, FaDatabase, FaDownload,
-    FaFlaskVial, FaHeartPulse, FaMicrochip, FaMobileScreen, FaScaleBalanced, FaServer,
-    FaShieldHalved, FaStar, FaStopwatch, FaTableCells, FaTag, FaTriangleExclamation, FaUsers,
-    FaVial,
+    FaArrowLeftLong, FaArrowsRotate, FaBomb, FaBox, FaBug, FaBuilding, FaCalendarDays,
+    FaChartColumn, FaChartLine, FaCode, FaCodeCommit, FaCodeFork, FaCopy, FaCube, FaDatabase,
+    FaDownload, FaFlaskVial, FaHeartPulse, FaLayerGroup, FaMicrochip, FaMobileScreen,
+    FaScaleBalanced, FaServer, FaShieldHalved, FaSitemap, FaStar, FaStopwatch, FaTableCells, FaTag,
+    FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -1431,6 +1431,11 @@ fn parser_meta_pills(parser: &str) -> Element {
     let Some(m) = parser_meta(parser) else {
         return rsx! {};
     };
+    // Source- and behavior-mined badges (panic discipline, empirical panic rate,
+    // unsafe, recursion depth, deps, serde), shown alongside the repo/crate facts.
+    let feat = crate::data::parser_features(parser);
+    let depth = crate::data::parser_depth(parser);
+    let panic = crate::data::panic_totals(parser);
     rsx! {
         div {
             class: "meta-grid",
@@ -1451,11 +1456,208 @@ fn parser_meta_pills(parser: &str) -> Element {
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "no_std", if m.no_std { "yes".to_string() } else { "no".to_string() }, m.no_std, crate::metadata::no_std_description(m.no_std))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCube } }, "wasm", if m.wasm { "yes".to_string() } else { "no".to_string() }, m.wasm, crate::metadata::wasm_description(m.wasm))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaRust } }, "impl", if m.pure_rust { "pure Rust".to_string() } else { "C FFI".to_string() }, m.pure_rust, crate::metadata::pure_rust_description(m.pure_rust))}
-            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "unsafe", if m.unsafe_note.is_empty() { "none".to_string() } else { "uses".to_string() }, m.unsafe_note.is_empty(), &crate::metadata::unsafe_description(m.unsafe_note))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "maintained", if crate::metadata::maintained(m.last_release) { "active".to_string() } else { "stale".to_string() }, crate::metadata::maintained(m.last_release), &crate::metadata::maintenance_description(m.last_release))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaFlaskVial } }, "miri/san", if m.sanitizers.is_empty() { "no".to_string() } else { m.sanitizers.to_string() }, !m.sanitizers.is_empty(), &crate::metadata::sanitizer_description(m.sanitizers))}
+            {feat.map_or_else(|| rsx! {}, panic_discipline_pill)}
+            {empirical_panic_pill(panic)}
+            {feat.map_or_else(|| rsx! {}, |f| unsafe_pill(f, m.unsafe_note))}
+            {depth.map_or_else(|| rsx! {}, depth_pill)}
+            {feat.map_or_else(|| rsx! {}, deps_pill)}
+            {feat.map_or_else(|| rsx! {}, serde_pill)}
         }
     }
+}
+
+/// Static panic-discipline pill: banned by lint, clean (none present), or a count
+/// of panic-inducing constructs. Neutral (informational): the count is a
+/// code-smell proxy, not a crash proof, so the empirical pill carries the alarm.
+fn panic_discipline_pill(f: &viz::ParserFeatures) -> Element {
+    let c = &f.counts;
+    let hard = c.hard_panics();
+    let fallible = c.unwrap + c.expect + c.unwrap_unchecked;
+    let total = hard + fallible;
+    let banned = f.lints.is_banned("unwrap_used")
+        || f.lints.is_banned("panic")
+        || f.lints.is_banned("expect_used");
+    let value = if banned {
+        "banned".to_string()
+    } else if total == 0 {
+        "clean".to_string()
+    } else {
+        total.to_string()
+    };
+    let desc = if banned {
+        format!(
+            "Panic discipline: bans panic-inducing lints by design (a regression fails the build). \
+             Static scan still found {total} construct(s) in library source ({hard} hard panics \
+             like panic!/unreachable!, {} unwrap, {} expect). Counts exclude tests and are a \
+             code-smell proxy, not a crash proof.",
+            c.unwrap, c.expect
+        )
+    } else if total == 0 {
+        "Panic discipline: no panic!, unreachable!, unwrap, or expect in library source (excluding tests), though no lint enforces this.".to_string()
+    } else {
+        format!(
+            "Panic discipline: {total} panic-inducing construct(s) in library source: {hard} hard \
+             panics (panic!/unreachable!/unimplemented!/todo!), {} unwrap, {} expect, over {} \
+             non-test lines. Counts exclude tests and are a code-smell proxy, not a crash proof. \
+             See the empirical panic rate for observed behavior.",
+            c.unwrap, c.expect, c.code_loc
+        )
+    };
+    meta_item(
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaTriangleExclamation } },
+        "panic discipline",
+        value,
+        desc,
+    )
+}
+
+/// Empirical panic-rate pill: how often the parser actually panics on the real
+/// corpus rather than returning an error. The real risk signal, flagged red when
+/// any panic is observed.
+fn empirical_panic_pill(totals: Option<(usize, usize)>) -> Element {
+    let (value, ok, desc) = match totals {
+        None => (
+            "n/a".to_string(),
+            true,
+            "Empirical panic rate not measured in this snapshot.".to_string(),
+        ),
+        Some((0, attempted)) => (
+            "0".to_string(),
+            true,
+            format!(
+                "Empirical panic rate: 0 panics across {attempted} statements parsed on the real \
+                 corpus. It returns errors instead of panicking."
+            ),
+        ),
+        Some((panicked, attempted)) => {
+            let pct = 100.0 * panicked as f64 / attempted as f64;
+            (
+                format!("{panicked} ({pct:.3}%)"),
+                false,
+                format!(
+                    "Empirical panic rate: {panicked} of {attempted} statements ({pct:.3}%) made \
+                     the parser panic (caught) on the real corpus instead of returning an error. \
+                     This is observed behavior, not a code smell."
+                ),
+            )
+        }
+    };
+    meta_flag(
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBomb } },
+        "panics on corpus",
+        value,
+        ok,
+        &desc,
+    )
+}
+
+/// Unsafe-surface pill: forbidden, none, or a count of unsafe occurrences.
+fn unsafe_pill(f: &viz::ParserFeatures, note: &str) -> Element {
+    let total = f.counts.unsafe_total();
+    let (value, ok) = if f.forbids_unsafe {
+        ("forbidden".to_string(), true)
+    } else if total == 0 {
+        ("none".to_string(), true)
+    } else {
+        (total.to_string(), false)
+    };
+    let note_suffix = if note.is_empty() {
+        String::new()
+    } else {
+        format!(" Used for: {note}.")
+    };
+    let desc = if f.forbids_unsafe {
+        "Unsafe: forbids unsafe code (#![forbid(unsafe_code)]), so the crate cannot contain any unsafe block.".to_string()
+    } else if total == 0 {
+        "Unsafe: no unsafe code in library source.".to_string()
+    } else {
+        format!(
+            "Unsafe: {total} unsafe occurrence(s) in library source ({} blocks, {} fns, {} impls).{note_suffix}",
+            f.counts.unsafe_blocks, f.counts.unsafe_fns, f.counts.unsafe_impls
+        )
+    };
+    meta_flag(
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } },
+        "unsafe",
+        value,
+        ok,
+        &desc,
+    )
+}
+
+/// Recursion-depth pill: depth-guarded (clean error, no overflow) or the depth at
+/// which deeply nested input overflows the stack and aborts the process.
+fn depth_pill(d: &viz::DepthReport) -> Element {
+    let (value, ok, desc) = match d.crash_depth {
+        None => {
+            let v = d
+                .limit_depth
+                .map_or_else(|| "guarded".to_string(), |l| format!("guarded ({l})"));
+            let detail = d.limit_depth.map_or_else(
+                || format!("handled nesting up to {} without overflowing (it does not recurse on the call stack)", d.ceil),
+                |l| format!("rejects deeply nested input with a clean error at depth {l} and never overflows the stack (probed to {})", d.ceil),
+            );
+            (
+                v,
+                true,
+                format!("Recursion depth: depth-guarded, it {detail}, on an 8 MiB stack."),
+            )
+        }
+        Some(crash) => (
+            format!("crashes @{crash}"),
+            false,
+            format!(
+                "Recursion depth: stack-overflows on nested input at depth {crash} (8 MiB stack), \
+                 aborting the whole process. Deeply nested SQL is a denial-of-service risk unless \
+                 input depth is bounded."
+            ),
+        ),
+    };
+    meta_flag(
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaLayerGroup } },
+        "recursion depth",
+        value,
+        ok,
+        &desc,
+    )
+}
+
+/// Dependency-footprint pill: direct (non-dev) dependency count. Neutral.
+fn deps_pill(f: &viz::ParserFeatures) -> Element {
+    meta_item(
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaSitemap } },
+        "deps",
+        f.direct_deps.to_string(),
+        format!(
+            "Dependency footprint: {} direct, non-dev dependencies. Fewer means a lighter, \
+             faster-compiling addition to a project.",
+            f.direct_deps
+        ),
+    )
+}
+
+/// AST-serializability pill: whether the parser derives serde::Serialize on its
+/// types, so the parse tree can be serialized. Neutral capability flag.
+fn serde_pill(f: &viz::ParserFeatures) -> Element {
+    let yes = f.counts.serde_derive;
+    let value = if yes {
+        "yes".to_string()
+    } else {
+        "no".to_string()
+    };
+    let desc = if yes {
+        "Serializable AST: the crate derives serde::Serialize on its types, so the parse tree can be serialized to JSON and similar."
+    } else {
+        "No serde derive found on the crate's types, so the AST is not directly serializable without custom code."
+    };
+    meta_item(
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaDatabase } },
+        "serde AST",
+        value,
+        desc.to_string(),
+    )
 }
 
 fn ratio_pct(n: usize, base: usize) -> String {
@@ -1665,7 +1867,7 @@ fn col_help(name: &str) -> Option<&'static str> {
 }
 
 /// A generic click-to-sort data table. `corner` labels the first (header)
-/// column; `columns` are the value-column labels. Clicking any header toggles
+/// column, and `columns` are the value-column labels. Clicking any header toggles
 /// ascending / descending on that column. `footer`, if present, is a row
 /// pinned below the sorted rows (used for the coverage subtotal).
 #[component]
@@ -1891,7 +2093,7 @@ fn memory_table(d: &DialectData) -> Element {
                 "Memory"
             }
             p { class: "table-cap",
-                "Bytes per statement, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over the whole accepted set parsed as one script divided by its statement count, so compare each batch column to the adjacent mean (batch retained is higher when every statement's AST is held at once; blank where not measured or no batch entry point). The libpg_query bindings are omitted (they parse in C, invisible to the Rust allocator)."
+                "Bytes per statement, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over the whole accepted set parsed as one script divided by its statement count, so compare each batch column to the adjacent mean (batch retained is higher when every statement's AST is held at once, blank where not measured or no batch entry point). The libpg_query bindings are omitted (they parse in C, invisible to the Rust allocator)."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{}-mempeak-ecdf", d.dir_name), &peak_ecdf, &format!("Empirical CDF of peak memory for {}, one curve per parser.", d.display_name), "Peak live memory per parse, one curve per parser. Further left is leaner (log scale).", &format!("{}-peak-memory-ecdf", d.dir_name))}

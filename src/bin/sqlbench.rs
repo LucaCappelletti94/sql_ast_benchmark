@@ -12,8 +12,9 @@
 //!                              prints the per-dataset acceptance matrix instead
 //!                              of per-dialect reference metrics.
 //!   export                     write `web/assets/bench.json.zst` for the explorer.
-//!   regen                      run the whole data pipeline (timing + memory
-//!                              benches, then export) with one command.
+//!   regen                      run the whole data pipeline (feature scan +
+//!                              depth probe + timing + memory benches +
+//!                              time machine, then export) with one command.
 //!
 //! The grading logic lives in the library (`report`). This binary is argument
 //! dispatch plus table formatting.
@@ -204,7 +205,32 @@ fn run_regen() {
     // straight to web/assets/history.json.zst. The memory passes install a global
     // allocator, so they are separate processes; the time-machine memory pass
     // runs before its timing pass, which merges the memory sidecar.
-    let steps: [(&str, &[&str]); 5] = [
+    let steps: [(&str, &[&str]); 7] = [
+        // Static source-feature scan and recursion-depth probe, writing the
+        // committed featurescan/data/*.json the web bakes in. Independent of the
+        // benches, so run first.
+        (
+            "cargo",
+            &[
+                "run",
+                "--release",
+                "-p",
+                "featurescan",
+                "--bin",
+                "featurescan",
+            ],
+        ), // featurescan/data/featurescan.json
+        (
+            "cargo",
+            &[
+                "run",
+                "--release",
+                "-p",
+                "featurescan",
+                "--bin",
+                "featurescan-depth",
+            ],
+        ), // featurescan/data/depth.json
         ("cargo", &["bench"]), // target/bench_dist/ + target/batch_dist/
         ("cargo", &["run", "--release", "-p", "membench"]), // target/mem_dist/
         (
@@ -264,7 +290,7 @@ fn usage() -> ! {
     eprintln!("usage: sqlbench <subcommand>");
     eprintln!("  correctness [--per-file]   grade parsers over datasets/");
     eprintln!("  export                     write web/assets/bench.json.zst for the site");
-    eprintln!("  regen                      run timing + memory benches, then export");
+    eprintln!("  regen                      run feature scan + depth probe + benches + time machine, then export");
     std::process::exit(2);
 }
 

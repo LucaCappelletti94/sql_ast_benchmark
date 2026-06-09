@@ -115,53 +115,70 @@ fn panic_reason(p: &(dyn std::any::Any + Send)) -> String {
         .unwrap_or_else(|| "panicked".to_string())
 }
 
-/// Run a parse closure under panic protection, turning a panic into an error
-/// message. Several parsers use `todo!()`/`panic!` on unimplemented paths, so
-/// this keeps a worker alive and still yields a reason for the rejection.
-fn catch_parse(
-    f: impl FnOnce() -> Result<(), String> + std::panic::UnwindSafe,
-) -> Result<(), String> {
-    match std::panic::catch_unwind(f) {
-        Ok(r) => r,
-        Err(p) => Err(panic_reason(&*p)),
+/// The outcome of one parse attempt, distinguishing a panic from an honest error.
+///
+/// `try_parse`/`accepts` collapse `Rejected` and `Panicked` into the same
+/// `Some(Err(..))`, which is right for correctness grading (a panic is still a
+/// non-acceptance), but the empirical panic-rate metric needs them apart: how
+/// often does a parser actually throw on real input instead of returning an error.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ParseOutcome {
+    /// The parser does not model this dialect (was `None` from `try_parse`).
+    Unsupported,
+    /// Parsed successfully.
+    Accepted,
+    /// Rejected with the parser's own error message.
+    Rejected(String),
+    /// Aborted with a caught panic, carrying the panic message.
+    Panicked(String),
+}
+
+/// Run a parse closure under panic protection, classifying the result into a
+/// [`ParseOutcome`] that distinguishes a clean rejection from a caught panic.
+/// Several parsers use `todo!()`/`panic!`/`unreachable!` on unimplemented paths,
+/// so this keeps the worker alive and records that the abort was a panic, which
+/// the empirical panic-rate metric counts separately from honest `Err` returns.
+fn catch_outcome(f: impl FnOnce() -> Result<(), String>) -> ParseOutcome {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(Ok(())) => ParseOutcome::Accepted,
+        Ok(Err(e)) => ParseOutcome::Rejected(e),
+        Err(p) => ParseOutcome::Panicked(panic_reason(&*p)),
     }
 }
 
-fn qusql_try(sql: &str, d: SQLDialect) -> Result<(), String> {
-    catch_parse(|| {
-        let opts = ParseOptions::new()
-            .dialect(d)
-            .arguments(qusql_parse::SQLArguments::Dollar);
-        let mut issues = Issues::new(sql);
-        let _ = parse_statements(sql, &mut issues, &opts);
-        issues
-            .get()
-            .iter()
-            .find(|i| i.level == Level::Error)
-            .map_or(Ok(()), |e| Err(e.message.to_string()))
-    })
+// The `*_raw` helpers do the bare parse with NO panic protection, so the single
+// `catch_outcome` wrapping them can tell a panic from an honest `Err`. They are
+// only ever called inside `catch_outcome`.
+
+fn qusql_raw(sql: &str, d: SQLDialect) -> Result<(), String> {
+    let opts = ParseOptions::new()
+        .dialect(d)
+        .arguments(qusql_parse::SQLArguments::Dollar);
+    let mut issues = Issues::new(sql);
+    let _ = parse_statements(sql, &mut issues, &opts);
+    issues
+        .get()
+        .iter()
+        .find(|i| i.level == Level::Error)
+        .map_or(Ok(()), |e| Err(e.message.to_string()))
 }
 
-fn databend_try(sql: &str, d: DatabendDialect) -> Result<(), String> {
-    catch_parse(|| {
-        let tokens = databend_tokenize(sql).map_err(|e| e.to_string())?;
-        databend_parse(&tokens, d)
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    })
+fn databend_raw(sql: &str, d: DatabendDialect) -> Result<(), String> {
+    let tokens = databend_tokenize(sql).map_err(|e| e.to_string())?;
+    databend_parse(&tokens, d)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
-fn sqlite3_try(sql: &str) -> Result<(), String> {
-    catch_parse(|| {
-        let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
-        loop {
-            match parser.next() {
-                Ok(Some(_)) => {}
-                Ok(None) => return Ok(()),
-                Err(e) => return Err(e.to_string()),
-            }
+fn sqlite3_raw(sql: &str) -> Result<(), String> {
+    let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+    loop {
+        match parser.next() {
+            Ok(Some(_)) => {}
+            Ok(None) => return Ok(()),
+            Err(e) => return Err(e.to_string()),
         }
-    })
+    }
 }
 
 fn sqlite3_reprint(sql: &str) -> Option<String> {
@@ -184,17 +201,15 @@ fn sqlite3_reprint(sql: &str) -> Option<String> {
     .unwrap_or(None)
 }
 
-fn turso_try(sql: &str) -> Result<(), String> {
-    catch_parse(|| {
-        let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
-        loop {
-            match parser.next_cmd() {
-                Ok(Some(_)) => {}
-                Ok(None) => return Ok(()),
-                Err(e) => return Err(e.to_string()),
-            }
+fn turso_raw(sql: &str) -> Result<(), String> {
+    let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
+    loop {
+        match parser.next_cmd() {
+            Ok(Some(_)) => {}
+            Ok(None) => return Ok(()),
+            Err(e) => return Err(e.to_string()),
         }
-    })
+    }
 }
 
 fn turso_reprint(sql: &str) -> Option<String> {
@@ -396,43 +411,67 @@ impl BenchParser {
     /// parser does not model the dialect, `Some(Ok(()))` = accepted, and
     /// `Some(Err(msg))` = rejected with the parser's own error message (or a
     /// panic message for parsers that abort on edge-case input). Panic-protected
-    /// like [`Self::accepts`], so it never unwinds the caller.
+    /// like [`Self::accepts`], so it never unwinds the caller. A panic and an
+    /// honest `Err` both map to `Some(Err(..))` here; use [`Self::parse_outcome`]
+    /// when the distinction matters (the empirical panic-rate metric).
     #[must_use]
     pub fn try_parse(self, sql: &str, dialect: Dialect) -> Option<Result<(), String>> {
+        match self.parse_outcome(sql, dialect) {
+            ParseOutcome::Unsupported => None,
+            ParseOutcome::Accepted => Some(Ok(())),
+            ParseOutcome::Rejected(e) | ParseOutcome::Panicked(e) => Some(Err(e)),
+        }
+    }
+
+    /// Parse `sql` in `dialect`, distinguishing a clean rejection from a caught
+    /// panic. Every parser is wrapped in one `catch_unwind` so a `panic!` /
+    /// `unreachable!` / `unwrap` on an unimplemented path becomes
+    /// [`ParseOutcome::Panicked`] rather than aborting the worker or hiding as a
+    /// plain rejection. This is the empirical counterpart to the static panic
+    /// scan: it counts the panics a parser actually throws on the real corpus.
+    #[must_use]
+    pub fn parse_outcome(self, sql: &str, dialect: Dialect) -> ParseOutcome {
         match self {
-            Self::Sqlparser => Some(
+            Self::Sqlparser => catch_outcome(|| {
                 SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql)
                     .map(|_| ())
-                    .map_err(|e| e.to_string()),
-            ),
-            Self::PgQuery => (dialect == Dialect::Postgresql)
-                .then(|| pg_query::parse(sql).map(|_| ()).map_err(|e| e.to_string())),
-            Self::PgQuerySummary => (dialect == Dialect::Postgresql).then(|| {
+                    .map_err(|e| e.to_string())
+            }),
+            Self::PgQuery if dialect == Dialect::Postgresql => {
+                catch_outcome(|| pg_query::parse(sql).map(|_| ()).map_err(|e| e.to_string()))
+            }
+            Self::PgQuerySummary if dialect == Dialect::Postgresql => catch_outcome(|| {
                 pg_query::summary(sql, -1)
                     .map(|_| ())
                     .map_err(|e| e.to_string())
             }),
-            Self::Qusql => qusql_dialect(dialect).map(|d| qusql_try(sql, d)),
-            Self::Polyglot => Some(catch_parse(|| {
+            Self::Qusql => qusql_dialect(dialect).map_or(ParseOutcome::Unsupported, |d| {
+                catch_outcome(|| qusql_raw(sql, d))
+            }),
+            Self::Polyglot => catch_outcome(|| {
                 polyglot_parse(sql, polyglot_dialect(dialect))
                     .map(|_| ())
                     .map_err(|e| e.to_string())
-            })),
-            Self::Databend => databend_dialect_of(dialect).map(|d| databend_try(sql, d)),
-            Self::Orql => (dialect == Dialect::Oracle).then(|| {
-                catch_parse(|| {
-                    orql_parser::parse(sql)
-                        .map(|_| ())
-                        .map_err(|e| e.to_string())
-                })
             }),
-            Self::Sqlglot => Some(catch_parse(|| {
+            Self::Databend => databend_dialect_of(dialect).map_or(ParseOutcome::Unsupported, |d| {
+                catch_outcome(|| databend_raw(sql, d))
+            }),
+            Self::Orql if dialect == Dialect::Oracle => catch_outcome(|| {
+                orql_parser::parse(sql)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }),
+            Self::Sqlglot => catch_outcome(|| {
                 sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect))
                     .map(|_| ())
                     .map_err(|e| e.to_string())
-            })),
-            Self::Sqlite3 => (dialect == Dialect::Sqlite).then(|| sqlite3_try(sql)),
-            Self::Turso => (dialect == Dialect::Sqlite).then(|| turso_try(sql)),
+            }),
+            Self::Sqlite3 if dialect == Dialect::Sqlite => catch_outcome(|| sqlite3_raw(sql)),
+            Self::Turso if dialect == Dialect::Sqlite => catch_outcome(|| turso_raw(sql)),
+            // Single-dialect parsers asked about a dialect they do not model.
+            Self::PgQuery | Self::PgQuerySummary | Self::Orql | Self::Sqlite3 | Self::Turso => {
+                ParseOutcome::Unsupported
+            }
         }
     }
 
@@ -830,6 +869,19 @@ pub trait Parser: Sync {
         self.try_parse(sql, dialect).map(|r| r.is_ok())
     }
 
+    /// Parse, distinguishing a caught panic from an honest rejection. The default
+    /// is built on `try_parse`, which has already folded any panic into `Err`, so
+    /// it never reports `Panicked`; the current build ([`BenchParser`]) overrides
+    /// it with a panic-detecting implementation. Historical versions keep the
+    /// default (their panic rate is not measured, only the current build's is).
+    fn parse_outcome(&self, sql: &str, dialect: Dialect) -> ParseOutcome {
+        match self.try_parse(sql, dialect) {
+            None => ParseOutcome::Unsupported,
+            Some(Ok(())) => ParseOutcome::Accepted,
+            Some(Err(e)) => ParseOutcome::Rejected(e),
+        }
+    }
+
     /// Whole-script `(peak, retained)`, gated on a batch entry point.
     fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
         if self.can_batch() {
@@ -912,6 +964,9 @@ impl Parser for BenchParser {
     fn accepts(&self, sql: &str, dialect: Dialect) -> Option<bool> {
         (*self).accepts(sql, dialect)
     }
+    fn parse_outcome(&self, sql: &str, dialect: Dialect) -> ParseOutcome {
+        (*self).parse_outcome(sql, dialect)
+    }
     fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
         (*self).measure_mem_batch(sql, dialect)
     }
@@ -934,8 +989,46 @@ pub mod stats;
 
 #[cfg(test)]
 mod tests {
-    use super::{has_canonical, has_reference, reference_accepts, BenchParser};
+    use super::ParseOutcome;
+    use super::{catch_outcome, has_canonical, has_reference, reference_accepts, BenchParser};
     use crate::datasets::Dialect;
+
+    #[test]
+    fn catch_outcome_classifies_accept_reject_and_panic() {
+        assert_eq!(catch_outcome(|| Ok(())), ParseOutcome::Accepted);
+        assert_eq!(
+            catch_outcome(|| Err("bad".to_string())),
+            ParseOutcome::Rejected("bad".to_string())
+        );
+        // A panic in the parse closure becomes Panicked, not an abort.
+        match catch_outcome(|| panic!("boom")) {
+            ParseOutcome::Panicked(msg) => assert!(msg.contains("boom")),
+            other => panic!("expected Panicked, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_outcome_agrees_with_try_parse() {
+        let p = BenchParser::Sqlparser;
+        // Accepted and rejected map to the same verdicts try_parse reports.
+        assert_eq!(
+            p.parse_outcome("SELECT 1", Dialect::Postgresql),
+            ParseOutcome::Accepted
+        );
+        assert!(matches!(
+            p.parse_outcome("SELECT 1 FROM", Dialect::Postgresql),
+            ParseOutcome::Rejected(_)
+        ));
+        // A dialect the parser does not model is Unsupported (try_parse -> None).
+        assert_eq!(
+            BenchParser::Sqlite3.parse_outcome("SELECT 1", Dialect::Postgresql),
+            ParseOutcome::Unsupported
+        );
+        assert_eq!(
+            BenchParser::Sqlite3.try_parse("SELECT 1", Dialect::Postgresql),
+            None
+        );
+    }
 
     const ALL_DIALECTS: [Dialect; 13] = [
         Dialect::Postgresql,

@@ -1,0 +1,41 @@
+[package]
+name = "featurescan"
+version = "0.1.0"
+edition = "2021"
+description = "Static source-feature scan of the benchmarked SQL parsers (panic discipline, unsafe, lint policy)"
+license = "MIT"
+publish = false
+default-run = "featurescan"
+
+# Offline analysis crate. It locates each benchmarked parser's source on disk via
+# `cargo metadata` (git checkouts and registry crates alike), parses the library
+# `src/` with `syn`, and records panic-inducing constructs, unsafe usage, and the
+# crate's own lint policy. The committed result (featurescan/data/featurescan.json)
+# is baked into the web metadata, so the wasm build stays free of network access.
+# Not a default workspace member, so `cargo build` never pulls these deps.
+
+[dependencies]
+cargo_metadata = "0.19"
+syn = { version = "2", features = ["full", "visit"] }
+# span-locations gives line numbers on spans, so test-region lines can be
+# subtracted from the LOC used for per-KLOC density.
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+walkdir = "2"
+toml = "0.8"
+serde_json = "1"
+# Shared schema types (FeatureScan/DepthScan), so the committed JSON the web bakes
+# in has a single source of truth.
+viz = { path = "../viz" }
+# The depth probe runs the real parsers, so it needs the main crate. The static
+# scan binary does not use it, but a workspace member with one heavy dep is fine
+# since featurescan is never part of the default build.
+sql_ast_benchmark = { path = ".." }
+
+[[bin]]
+name = "featurescan"
+path = "src/main.rs"
+
+[[bin]]
+name = "featurescan-depth"
+path = "src/depth.rs"
