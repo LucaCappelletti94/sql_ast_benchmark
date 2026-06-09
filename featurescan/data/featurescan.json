@@ -1,0 +1,327 @@
+{
+  "note": "Static source scan of each parser's library src/ (panic families, unsafe, lint policy). Counts exclude tests/benches/examples, #[cfg(test)] items, and test-helper files (e.g. test_utils.rs). Macro-body unwraps are not counted (opaque to syn). Counts are a code-smell proxy, not a crash proof. Regenerate with `cargo run -p featurescan`.",
+  "parsers": [
+    {
+      "parser": "sqlparser-rs",
+      "package": "sqlparser",
+      "version": "0.62.0",
+      "counts": {
+        "loc": 68907,
+        "test_lines": 4276,
+        "code_loc": 64631,
+        "files": 43,
+        "parse_failures": 0,
+        "panic": 3,
+        "unreachable": 0,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 4,
+        "unwrap": 7,
+        "expect": 0,
+        "unwrap_unchecked": 0,
+        "index": 8,
+        "unsafe_blocks": 0,
+        "unsafe_fns": 0,
+        "unsafe_impls": 0,
+        "serde_derive": false
+      },
+      "lints": {
+        "lints": {
+          "unreachable": "forbid"
+        },
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 6,
+      "serde_dep": true
+    },
+    {
+      "parser": "pg_query.rs",
+      "package": "pg_query",
+      "version": "6.1.1",
+      "counts": {
+        "loc": 15402,
+        "test_lines": 0,
+        "code_loc": 15402,
+        "files": 13,
+        "parse_failures": 0,
+        "panic": 1,
+        "unreachable": 0,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 0,
+        "unwrap": 38,
+        "expect": 0,
+        "unwrap_unchecked": 0,
+        "index": 9,
+        "unsafe_blocks": 40,
+        "unsafe_fns": 2,
+        "unsafe_impls": 0,
+        "serde_derive": true
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 5,
+      "serde_dep": true
+    },
+    {
+      "parser": "pg_query (summary)",
+      "package": "pg_query",
+      "version": "6.1.1",
+      "counts": {
+        "loc": 15402,
+        "test_lines": 0,
+        "code_loc": 15402,
+        "files": 13,
+        "parse_failures": 0,
+        "panic": 1,
+        "unreachable": 0,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 0,
+        "unwrap": 38,
+        "expect": 0,
+        "unwrap_unchecked": 0,
+        "index": 9,
+        "unsafe_blocks": 40,
+        "unsafe_fns": 2,
+        "unsafe_impls": 0,
+        "serde_derive": true
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 5,
+      "serde_dep": true
+    },
+    {
+      "parser": "qusql-parse",
+      "package": "qusql-parse",
+      "version": "0.8.0",
+      "counts": {
+        "loc": 35323,
+        "test_lines": 1711,
+        "code_loc": 33612,
+        "files": 43,
+        "parse_failures": 0,
+        "panic": 1,
+        "unreachable": 0,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 0,
+        "unwrap": 48,
+        "expect": 6,
+        "unwrap_unchecked": 0,
+        "index": 11,
+        "unsafe_blocks": 1,
+        "unsafe_fns": 0,
+        "unsafe_impls": 0,
+        "serde_derive": false
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 0,
+      "serde_dep": false
+    },
+    {
+      "parser": "polyglot-sql",
+      "package": "polyglot-sql",
+      "version": "0.4.4",
+      "counts": {
+        "loc": 239954,
+        "test_lines": 16786,
+        "code_loc": 223168,
+        "files": 74,
+        "parse_failures": 0,
+        "panic": 5,
+        "unreachable": 212,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 0,
+        "unwrap": 312,
+        "expect": 17,
+        "unwrap_unchecked": 0,
+        "index": 1066,
+        "unsafe_blocks": 0,
+        "unsafe_fns": 0,
+        "unsafe_impls": 0,
+        "serde_derive": true
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 7,
+      "serde_dep": true
+    },
+    {
+      "parser": "databend-common-ast",
+      "package": "databend-common-ast",
+      "version": "0.2.5",
+      "counts": {
+        "loc": 31399,
+        "test_lines": 271,
+        "code_loc": 31128,
+        "files": 81,
+        "parse_failures": 0,
+        "panic": 1,
+        "unreachable": 33,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 3,
+        "unwrap": 27,
+        "expect": 0,
+        "unwrap_unchecked": 0,
+        "index": 46,
+        "unsafe_blocks": 0,
+        "unsafe_fns": 0,
+        "unsafe_impls": 0,
+        "serde_derive": true
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 26,
+      "serde_dep": true
+    },
+    {
+      "parser": "sqlglot-rust",
+      "package": "sqlglot-rust",
+      "version": "0.10.0",
+      "counts": {
+        "loc": 29937,
+        "test_lines": 3951,
+        "code_loc": 25986,
+        "files": 29,
+        "parse_failures": 0,
+        "panic": 0,
+        "unreachable": 4,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 1,
+        "unwrap": 21,
+        "expect": 4,
+        "unwrap_unchecked": 0,
+        "index": 162,
+        "unsafe_blocks": 11,
+        "unsafe_fns": 5,
+        "unsafe_impls": 2,
+        "serde_derive": true
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 5,
+      "serde_dep": true
+    },
+    {
+      "parser": "sqlite3-parser",
+      "package": "sqlite3-parser",
+      "version": "0.16.0",
+      "counts": {
+        "loc": 6712,
+        "test_lines": 584,
+        "code_loc": 6128,
+        "files": 12,
+        "parse_failures": 0,
+        "panic": 2,
+        "unreachable": 5,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 3,
+        "unwrap": 5,
+        "expect": 0,
+        "unwrap_unchecked": 0,
+        "index": 59,
+        "unsafe_blocks": 1,
+        "unsafe_fns": 0,
+        "unsafe_impls": 0,
+        "serde_derive": false
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 7,
+      "serde_dep": false
+    },
+    {
+      "parser": "turso_parser",
+      "package": "turso_parser",
+      "version": "0.6.1",
+      "counts": {
+        "loc": 19732,
+        "test_lines": 8126,
+        "code_loc": 11606,
+        "files": 8,
+        "parse_failures": 0,
+        "panic": 0,
+        "unreachable": 29,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 7,
+        "unwrap": 19,
+        "expect": 0,
+        "unwrap_unchecked": 0,
+        "index": 67,
+        "unsafe_blocks": 3,
+        "unsafe_fns": 1,
+        "unsafe_impls": 0,
+        "serde_derive": false
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 8,
+      "serde_dep": true
+    },
+    {
+      "parser": "orql",
+      "package": "orql",
+      "version": "0.1.0",
+      "counts": {
+        "loc": 17994,
+        "test_lines": 481,
+        "code_loc": 17513,
+        "files": 40,
+        "parse_failures": 0,
+        "panic": 6,
+        "unreachable": 0,
+        "unimplemented": 0,
+        "todo": 0,
+        "assert": 0,
+        "unwrap": 6,
+        "expect": 13,
+        "unwrap_unchecked": 0,
+        "index": 23,
+        "unsafe_blocks": 1,
+        "unsafe_fns": 0,
+        "unsafe_impls": 0,
+        "serde_derive": false
+      },
+      "lints": {
+        "lints": {},
+        "workspace_inherited": false
+      },
+      "forbids_unsafe": false,
+      "direct_deps": 2,
+      "serde_dep": false
+    }
+  ]
+}

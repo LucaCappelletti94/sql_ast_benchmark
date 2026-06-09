@@ -1,5 +1,5 @@
 //! Historical sqlite3-parser (lemon-rs) versions. SQLite only, a streaming
-//! `FallibleIterator` of commands; reprints via each command's `Display`.
+//! `FallibleIterator` of commands. Reprints via each command's `Display`.
 
 use fallible_iterator::FallibleIterator as _;
 use sql_ast_benchmark::datasets::Dialect;

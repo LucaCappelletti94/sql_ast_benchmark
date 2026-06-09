@@ -140,6 +140,9 @@ fn metrics(report: &DialectReport) -> Vec<ParserMetrics> {
             } else {
                 pct(s.accepted_valid, report.valid_total)
             },
+            attempted: s.attempted,
+            panicked: s.panicked,
+            panic_pct: pct(s.panicked, s.attempted),
         })
         .collect()
 }
@@ -235,7 +238,7 @@ struct BatchMemRow {
 
 /// Whether a batch parse consumed the whole accepted set, so its normalized cost
 /// can be trusted. A fail-fast parser that errors partway yields `n_parsed`
-/// below `n_accepted`; statements with internal `;` only push `n_parsed` higher,
+/// below `n_accepted`. Statements with internal `;` only push `n_parsed` higher,
 /// so `>=` is the right "fully consumed" test.
 const fn batch_complete(n_parsed: usize, n_accepted: usize) -> bool {
     n_accepted > 0 && n_parsed >= n_accepted
@@ -294,7 +297,7 @@ fn read_batch_mem() -> Vec<BatchMemRow> {
 
 /// Merge batch time and batch memory rows for one dialect into per-parser
 /// `ParserBatch`. A parser appears only if at least one axis parsed the whole
-/// accepted set (see [`batch_complete`]); an axis whose batch bailed out early
+/// accepted set (see [`batch_complete`]). An axis whose batch bailed out early
 /// is dropped to `None` so the explorer never shows a misleading number. Pure,
 /// so the merge and the guard are testable.
 fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<ParserBatch> {
@@ -521,7 +524,7 @@ fn write_failure_tsv(file: &str, rejected: &[String], reasons: &[String]) -> std
 /// Build the TSV body for a failure download: a `statement\treason` header then
 /// up to `cap` rows. Each row is the rejected statement, a tab, then the parser's
 /// error message, with backslashes, tabs, and newlines escaped in both columns so
-/// every row stays on a single line. `reasons` is aligned with `rejected`; a
+/// every row stays on a single line. `reasons` is aligned with `rejected`. A
 /// missing reason is written as an empty cell.
 fn format_failure_tsv(rejected: &[String], reasons: &[String], cap: usize) -> String {
     fn escape(s: &str) -> String {
@@ -704,7 +707,7 @@ mod tests {
 
     #[test]
     fn git_short_runs_without_panicking() {
-        // In the repo it returns Some(hash); the point is it does not panic and
+        // In the repo it returns Some(hash). The point is it does not panic and
         // yields a non-empty string when present.
         if let Some(h) = git_short() {
             assert!(!h.is_empty());

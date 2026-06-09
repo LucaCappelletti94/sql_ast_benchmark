@@ -2,7 +2,7 @@
 //!
 //! For each reference dialect this brings up the actual engine in Docker, labels
 //! every corpus statement valid/invalid by the schema-free rule (a syntax/parse
-//! error means invalid; no error or a schema/semantic error means it parsed, so
+//! error means invalid. No error or a schema/semantic error means it parsed, so
 //! valid), and writes a committed cache under `oracle/labels/{dir}.tsv.zst` that
 //! `sql_ast_benchmark::oracle_cache` reads. Run locally with Docker:
 //!
@@ -10,8 +10,8 @@
 //!   cargo run --release -p oracle -- sqlite    # one or more by dir name
 //!
 //! Server engines (PostgreSQL, MySQL, ClickHouse, SQL Server) run in
-//! testcontainers and connect over a mapped port; SQLite runs as the `sqlite3`
-//! CLI in a one-shot container; DuckDB, which has no server and whose CLI errors
+//! testcontainers and connect over a mapped port. SQLite runs as the `sqlite3`
+//! CLI in a one-shot container. DuckDB, which has no server and whose CLI errors
 //! carry no line numbers, links the real `libduckdb` in-process via the `duckdb`
 //! crate. Each uses the engine's parse-only path where one exists.
 
@@ -100,7 +100,7 @@ fn write_cache(dialect: Dialect, stmts: &[String], valid: &[bool]) -> Result<()>
 }
 
 /// PostgreSQL: real server in a container. Each statement runs inside a rolled
-/// back transaction (PG has transactional DDL); invalid iff the SQLSTATE is
+/// back transaction (PG has transactional DDL). Invalid iff the SQLSTATE is
 /// `42601` (syntax_error). Schema errors (42P01, 42703) and "cannot run in a
 /// transaction" (25xxx) are not syntax, so they count as valid (parsed fine).
 async fn label_postgresql(stmts: &[String]) -> Result<Vec<bool>> {
@@ -146,7 +146,7 @@ async fn label_postgresql(stmts: &[String]) -> Result<Vec<bool>> {
 /// MySQL: real server in a container. We use `PREPARE`, MySQL's parse-only path:
 /// it parses (and name-resolves) without executing, so there are no side effects
 /// and nothing blocks. Invalid iff `PREPARE` fails with error 1064
-/// (ER_PARSE_ERROR); a missing table/column (1146/1054) or "unsupported in the
+/// (ER_PARSE_ERROR). A missing table/column (1146/1054) or "unsupported in the
 /// prepared-statement protocol" (1295) means it parsed, so it is valid.
 async fn label_mysql(stmts: &[String]) -> Result<Vec<bool>> {
     use mysql_async::prelude::Queryable;
@@ -190,7 +190,7 @@ async fn label_mysql(stmts: &[String]) -> Result<Vec<bool>> {
 
 /// ClickHouse: real server in a container, queried over HTTP. `EXPLAIN AST`
 /// parses only (no execution, no tables needed). Invalid iff the exception code
-/// is 62 (SYNTAX_ERROR); any other code (unknown table/identifier, not
+/// is 62 (SYNTAX_ERROR). Any other code (unknown table/identifier, not
 /// implemented) means it parsed, so it is valid.
 async fn label_clickhouse(stmts: &[String]) -> Result<Vec<bool>> {
     use testcontainers_modules::clickhouse::ClickHouse;
@@ -289,7 +289,7 @@ async fn label_tsql(stmts: &[String]) -> Result<Vec<bool>> {
 /// DuckDB: real engine via the in-process `duckdb` crate (the actual libduckdb).
 /// DuckDB has no server, and its CLI errors carry no line numbers (so the
 /// container batch-correlation used for SQLite is unreliable), so we link the
-/// real engine directly. `prepare` parses and binds without executing; a
+/// real engine directly. `prepare` parses and binds without executing. A
 /// "Parser Error" is a syntax error (invalid), while a "Binder"/"Catalog Error"
 /// (unknown table or column) means it parsed, so it is valid.
 fn label_duckdb(stmts: &[String]) -> Result<Vec<bool>> {
@@ -312,9 +312,9 @@ fn label_duckdb(stmts: &[String]) -> Result<Vec<bool>> {
 /// SQLite: real engine via the `sqlite3` CLI in a one-shot container. We feed a
 /// script of `EXPLAIN <stmt>;` (compiles, does not execute, so no side effects)
 /// and read stderr. `EXPLAIN` resolves names, so "no such table/column" surfaces
-/// as a non-syntax error (valid); only a syntax error makes a statement invalid.
+/// as a non-syntax error (valid). Only a syntax error makes a statement invalid.
 fn label_sqlite(stmts: &[String]) -> Result<Vec<bool>> {
-    // Script line 1 is `.bail off`; statement i is on line i + 2.
+    // Script line 1 is `.bail off`. Statement i is on line i + 2.
     let mut script = String::from(".bail off\n");
     for s in stmts {
         script.push_str("EXPLAIN ");
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn missing_object_errors_are_valid() {
-        // The statement parsed; it only references objects we did not create.
+        // The statement parsed. It only references objects we did not create.
         assert!(!is_sqlite_invalid("no such table: documents"));
         assert!(!is_sqlite_invalid("no such column: x"));
         assert!(!is_sqlite_invalid("no such function: my_udf"));

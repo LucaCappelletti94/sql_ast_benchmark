@@ -1,5 +1,14 @@
 # Changelog
 
+## June 2026: robustness badges
+
+- Each parser page gains a Robustness section with six per-parser badges mined from the parser's own source and behavior, so a chooser can weigh crash-safety alongside speed and coverage.
+- Static panic discipline: a new `featurescan` crate parses each parser's library source with `syn` and counts panic-inducing constructs (panic!, unreachable!, unimplemented!, todo!, unwrap, expect, indexing), excluding tests, benches, and test-helper files, and reads the crate's own lint policy so a parser that bans those lints by design is shown as banned. The counts are a code-smell proxy, not a crash proof.
+- Empirical panic rate: grading now tells a caught panic apart from an honest error, so each parser page reports how often it actually panics on the real corpus instead of returning an error. qusql-parse is the only parser that panics on real input (a fraction of a percent), and turso_parser's many static unreachable! macros never fire, which is exactly why the static and empirical signals are shown side by side.
+- Recursion depth: a child-process probe measures how deeply each parser nests input before it either rejects with a clean recursion-limit error or overflows the stack and aborts the process. Among the pure-Rust parsers only sqlparser-rs (limit 48) and sqlite3-parser (no call recursion) are depth-guarded, while polyglot-sql overflows at depth 232.
+- Unsafe surface (count plus whether the crate forbids unsafe), direct dependency count, and whether the AST derives serde round out the badges.
+- The feature scan and depth probe run as part of `cargo regen`, and their committed JSON snapshots are baked into the site at build time, so the wasm build stays free of network access.
+
 ## June 2026: real engines, batch axis, and the time machine
 
 - Validity is now graded against the real database engines (PostgreSQL, SQLite, MySQL, ClickHouse, DuckDB, SQL Server), run once locally in Docker via testcontainers by the `oracle` crate, with the labels committed under `oracle/labels` so grading and CI need no Docker. Library oracles are gone.

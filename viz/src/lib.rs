@@ -17,6 +17,7 @@ pub use chart::{
 };
 pub use color::{parser_hex, parser_rgb};
 pub use schema::{
-    Bundle, CoverageFile, CoverageMatrix, DialectData, DialectRun, FamilyHistory, MemDist,
-    ParserBatch, ParserFailures, ParserMem, ParserMetrics, ParserPerf, VersionRun,
+    Bundle, CoverageFile, CoverageMatrix, DepthReport, DepthScan, DialectData, DialectRun,
+    FamilyHistory, FeatureCounts, FeatureScan, LintPolicy, MemDist, ParserBatch, ParserFailures,
+    ParserFeatures, ParserMem, ParserMetrics, ParserPerf, VersionRun,
 };

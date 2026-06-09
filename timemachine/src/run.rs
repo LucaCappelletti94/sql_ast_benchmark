@@ -5,7 +5,7 @@
 //! ([`stats::perf_from`], [`stats::dist_from`]) so the history is computed the
 //! same way as the current snapshot. Timing and memory run as separate binaries
 //! (the memory one installs a global allocator), each producing part of the
-//! history; the timing binary merges in the memory sidecar and writes the final
+//! history. The timing binary merges in the memory sidecar and writes the final
 //! per-family file.
 
 use sql_ast_benchmark::batch::join_batch;
@@ -159,6 +159,12 @@ fn metrics_of(report: &report::DialectReport, dialect: Dialect) -> ParserMetrics
         } else {
             pct(s.accepted_valid, report.valid_total)
         },
+        // The time machine does not measure the empirical panic rate (only the
+        // current build does, via BenchParser's panic-detecting parse_outcome), so
+        // it is left unmeasured rather than reported as a misleading zero.
+        attempted: s.attempted,
+        panicked: 0,
+        panic_pct: None,
     }
 }
 

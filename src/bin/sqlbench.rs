@@ -12,8 +12,9 @@
 //!                              prints the per-dataset acceptance matrix instead
 //!                              of per-dialect reference metrics.
 //!   export                     write `web/assets/bench.json.zst` for the explorer.
-//!   regen                      run the whole data pipeline (timing + memory
-//!                              benches, then export) with one command.
+//!   regen                      run the whole data pipeline (feature scan +
+//!                              depth probe + timing + memory benches +
+//!                              time machine, then export) with one command.
 //!
 //! The grading logic lives in the library (`report`). This binary is argument
 //! dispatch plus table formatting.
@@ -193,7 +194,7 @@ fn run_coverage() {
 /// The memory bench installs a custom global allocator, so it must run in its
 /// own process, separate from the timing bench (which must stay on the default
 /// allocator for fair numbers) and from export. That is why this shells out to
-/// the timing and memory benches rather than calling them in-process; export
+/// the timing and memory benches rather than calling them in-process. Export
 /// runs in-process at the end since it needs no special allocator.
 fn run_regen() {
     if let Err(e) = sql_ast_benchmark::datasets::ensure_corpus() {
@@ -202,9 +203,34 @@ fn run_regen() {
     }
     // Each step writes under target/ (read by export) or, for the time-machine,
     // straight to web/assets/history.json.zst. The memory passes install a global
-    // allocator, so they are separate processes; the time-machine memory pass
+    // allocator, so they are separate processes. The time-machine memory pass
     // runs before its timing pass, which merges the memory sidecar.
-    let steps: [(&str, &[&str]); 5] = [
+    let steps: [(&str, &[&str]); 7] = [
+        // Static source-feature scan and recursion-depth probe, writing the
+        // committed featurescan/data/*.json the web bakes in. Independent of the
+        // benches, so run first.
+        (
+            "cargo",
+            &[
+                "run",
+                "--release",
+                "-p",
+                "featurescan",
+                "--bin",
+                "featurescan",
+            ],
+        ), // featurescan/data/featurescan.json
+        (
+            "cargo",
+            &[
+                "run",
+                "--release",
+                "-p",
+                "featurescan",
+                "--bin",
+                "featurescan-depth",
+            ],
+        ), // featurescan/data/depth.json
         ("cargo", &["bench"]), // target/bench_dist/ + target/batch_dist/
         ("cargo", &["run", "--release", "-p", "membench"]), // target/mem_dist/
         (
@@ -264,7 +290,7 @@ fn usage() -> ! {
     eprintln!("usage: sqlbench <subcommand>");
     eprintln!("  correctness [--per-file]   grade parsers over datasets/");
     eprintln!("  export                     write web/assets/bench.json.zst for the site");
-    eprintln!("  regen                      run timing + memory benches, then export");
+    eprintln!("  regen                      run feature scan + depth probe + benches + time machine, then export");
     std::process::exit(2);
 }
 

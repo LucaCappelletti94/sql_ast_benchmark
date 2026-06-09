@@ -48,7 +48,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    // MAIN_CSS is force-referenced so the linker keeps the asset; the actual
+    // MAIN_CSS is force-referenced so the linker keeps the asset. The actual
     // <link> is emitted into the static <head> via with_static_head above.
     let _ = MAIN_CSS;
     rsx! {

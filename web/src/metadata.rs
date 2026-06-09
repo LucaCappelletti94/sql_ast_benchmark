@@ -245,7 +245,7 @@ pub struct ParserMeta {
 }
 
 /// Releases at least this recent count as actively maintained. Roughly twelve
-/// months before [`SNAPSHOT`]; `"YYYY-MM"` strings order by date.
+/// months before [`SNAPSHOT`]. `"YYYY-MM"` strings order by date.
 const MAINTAINED_SINCE: &str = "2025-05";
 
 /// Whether the crate's latest release is recent enough to look maintained.
@@ -261,16 +261,6 @@ pub const fn pure_rust_description(pure: bool) -> &'static str {
         "Pure Rust: builds with cargo alone, needing no C toolchain or native library."
     } else {
         "Not pure Rust: it binds a C library through FFI, so it needs a C toolchain and cannot target every platform (no wasm, no no_std)."
-    }
-}
-
-/// A full sentence describing the crate's use of `unsafe`.
-#[must_use]
-pub fn unsafe_description(note: &str) -> String {
-    if note.is_empty() {
-        "Memory safe: the crate contains no unsafe code, so the compiler vouches for its memory safety.".to_string()
-    } else {
-        format!("Uses unsafe code for {note}, stepping outside the compiler's memory-safety guarantees.")
     }
 }
 

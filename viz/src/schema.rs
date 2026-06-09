@@ -1,7 +1,122 @@
 //! The committed-snapshot JSON schema, shared by `sqlbench export` (serialize)
 //! and the `web` viewer (deserialize).
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+
+/// Static source-feature scan of one parser's library `src/` (panic-inducing
+/// constructs, unsafe usage, lint policy, dependency footprint). Produced by the
+/// `featurescan` crate and baked into the web metadata. See that crate for the
+/// counting rules and caveats (counts are a code-smell proxy, not a crash proof).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FeatureScan {
+    pub note: String,
+    pub parsers: Vec<ParserFeatures>,
+}
+
+/// One parser's static-scan results.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ParserFeatures {
+    /// Display name, matching the parser-page name.
+    pub parser: String,
+    pub package: String,
+    pub version: String,
+    pub counts: FeatureCounts,
+    pub lints: LintPolicy,
+    /// The crate sets `forbid(unsafe_code)`.
+    pub forbids_unsafe: bool,
+    /// Direct, non-dev, non-build dependencies.
+    pub direct_deps: usize,
+    /// The crate depends on serde (AST serialization is plausible).
+    pub serde_dep: bool,
+}
+
+/// Library-source construct counts (panic families, unsafe, LOC). All counts
+/// exclude tests, benches, examples, `#[cfg(test)]` items, and test-helper files.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct FeatureCounts {
+    pub loc: usize,
+    pub test_lines: usize,
+    /// Non-test lines (`loc - test_lines`), the per-KLOC density denominator.
+    pub code_loc: usize,
+    pub files: usize,
+    pub parse_failures: usize,
+    pub panic: usize,
+    pub unreachable: usize,
+    pub unimplemented: usize,
+    pub todo: usize,
+    pub assert: usize,
+    pub unwrap: usize,
+    pub expect: usize,
+    pub unwrap_unchecked: usize,
+    pub index: usize,
+    pub unsafe_blocks: usize,
+    pub unsafe_fns: usize,
+    pub unsafe_impls: usize,
+    pub serde_derive: bool,
+}
+
+impl FeatureCounts {
+    /// Hard, unconditional panics: `panic!`, `unreachable!`, `unimplemented!`, `todo!`.
+    #[must_use]
+    pub const fn hard_panics(&self) -> usize {
+        self.panic + self.unreachable + self.unimplemented + self.todo
+    }
+
+    /// Total unsafe occurrences (blocks, functions, impls).
+    #[must_use]
+    pub const fn unsafe_total(&self) -> usize {
+        self.unsafe_blocks + self.unsafe_fns + self.unsafe_impls
+    }
+}
+
+/// A parser's own panic-relevant lint policy: which lints it bans by design.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct LintPolicy {
+    /// Lint bare name (e.g. `unwrap_used`) -> level (`forbid`/`deny`/`warn`/`allow`).
+    pub lints: BTreeMap<String, String>,
+    /// The crate inherits `[lints]` from a workspace not resolvable from the
+    /// published package, so any policy there is invisible to the scan.
+    pub workspace_inherited: bool,
+}
+
+impl LintPolicy {
+    /// True if the lint is set to `deny` or `forbid` (a build-failing ban).
+    #[must_use]
+    pub fn is_banned(&self, lint: &str) -> bool {
+        matches!(
+            self.lints.get(lint).map(String::as_str),
+            Some("deny" | "forbid")
+        )
+    }
+}
+
+/// Recursion-depth probe results across parsers. Produced by `featurescan-depth`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DepthScan {
+    pub note: String,
+    pub stack_bytes: usize,
+    pub ceil: usize,
+    pub parsers: Vec<DepthReport>,
+}
+
+/// One parser's recursion-depth result.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DepthReport {
+    pub parser: String,
+    pub dialect: String,
+    /// Rejects deep input cleanly and never overflows up to the ceiling.
+    pub guarded: bool,
+    /// The parser does not accept the probe shape even at depth 1, so its graceful
+    /// limit cannot be read from this shape (the crash depth is still valid).
+    pub shape_rejected: bool,
+    /// Smallest depth rejected instead of accepted (graceful recursion limit).
+    pub limit_depth: Option<usize>,
+    /// Smallest depth that overflows the stack (None = never, up to the ceiling).
+    pub crash_depth: Option<usize>,
+    pub ceil: usize,
+}
 
 /// Top-level results bundle (one committed `bench.json.zst`).
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -46,7 +161,7 @@ pub struct DialectData {
 /// Whole-script (batch) parse results for one parser in one dialect.
 ///
 /// The parser's whole accepted set is concatenated into a single script and
-/// parsed in one call; the cost is divided by the statement count. This
+/// parsed in one call, and the cost is divided by the statement count. This
 /// complements the per-statement [`ParserPerf`]/[`ParserMem`], exposing the
 /// amortization a batch API gains or loses (a grown `Vec` of statements, all
 /// ASTs held at once). The values are means (total over count), so they compare
@@ -106,7 +221,7 @@ pub struct MemDist {
 
 /// A preview of the statements one parser rejected in one dialect, plus the
 /// info needed to offer the full set as a download. The full list is shipped
-/// separately as a committed `.tsv.zst` file (see `download`); only a short
+/// separately as a committed `.tsv.zst` file (see `download`). Only a short
 /// preview is embedded in the JSON to keep it small.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ParserFailures {
@@ -152,6 +267,20 @@ pub struct ParserMetrics {
     pub fidelity_pct: Option<f64>,
     /// Provenance dialects: fraction of the corpus accepted.
     pub accept_pct: Option<f64>,
+    /// Statements the parser attempted in this dialect (the panic-rate
+    /// denominator), so per-parser rates can be aggregated across dialects. 0 in
+    /// older snapshots.
+    #[serde(default)]
+    pub attempted: usize,
+    /// Statements on which the parser threw a caught panic instead of returning a
+    /// result (0 in older snapshots, and in historical time-machine versions whose
+    /// panic rate is not measured).
+    #[serde(default)]
+    pub panicked: usize,
+    /// Empirical panic rate: panics as a fraction of statements attempted in this
+    /// dialect. `None` when nothing was attempted or the value is unmeasured.
+    #[serde(default)]
+    pub panic_pct: Option<f64>,
 }
 
 /// Timing distribution for one parser in one dialect.

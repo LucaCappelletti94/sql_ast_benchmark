@@ -22,7 +22,7 @@ type Res = Result<(), Box<dyn std::error::Error>>;
 /// Pixels reserved on the right of each chart for the legend, sized to the
 /// widest label so short-label charts (e.g. a single-dialect parser page) do
 /// not get a wide empty band while long-label charts still fit. The 34px swatch
-/// indent precedes the text; ~5px/char approximates 11px sans-serif, plus a
+/// indent precedes the text. ~5px/char approximates 11px sans-serif, plus a
 /// 16px right margin. Clamped so even one short label keeps a sane band.
 fn legend_width(lines: &[Line]) -> i32 {
     let max_chars = lines
@@ -423,7 +423,7 @@ pub fn trend_lines(title: &str, series: &[TrendSeries], w: u32, h: u32, y_desc: 
             if !xmin.is_finite() || !xmax.is_finite() {
                 return Ok(()); // no data
             }
-            // Pad the x range; a single-release family still gets a sane window.
+            // Pad the x range. A single-release family still gets a sane window.
             let xpad = ((xmax - xmin) * 0.08).max(0.08);
             let (xlo, xhi) = (xmin - xpad, xmax + xpad);
             if !ymin.is_finite() || ymin <= 0.0 {

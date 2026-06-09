@@ -33,6 +33,13 @@ pub struct ParserStat {
     pub roundtrip_ok: usize,
     /// Reference-fidelity-preserving among accepted-valid.
     pub fidelity_ok: usize,
+    /// Statements the parser attempted in this dialect (the panic-rate
+    /// denominator): every graded statement, since a supporting parser is run on
+    /// all of them. Zero for a parser that does not model the dialect.
+    pub attempted: usize,
+    /// Statements on which the parser threw a caught panic instead of returning a
+    /// result (the empirical panic-rate numerator).
+    pub panicked: usize,
 }
 
 impl ParserStat {
@@ -41,6 +48,8 @@ impl ParserStat {
         self.accepted_invalid += other.accepted_invalid;
         self.roundtrip_ok += other.roundtrip_ok;
         self.fidelity_ok += other.fidelity_ok;
+        self.attempted += other.attempted;
+        self.panicked += other.panicked;
     }
 }
 
@@ -111,8 +120,20 @@ pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[&dyn Parser]) 
         }
 
         for (i, &p) in parsers.iter().enumerate() {
-            if p.accepts(sql, dialect) != Some(true) {
-                continue;
+            // A panic is still a non-acceptance (it does not enter the accepted
+            // tallies), but it is counted separately for the panic-rate metric.
+            match p.parse_outcome(sql, dialect) {
+                crate::ParseOutcome::Unsupported => continue,
+                crate::ParseOutcome::Panicked(_) => {
+                    report.stats[i].attempted += 1;
+                    report.stats[i].panicked += 1;
+                    continue;
+                }
+                crate::ParseOutcome::Rejected(_) => {
+                    report.stats[i].attempted += 1;
+                    continue;
+                }
+                crate::ParseOutcome::Accepted => report.stats[i].attempted += 1,
             }
             if is_valid {
                 report.stats[i].accepted_valid += 1;
@@ -417,6 +438,76 @@ mod tests {
         let p = std::env::temp_dir().join(format!("sqlbench_{tag}_{}_{nanos}", std::process::id()));
         fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    /// A parser whose outcome is driven by the statement text, so grading of
+    /// panics can be exercised deterministically without a real parser that
+    /// happens to panic. "OK" is accepted, "PANIC" panics, anything else rejects.
+    struct MockParser;
+
+    impl crate::Parser for MockParser {
+        fn id(&self) -> crate::ParserId {
+            crate::ParserId {
+                family: "mock",
+                version: "0",
+                released: "",
+            }
+        }
+        fn supports(&self, _d: Dialect) -> bool {
+            true
+        }
+        fn try_parse(&self, sql: &str, dialect: Dialect) -> Option<Result<(), String>> {
+            match self.parse_outcome(sql, dialect) {
+                crate::ParseOutcome::Unsupported => None,
+                crate::ParseOutcome::Accepted => Some(Ok(())),
+                crate::ParseOutcome::Rejected(e) | crate::ParseOutcome::Panicked(e) => Some(Err(e)),
+            }
+        }
+        fn parse_outcome(&self, sql: &str, _d: Dialect) -> crate::ParseOutcome {
+            match sql {
+                "OK" => crate::ParseOutcome::Accepted,
+                "PANIC" => crate::ParseOutcome::Panicked("boom".to_string()),
+                _ => crate::ParseOutcome::Rejected("nope".to_string()),
+            }
+        }
+        fn parse_once(&self, sql: &str, _d: Dialect) -> bool {
+            sql == "OK"
+        }
+        fn parse_batch(&self, _sql: &str, _d: Dialect) -> Option<usize> {
+            None
+        }
+        fn can_batch(&self) -> bool {
+            false
+        }
+        fn measure_mem(&self, _sql: &str, _d: Dialect) -> Option<(usize, usize)> {
+            None
+        }
+        fn reprint(&self, _sql: &str, _d: Dialect) -> Option<String> {
+            None
+        }
+        fn can_reprint(&self, _d: Dialect) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn grade_chunk_counts_panics_separately_from_rejections() {
+        let stmts = vec![
+            "OK".to_string(),
+            "PANIC".to_string(),
+            "PANIC".to_string(),
+            "reject".to_string(),
+        ];
+        let mock = MockParser;
+        let parsers: [&dyn Parser; 1] = [&mock];
+        // Multi is a provenance dialect: every statement is treated as valid.
+        let r = grade_chunk(&stmts, Dialect::Multi, &parsers);
+        let s = &r.stats[0];
+        assert_eq!(s.attempted, 4, "every statement attempted");
+        assert_eq!(s.panicked, 2, "two panics counted");
+        assert_eq!(s.accepted_valid, 1, "only OK accepted");
+        // A panic is a non-acceptance: it must not inflate the accepted tallies.
+        assert_eq!(s.accepted_invalid, 0);
     }
 
     #[test]

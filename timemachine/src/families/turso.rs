@@ -1,5 +1,5 @@
 //! turso_parser (the SQLite parser from Turso). SQLite only, a streaming
-//! `next_cmd` loop; reprints via each command's `Display`. Only one stable
+//! `next_cmd` loop. Reprints via each command's `Display`. Only one stable
 //! release is published, so the history is a single point.
 
 use sql_ast_benchmark::datasets::Dialect;
