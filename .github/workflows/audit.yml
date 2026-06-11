@@ -1,0 +1,27 @@
+name: Security audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so newly published advisories are caught without a code change.
+    - cron: "0 6 * * 1"
+
+jobs:
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      # Cargo.lock is gitignored (the benchmark tracks latest deps), so resolve
+      # a fresh lockfile to audit the versions CI would actually build.
+      - name: Generate lockfile
+        run: cargo generate-lockfile
+      - name: Audit dependencies
+        run: cargo audit

@@ -1,0 +1,25 @@
+# Configuration for cargo audit (https://github.com/rustsec/rustsec).
+#
+# Every ignored advisory below comes from optional tooling or the historical
+# parser versions the benchmark deliberately compiles, never from the core
+# library or anything in the published site. A new advisory anywhere else still
+# fails the build. Unmaintained-crate warnings (yaml-rust via syntect, bincode,
+# proc-macro-error) are left visible on purpose, they are informational and do
+# not fail the run.
+[advisories]
+ignore = [
+    # fast-float 0.2.0: segfault (no upstream fix) and soundness issues. Pulled
+    # only by the historical databend-common-ast 0.0.3 that the time-machine
+    # crate compiles to benchmark old releases. Current databend uses the
+    # maintained fast-float2 fork, so this never reaches the core benchmark.
+    "RUSTSEC-2025-0003",
+    "RUSTSEC-2024-0379",
+    # rustls-webpki 0.101.7: three certificate-validation advisories, fixed only
+    # in a rustls line that tiberius 0.12.3 does not yet allow. Pulled only by
+    # tiberius (the SQL Server client) in the oracle crate, which runs locally
+    # in Docker to refresh the committed validity labels. It is not part of the
+    # benchmark, the site, or CI, and it talks only to a trusted local container.
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
+]
