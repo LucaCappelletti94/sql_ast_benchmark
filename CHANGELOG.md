@@ -1,5 +1,12 @@
 # Changelog
 
+## June 2026: parser refresh and a failed-to-parse badge
+
+- Updated the benchmarked parsers to their latest versions: polyglot-sql 0.4.4 to 0.5.1, sqlglot-rust 0.10.0 to 0.10.1, and the git-tracked sqlparser-rs and pg_query.rs to their current commits (sqlparser-rs now at b3760221). turso_parser stays on 0.6.1 since the only newer version is a prerelease.
+- The time machine gains the new release points (polyglot-sql 0.5.1 and sqlglot-rust 0.10.1) so the trends end at the current code.
+- Each parser page gains a failed-to-parse badge in the meta-grid showing how many statements the parser rejected that it was expected to accept, summed across every dialect. It is a neutral coverage figure (every parser misses some real-world SQL), with the percentage and denominator in the tooltip.
+- Added three CI-practice badges per parser: cargo deny (whether CI enforces a dependency policy with cargo deny), cargo audit (whether CI scans dependencies against the RustSec advisory database, via cargo audit or cargo deny check advisories), and cargo mutants (whether CI runs mutation testing). As of this snapshot turso is the only parser running cargo deny (its licenses check only), and none run cargo audit or cargo mutants.
+
 ## June 2026: robustness badges
 
 - Each parser page gains a Robustness section with six per-parser badges mined from the parser's own source and behavior, so a chooser can weigh crash-safety alongside speed and coverage.

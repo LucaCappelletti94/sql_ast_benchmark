@@ -58,13 +58,14 @@ sqlparser_v0_62 = { package = "sqlparser", version = "=0.62.0" }
 
 # sqlglot-rust minors (0.9 and 0.10 are the two semver-incompatible groups).
 sqlglot_v0_9 = { package = "sqlglot-rust", version = "=0.9.37" }
-sqlglot_v0_10 = { package = "sqlglot-rust", version = "=0.10.0" }
+sqlglot_v0_10 = { package = "sqlglot-rust", version = "=0.10.1" }
 
 # polyglot-sql minors (latest patch of each).
 polyglot_v0_1 = { package = "polyglot-sql", version = "=0.1.15" }
 polyglot_v0_2 = { package = "polyglot-sql", version = "=0.2.3" }
 polyglot_v0_3 = { package = "polyglot-sql", version = "=0.3.11" }
 polyglot_v0_4 = { package = "polyglot-sql", version = "=0.4.4" }
+polyglot_v0_5 = { package = "polyglot-sql", version = "=0.5.1" }
 
 # databend-common-ast minors (single-statement parser).
 databend_v0_0 = { package = "databend-common-ast", version = "=0.0.3" }

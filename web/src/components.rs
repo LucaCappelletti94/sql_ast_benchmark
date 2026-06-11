@@ -6,11 +6,11 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaArrowsRotate, FaBomb, FaBox, FaBug, FaBuilding, FaCalendarDays,
-    FaChartColumn, FaChartLine, FaCode, FaCodeCommit, FaCodeFork, FaCopy, FaCube, FaDatabase,
-    FaDownload, FaFlaskVial, FaHeartPulse, FaLayerGroup, FaMicrochip, FaMobileScreen,
-    FaScaleBalanced, FaServer, FaShieldHalved, FaSitemap, FaStar, FaStopwatch, FaTableCells, FaTag,
-    FaTriangleExclamation, FaUsers, FaVial,
+    FaArrowLeftLong, FaArrowsRotate, FaBan, FaBomb, FaBox, FaBug, FaBuilding, FaCalendarDays,
+    FaChartColumn, FaChartLine, FaCircleXmark, FaCode, FaCodeCommit, FaCodeFork, FaCopy, FaCube,
+    FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaHeartPulse, FaLayerGroup,
+    FaMicrochip, FaMobileScreen, FaScaleBalanced, FaServer, FaShieldHalved, FaSitemap, FaStar,
+    FaStopwatch, FaTableCells, FaTag, FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -1458,8 +1458,12 @@ fn parser_meta_pills(parser: &str) -> Element {
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaRust } }, "impl", if m.pure_rust { "pure Rust".to_string() } else { "C FFI".to_string() }, m.pure_rust, crate::metadata::pure_rust_description(m.pure_rust))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "maintained", if crate::metadata::maintained(m.last_release) { "active".to_string() } else { "stale".to_string() }, crate::metadata::maintained(m.last_release), &crate::metadata::maintenance_description(m.last_release))}
             {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaFlaskVial } }, "miri/san", if m.sanitizers.is_empty() { "no".to_string() } else { m.sanitizers.to_string() }, !m.sanitizers.is_empty(), &crate::metadata::sanitizer_description(m.sanitizers))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBan } }, "cargo deny", if m.cargo_deny { "yes".to_string() } else { "no".to_string() }, m.cargo_deny, crate::metadata::cargo_deny_description(m.cargo_deny))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaFileShield } }, "cargo audit", if m.cargo_audit { "yes".to_string() } else { "no".to_string() }, m.cargo_audit, crate::metadata::cargo_audit_description(m.cargo_audit))}
+            {meta_flag(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaDna } }, "cargo mutants", if m.cargo_mutants { "yes".to_string() } else { "no".to_string() }, m.cargo_mutants, crate::metadata::cargo_mutants_description(m.cargo_mutants))}
             {feat.map_or_else(|| rsx! {}, panic_discipline_pill)}
             {empirical_panic_pill(panic)}
+            {failures_pill(crate::data::failure_totals(parser))}
             {feat.map_or_else(|| rsx! {}, |f| unsafe_pill(f, m.unsafe_note))}
             {depth.map_or_else(|| rsx! {}, depth_pill)}
             {feat.map_or_else(|| rsx! {}, deps_pill)}
@@ -1550,6 +1554,43 @@ fn empirical_panic_pill(totals: Option<(usize, usize)>) -> Element {
         value,
         ok,
         &desc,
+    )
+}
+
+/// Failed-to-parse pill: how many statements the parser rejected that it was
+/// expected to accept, summed across every dialect. Neutral (informational):
+/// every parser misses some real-world SQL, so this is a coverage figure, not an
+/// alarm, and a red flag on every parser would dilute the genuine red flags. The
+/// value is the absolute count the user asked for; the rate is in the tooltip.
+fn failures_pill(totals: Option<(usize, usize)>) -> Element {
+    let (value, desc) = match totals {
+        None => (
+            "n/a".to_string(),
+            "Failed-to-parse count not available in this snapshot.".to_string(),
+        ),
+        Some((rejected, expected)) => {
+            let pct = if expected > 0 {
+                100.0 * rejected as f64 / expected as f64
+            } else {
+                0.0
+            };
+            (
+                commas(rejected),
+                format!(
+                    "Failed to parse: {} of {} statements ({pct:.2}%) that this parser was \
+                     expected to accept were rejected, summed across every dialect. These are the \
+                     statements listed on the parser's failures download.",
+                    commas(rejected),
+                    commas(expected)
+                ),
+            )
+        }
+    };
+    meta_item(
+        rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaCircleXmark } },
+        "failed to parse",
+        value,
+        desc,
     )
 }
 

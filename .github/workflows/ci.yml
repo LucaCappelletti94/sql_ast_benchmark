@@ -107,7 +107,11 @@ jobs:
       - name: Extract corpus
         run: tar --zstd -xf datasets.tar.zst
       - name: Run coverage
-        run: cargo tarpaulin --out Xml
+        # Exclude timemachine: it links several sqlglot-rust versions side by side,
+        # each exporting the same unmangled extern "C" FFI symbols, which collide at
+        # link time once tarpaulin disables dead-code stripping. It has no unit tests
+        # of its own, so excluding it loses no coverage.
+        run: cargo tarpaulin --workspace --exclude timemachine --out Xml
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with:
