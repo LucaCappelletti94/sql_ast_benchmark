@@ -6,11 +6,12 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaArrowsRotate, FaBan, FaBomb, FaBox, FaBug, FaBuilding, FaCalendarDays,
-    FaChartColumn, FaChartLine, FaCircleXmark, FaCode, FaCodeCommit, FaCodeFork, FaCopy, FaCube,
-    FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaHeartPulse, FaLayerGroup,
-    FaMicrochip, FaMobileScreen, FaScaleBalanced, FaServer, FaShieldHalved, FaSitemap, FaStar,
-    FaStopwatch, FaTableCells, FaTag, FaTriangleExclamation, FaUsers, FaVial,
+    FaArrowLeftLong, FaArrowsRotate, FaBan, FaBomb, FaBox, FaBug, FaBuilding, FaBullseye,
+    FaCalendarDays, FaChartColumn, FaChartLine, FaCircleXmark, FaCode, FaCodeCommit, FaCodeFork,
+    FaCopy, FaCube, FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaGaugeHigh,
+    FaHeartPulse, FaLayerGroup, FaMicrochip, FaMobileScreen, FaRankingStar, FaScaleBalanced,
+    FaServer, FaShieldHalved, FaSitemap, FaStar, FaStopwatch, FaTableCells, FaTag,
+    FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -356,6 +357,17 @@ pub fn Overview() -> Element {
                 {rich_text("On their home dialect the reference bindings are exact by construction, so the more telling comparison is among the pure-Rust parsers. There, [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) is the most broadly capable, the permissive parsers such as [polyglot-sql](https://github.com/tobilg/polyglot) accept the most statements but pay for it with a high false-positive rate, and the stricter parsers reject more in exchange for precision. Speed spans more than an order of magnitude, from well under a microsecond per statement for the fastest parsers to the low single-digit microseconds for most, with [polyglot-sql](https://github.com/tobilg/polyglot) a clear outlier at roughly fifteen. No parser leads on every axis, so the right choice comes down to what a given project values most: broad coverage, few false positives, or raw speed.").into_iter()}
             }
         }
+        div { class: "section-head",
+            h2 {
+                Icon { width: 18, height: 18, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaRankingStar }
+                "Overall ranking"
+            }
+        }
+        p { class: "table-cap",
+            "A single composite score, 0 to 100, blending every dimension: correctness 45 percent, robustness 20, project health 15, speed 12, and memory 8. Each parser is judged only on the dialects it models, never penalised for dialects it never claimed, and breadth is not itself rewarded. Correctness and health are absolute; speed and memory are ranked against the field within each dialect, then averaged. Click any column to sort. A dimension that does not apply (memory for the FFI bindings) shows n/a and its weight is redistributed."
+        }
+        {score_leaderboard()}
+
         div { class: "section-head",
             h2 {
                 Icon { width: 18, height: 18, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaDatabase }
@@ -710,6 +722,9 @@ pub fn ParserView(name: String) -> Element {
                     h1 { "{parser}" }
                     p { class: "hero-stats",
                         span { class: "stat", strong { "{rows.len()}" } " of {b.dialects.len()} dialects" }
+                        if let Some(sc) = crate::score::parser_score(&parser) {
+                            span { class: "stat", strong { "{sc.overall:.0}" } " / 100 score" }
+                        }
                     }
                 }
                 {parser_meta_pills(&parser)}
@@ -717,6 +732,8 @@ pub fn ParserView(name: String) -> Element {
         }
 
         {blurb(crate::descriptions::parser_blurb(&parser))}
+
+        {parser_score_section(&parser)}
 
         if has_charts {
             section { class: "block",
@@ -1426,6 +1443,90 @@ fn dialect_meta_pills(dir: &str) -> Element {
 /// Repository and crate metadata pills for a parser, shown inside the parser
 /// hero banner. Renders nothing for a parser with no recorded metadata. Figures
 /// are a dated snapshot (see `metadata::SNAPSHOT`).
+/// The overall-score leaderboard for the overview: one row per parser, ranked
+/// by the composite score, with the five sub-scores as sortable columns.
+fn score_leaderboard() -> Element {
+    let columns = vec![
+        "overall".to_string(),
+        "correctness".to_string(),
+        "robustness".to_string(),
+        "speed".to_string(),
+        "memory".to_string(),
+        "health".to_string(),
+    ];
+    let cell = |v: Option<f64>| {
+        v.map_or_else(
+            || Cell::with("n/a".to_string(), None),
+            |x| Cell::with(format!("{x:.0}"), Some(x)),
+        )
+    };
+    let mut scored: Vec<(&String, &crate::score::ParserScore)> =
+        crate::score::all_scores().iter().collect();
+    scored.sort_by(|a, b| {
+        b.1.overall
+            .partial_cmp(&a.1.overall)
+            .unwrap_or(Ordering::Equal)
+    });
+    let rows: Vec<Row> = scored
+        .into_iter()
+        .map(|(name, s)| Row {
+            key: name.clone(),
+            head: Head::Parser(name.clone()),
+            cells: vec![
+                Cell::with(format!("{:.0}", s.overall), Some(s.overall)),
+                cell(s.correctness),
+                cell(s.robustness),
+                cell(s.speed),
+                cell(s.memory),
+                cell(s.health),
+            ],
+        })
+        .collect();
+    rsx! {
+        SortTable {
+            caption: "Overall parser score, ranked".to_string(),
+            corner: "parser".to_string(),
+            columns,
+            rows,
+            footer: None,
+        }
+    }
+}
+
+/// The per-parser score block on the parser page: the overall number plus the
+/// five sub-scores as pills, so the composite is never an opaque figure.
+fn parser_score_section(parser: &str) -> Element {
+    let Some(s) = crate::score::parser_score(parser) else {
+        return rsx! {};
+    };
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaRankingStar }
+                "Overall score"
+            }
+            p { class: "table-cap",
+                "A composite of every dimension, 0 to 100, weighting correctness 45 percent, robustness 20, project health 15, speed 12, and memory 8. Computed only over the dialects this parser models. Speed and memory are ranked against the other parsers on each dialect; correctness and health are absolute."
+            }
+            p { class: "hero-stats",
+                span { class: "stat", strong { "{s.overall:.0}" } " / 100 overall" }
+            }
+            div { class: "meta-grid",
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", fmt_score(s.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, round-trip, and fidelity, averaged over the dialects this parser models.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "robustness", fmt_score(s.robustness), "Robustness sub-score (0 to 100): empirical panic rate on the real corpus, recursion-depth guarding, unsafe surface, and static panic discipline.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGaugeHigh } }, "speed", fmt_score(s.speed), "Speed sub-score (0 to 100): median parse time ranked against the other parsers within each dialect on a log scale, then averaged.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "memory", fmt_score(s.memory), "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. Shown n/a for FFI parsers, whose C-side allocations are not measured.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "health", fmt_score(s.health), "Project-health sub-score (0 to 100): maintenance, tests, benches, fuzzing, sanitizers, supply-chain gates, licensing, release cadence, and contributor depth. Excludes popularity proxies.".to_string())}
+            }
+        }
+    }
+}
+
+/// Format a sub-score as a rounded number, or "n/a" when it does not apply.
+fn fmt_score(v: Option<f64>) -> String {
+    v.map_or_else(|| "n/a".to_string(), |x| format!("{x:.0}"))
+}
+
 fn parser_meta_pills(parser: &str) -> Element {
     use crate::metadata::{parser_meta, SNAPSHOT};
     let Some(m) = parser_meta(parser) else {
@@ -1890,6 +1991,12 @@ fn col_help(name: &str) -> Option<&'static str> {
     Some(match name {
         "parser" => "The SQL parser library under test.",
         "dialect" => "The SQL dialect the row reports on.",
+        "overall" => "Overall score (0 to 100): correctness 45 percent, robustness 20, project health 15, speed 12, memory 8, computed only over the dialects the parser models. Higher is better.",
+        "correctness" => "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, round-trip, and fidelity, averaged over the parser's dialects. Higher is better.",
+        "robustness" => "Robustness sub-score (0 to 100): empirical panic rate, recursion-depth guarding, unsafe surface, and static panic discipline. Higher is better.",
+        "speed" => "Speed sub-score (0 to 100): median parse time ranked against the field within each dialect on a log scale, then averaged. Higher is better.",
+        "memory" => "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. n/a for FFI parsers. Higher is better.",
+        "health" => "Project-health sub-score (0 to 100): maintenance, tests, fuzzing, sanitizers, supply-chain gates, licensing, cadence, and contributor depth. Higher is better.",
         "recall" => "Recall: of the statements the reference parser treats as valid, the share this parser also accepted. It measures agreement with the reference on what counts as valid SQL, not whether the parser runs. Higher is better.",
         "accept" => "Acceptance rate: the share of the corpus this parser accepted. Used where there is no reference parser, so every corpus statement is treated as expected-valid.",
         "accept / recall" => "Recall where a reference parser exists (agreement with it on valid statements), otherwise the plain acceptance rate. Higher is better.",
