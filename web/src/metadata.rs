@@ -242,6 +242,14 @@ pub struct ParserMeta {
     pub last_release: &'static str,
     /// Sanitizer/Miri run in CI (short label, e.g. `"leak"`), or `""` for none.
     pub sanitizers: &'static str,
+    /// Whether CI scans dependencies against the RustSec advisory database, via
+    /// `cargo audit` or `cargo deny check advisories`.
+    pub cargo_audit: bool,
+    /// Whether CI runs mutation testing with `cargo mutants`.
+    pub cargo_mutants: bool,
+    /// Whether CI runs `cargo deny` to enforce a dependency policy (licenses,
+    /// banned or duplicate crates, untrusted sources, and/or advisories).
+    pub cargo_deny: bool,
 }
 
 /// Releases at least this recent count as actively maintained. Roughly twelve
@@ -281,6 +289,40 @@ pub fn sanitizer_description(sanitizers: &str) -> String {
         "No sanitizer or Miri in CI, so memory errors, leaks, and undefined behavior are not caught automatically.".to_string()
     } else {
         format!("Runs the {sanitizers} sanitizer in CI, catching memory errors automatically on every change.")
+    }
+}
+
+/// A full sentence describing whether CI scans dependencies for known security
+/// advisories (`cargo audit` or `cargo deny check advisories`).
+#[must_use]
+pub const fn cargo_audit_description(has: bool) -> &'static str {
+    if has {
+        "Audits dependencies in CI: runs cargo audit (or cargo deny check advisories) against the RustSec database, so a dependency with a known vulnerability fails the build."
+    } else {
+        "No dependency audit in CI: does not run cargo audit or cargo deny check advisories, so a known vulnerability in a dependency would go unflagged."
+    }
+}
+
+/// A full sentence describing whether CI runs mutation testing with
+/// `cargo mutants`, a measure of how thoroughly the test suite catches bugs.
+#[must_use]
+pub const fn cargo_mutants_description(has: bool) -> &'static str {
+    if has {
+        "Runs mutation testing in CI: cargo mutants injects deliberate bugs and checks the test suite catches them, a strong signal the tests actually exercise behavior."
+    } else {
+        "No mutation testing in CI: does not run cargo mutants, so there is no automated measure of how many real bugs its tests would actually catch."
+    }
+}
+
+/// A full sentence describing whether CI runs `cargo deny` to enforce a
+/// dependency policy (licenses, banned or duplicate crates, untrusted sources,
+/// and/or RustSec advisories).
+#[must_use]
+pub const fn cargo_deny_description(has: bool) -> &'static str {
+    if has {
+        "Enforces a dependency policy in CI with cargo deny, gating on some of licenses, banned or duplicate crates, untrusted sources, and RustSec advisories (which checks are on depends on the project's deny.toml)."
+    } else {
+        "No cargo deny in CI: dependency licenses, banned or duplicate crates, untrusted sources, and advisories are not gated automatically."
     }
 }
 
@@ -344,6 +386,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "",
             last_release: "2026-05",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         // Both libpg_query bindings: own crate has no harness, but libpg_query
         // (PostgreSQL's own C parser) is fuzzed upstream.
@@ -367,6 +412,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "the C FFI bindings to libpg_query",
             last_release: "2025-08",
             sanitizers: "leak",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         "qusql-parse" => ParserMeta {
             stars: 17,
@@ -388,6 +436,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "one unchecked UTF-8 conversion in the lexer",
             last_release: "2026-05",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         "polyglot-sql" => ParserMeta {
             stars: 829,
@@ -409,6 +460,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "",
             last_release: "2026-06",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         "databend-common-ast" => ParserMeta {
             stars: 9308,
@@ -430,6 +484,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "",
             last_release: "2026-03",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         "sqlglot-rust" => ParserMeta {
             stars: 15,
@@ -451,6 +508,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "its C-ABI export layer",
             last_release: "2026-05",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         "sqlite3-parser" => ParserMeta {
             stars: 62,
@@ -472,6 +532,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "one unchecked UTF-8 conversion in keyword lookup",
             last_release: "2026-04",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         "turso_parser" => ParserMeta {
             stars: 19043,
@@ -493,6 +556,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "unchecked UTF-8 conversions in the lexer and parser",
             last_release: "2026-05",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: true,
         },
         "orql" => ParserMeta {
             stars: 0,
@@ -514,6 +580,9 @@ pub fn parser_meta(name: &str) -> Option<ParserMeta> {
             unsafe_note: "an unchecked UTF-8 conversion and a transmute",
             last_release: "2026-01",
             sanitizers: "",
+            cargo_audit: false,
+            cargo_mutants: false,
+            cargo_deny: false,
         },
         _ => return None,
     })

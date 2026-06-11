@@ -101,3 +101,4 @@ polyglot_version!(PolyglotV0_1, polyglot_v0_1, "0.1.15", "2026-03-16");
 polyglot_version!(PolyglotV0_2, polyglot_v0_2, "0.2.3", "2026-04-05");
 polyglot_version!(PolyglotV0_3, polyglot_v0_3, "0.3.11", "2026-05-15");
 polyglot_version!(PolyglotV0_4, polyglot_v0_4, "0.4.4", "2026-06-03");
+polyglot_version!(PolyglotV0_5, polyglot_v0_5, "0.5.1", "2026-06-09");

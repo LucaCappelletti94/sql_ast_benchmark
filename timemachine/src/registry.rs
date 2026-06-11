@@ -50,6 +50,7 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(polyglot::PolyglotV0_2),
         Box::new(polyglot::PolyglotV0_3),
         Box::new(polyglot::PolyglotV0_4),
+        Box::new(polyglot::PolyglotV0_5),
         Box::new(databend::DatabendV0_0),
         Box::new(databend::DatabendV0_1),
         Box::new(databend::DatabendV0_2),

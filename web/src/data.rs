@@ -92,6 +92,25 @@ pub fn panic_totals(parser: &str) -> Option<(usize, usize)> {
     (attempted > 0).then_some((panicked, attempted))
 }
 
+/// Aggregate failed-to-parse totals for one parser across every dialect:
+/// `(rejected, expected)`. A statement counts as failed when the parser was
+/// expected to accept it (reference-valid statements in reference dialects, every
+/// statement in provenance dialects) but rejected it. This is the same set the
+/// per-parser failures download lists. Returns `None` when nothing was expected
+/// (e.g. an older snapshot without the failures section), so the caller can show
+/// the badge as unmeasured rather than 0.
+#[must_use]
+pub fn failure_totals(parser: &str) -> Option<(usize, usize)> {
+    let (mut rejected, mut expected) = (0usize, 0usize);
+    for dialect in &bundle().dialects {
+        if let Some(f) = dialect.failures.iter().find(|f| f.parser == parser) {
+            rejected += f.rejected_total;
+            expected += f.expected_total;
+        }
+    }
+    (expected > 0).then_some((rejected, expected))
+}
+
 #[cfg(test)]
 mod tests {
     /// The committed snapshot must decompress and deserialize into the shared

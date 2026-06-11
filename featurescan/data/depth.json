@@ -72,7 +72,7 @@
       "guarded": false,
       "shape_rejected": false,
       "limit_depth": null,
-      "crash_depth": 548,
+      "crash_depth": 412,
       "ceil": 50000
     },
     {

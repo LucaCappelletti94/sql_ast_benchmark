@@ -6,9 +6,9 @@
       "package": "sqlparser",
       "version": "0.62.0",
       "counts": {
-        "loc": 68907,
+        "loc": 69033,
         "test_lines": 4276,
-        "code_loc": 64631,
+        "code_loc": 64757,
         "files": 43,
         "parse_failures": 0,
         "panic": 3,
@@ -27,11 +27,12 @@
       },
       "lints": {
         "lints": {
-          "unreachable": "forbid"
+          "unreachable": "forbid",
+          "unsafe_code": "forbid"
         },
         "workspace_inherited": false
       },
-      "forbids_unsafe": false,
+      "forbids_unsafe": true,
       "direct_deps": 6,
       "serde_dep": true
     },
@@ -134,12 +135,12 @@
     {
       "parser": "polyglot-sql",
       "package": "polyglot-sql",
-      "version": "0.4.4",
+      "version": "0.5.1",
       "counts": {
-        "loc": 239954,
-        "test_lines": 16786,
-        "code_loc": 223168,
-        "files": 74,
+        "loc": 241432,
+        "test_lines": 16915,
+        "code_loc": 224517,
+        "files": 75,
         "parse_failures": 0,
         "panic": 5,
         "unreachable": 212,
@@ -198,22 +199,22 @@
     {
       "parser": "sqlglot-rust",
       "package": "sqlglot-rust",
-      "version": "0.10.0",
+      "version": "0.10.1",
       "counts": {
-        "loc": 29937,
-        "test_lines": 3951,
-        "code_loc": 25986,
+        "loc": 36480,
+        "test_lines": 3986,
+        "code_loc": 32494,
         "files": 29,
         "parse_failures": 0,
         "panic": 0,
-        "unreachable": 4,
+        "unreachable": 6,
         "unimplemented": 0,
         "todo": 0,
         "assert": 1,
-        "unwrap": 21,
+        "unwrap": 33,
         "expect": 4,
         "unwrap_unchecked": 0,
-        "index": 162,
+        "index": 165,
         "unsafe_blocks": 11,
         "unsafe_fns": 5,
         "unsafe_impls": 2,

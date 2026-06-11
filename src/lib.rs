@@ -386,10 +386,10 @@ impl BenchParser {
             Self::Sqlparser => "0.62.0",
             Self::PgQuery | Self::PgQuerySummary => "6.1.1",
             Self::Qusql => "0.8.0",
-            Self::Polyglot => "0.4.4",
+            Self::Polyglot => "0.5.1",
             Self::Databend => "0.2.5",
             Self::Orql => "0.1.0",
-            Self::Sqlglot => "0.10.0",
+            Self::Sqlglot => "0.10.1",
             Self::Sqlite3 => "0.16.0",
             Self::Turso => "0.6.1",
         }
