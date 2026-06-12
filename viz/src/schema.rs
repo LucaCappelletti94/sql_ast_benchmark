@@ -171,15 +171,22 @@ pub struct DialectData {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ParserBatch {
     pub parser: String,
-    /// Statements fed into the batch (the parser's accepted set).
+    /// Statements eligible for batching (accepted, parse to one statement alone,
+    /// and not input-consuming), the pool the random batches were drawn from.
     pub n_accepted: usize,
-    /// Whole-script parse time divided by statement count (ns).
+    /// Batch accuracy: the share of sampled multi-statement scripts the parser
+    /// reparsed to exactly the expected statement count, as a percent. Lower than
+    /// 100 means the parser mishandles a statement boundary in some scripts.
+    #[serde(default)]
+    pub accuracy_pct: Option<f64>,
+    /// Per-statement parse time averaged over the batches that parsed correctly
+    /// (ns). `None` when no batch parsed correctly.
     #[serde(default)]
     pub ns_per_stmt: Option<f64>,
-    /// Peak live bytes during the whole-script parse, per statement.
+    /// Peak live bytes per statement over the correctly parsed batches.
     #[serde(default)]
     pub peak_per_stmt: Option<f64>,
-    /// Retained bytes after the whole-script parse, per statement.
+    /// Retained bytes per statement over the correctly parsed batches.
     #[serde(default)]
     pub retained_per_stmt: Option<f64>,
 }
