@@ -4,9 +4,9 @@
 //!
 //! Shared by the `sqlbench` tool and unit-tested here. `grade_chunk` is the
 //! correctness core: it splits a dialect's statements by reference verdict (where
-//! one exists) and tallies per parser recall, false-positive, round-trip and
-//! fidelity. It is deterministic, so callers may chunk the corpus and `merge`
-//! partial reports for speed.
+//! one exists) and tallies per parser recall, false-positive, and round-trip. It
+//! is deterministic, so callers may chunk the corpus and `merge` partial reports
+//! for speed.
 
 use crate::datasets::Dialect;
 use crate::{has_reference, reference_accepts, Parser, ParserId};
@@ -21,7 +21,7 @@ pub const WORKER_STACK: usize = 512 * 1024 * 1024;
 /// Per-parser tallies within one dialect.
 #[derive(Clone, Default)]
 pub struct ParserStat {
-    /// Whether the parser can pretty-print in this dialect (round-trip/fidelity).
+    /// Whether the parser can pretty-print in this dialect (round-trip).
     pub can_reprint: bool,
     /// Accepted among reference-valid statements (recall numerator). For a
     /// provenance dialect (no reference) every statement is treated as valid, so
@@ -31,8 +31,6 @@ pub struct ParserStat {
     pub accepted_invalid: usize,
     /// Round-trip-stable among accepted-valid.
     pub roundtrip_ok: usize,
-    /// Reference-fidelity-preserving among accepted-valid.
-    pub fidelity_ok: usize,
     /// Statements the parser attempted in this dialect (the panic-rate
     /// denominator): every graded statement, since a supporting parser is run on
     /// all of them. Zero for a parser that does not model the dialect.
@@ -47,7 +45,6 @@ impl ParserStat {
         self.accepted_valid += other.accepted_valid;
         self.accepted_invalid += other.accepted_invalid;
         self.roundtrip_ok += other.roundtrip_ok;
-        self.fidelity_ok += other.fidelity_ok;
         self.attempted += other.attempted;
         self.panicked += other.panicked;
     }
@@ -137,13 +134,8 @@ pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[&dyn Parser]) 
             }
             if is_valid {
                 report.stats[i].accepted_valid += 1;
-                if report.stats[i].can_reprint {
-                    if p.roundtrips(sql, dialect) == Some(true) {
-                        report.stats[i].roundtrip_ok += 1;
-                    }
-                    if p.fidelity(sql, dialect) == Some(true) {
-                        report.stats[i].fidelity_ok += 1;
-                    }
+                if report.stats[i].can_reprint && p.roundtrips(sql, dialect) == Some(true) {
+                    report.stats[i].roundtrip_ok += 1;
                 }
             } else {
                 report.stats[i].accepted_invalid += 1;

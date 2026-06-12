@@ -130,11 +130,6 @@ fn metrics(report: &DialectReport) -> Vec<ParserMetrics> {
             } else {
                 None
             },
-            fidelity_pct: if crate::has_canonical(report.dialect) && s.can_reprint {
-                pct(s.fidelity_ok, s.accepted_valid)
-            } else {
-                None
-            },
             accept_pct: if reference {
                 None
             } else {

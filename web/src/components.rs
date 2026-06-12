@@ -350,7 +350,7 @@ pub fn Overview() -> Element {
                 {rich_text(&format!("We evaluated nine parser libraries: [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) (Apache DataFusion), [pg_query.rs](https://github.com/pganalyze/pg_query.rs) and its faster summary mode (Rust bindings to [libpg_query](https://github.com/pganalyze/libpg_query), PostgreSQL's own parser), [databend-common-ast](https://crates.io/crates/databend-common-ast), [polyglot-sql](https://github.com/tobilg/polyglot), [sqlglot-rust](https://crates.io/crates/sqlglot-rust), [qusql-parse](https://crates.io/crates/qusql-parse), [sqlite3-parser](https://crates.io/crates/sqlite3-parser) (lemon-rs), and [turso_parser](https://crates.io/crates/turso_parser) (the SQLite parser from Turso), plus [orql](https://codeberg.org/xitep/orql) on Oracle. We ran them against a corpus of 340,938 statements spanning these {} dialects, drawn from each engine's own regression suites and official samples and committed compressed so every run is reproducible.", b.dialects.len())).into_iter()}
             }
             p { class: "blurb",
-                {rich_text("We exercised each parser in the dialect that matches the corpus under test. Where a dialect has a runnable engine, we labelled each statement valid or invalid with the real database engine itself, run in Docker via [testcontainers](https://github.com/testcontainers/testcontainers-rs): a statement counts as valid unless the engine reports a syntax error, so a missing table or column still counts as parsed. Against that ground truth we scored the parsers on recall (valid statements accepted), false positives (invalid statements wrongly accepted), display round-trip stability, and canonical-form fidelity. The other dialects have no runnable engine, so their statements count as provenance-valid and the metric is simply the acceptance rate. Across all dialects, we captured speed as a per-statement parse-time distribution over every accepted statement, and memory as the peak and retained bytes per statement under a counting allocator. A batch axis additionally parses each parser's whole accepted set as a single script, showing what bulk parsing amortizes, and a time machine benchmarks the historical releases of every pure-Rust parser (59 versions in total, including every sqlparser-rs minor since January 2023), so each parser page also charts how coverage, speed, and memory evolved across releases.").into_iter()}
+                {rich_text("We exercised each parser in the dialect that matches the corpus under test. Where a dialect has a runnable engine, we labelled each statement valid or invalid with the real database engine itself, run in Docker via [testcontainers](https://github.com/testcontainers/testcontainers-rs): a statement counts as valid unless the engine reports a syntax error, so a missing table or column still counts as parsed. Against that ground truth we scored the parsers on recall (valid statements accepted), false positives (invalid statements wrongly accepted), and display round-trip stability. The other dialects have no runnable engine, so their statements count as provenance-valid and the metric is simply the acceptance rate. Across all dialects, we captured speed as a per-statement parse-time distribution over every accepted statement, and memory as the peak and retained bytes per statement under a counting allocator. A batch axis additionally parses each parser's whole accepted set as a single script, showing what bulk parsing amortizes, and a time machine benchmarks the historical releases of every pure-Rust parser (59 versions in total, including every sqlparser-rs minor since January 2023), so each parser page also charts how coverage, speed, and memory evolved across releases.").into_iter()}
             }
             p { class: "blurb",
                 {rich_text("On their home dialect the reference bindings are exact by construction, so the more telling comparison is among the pure-Rust parsers. There, [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) is the most broadly capable, the permissive parsers such as [polyglot-sql](https://github.com/tobilg/polyglot) accept the most statements but pay for it with a high false-positive rate, and the stricter parsers reject more in exchange for precision. Speed spans more than an order of magnitude, from well under a microsecond per statement for the fastest parsers to the low single-digit microseconds for most, with [polyglot-sql](https://github.com/tobilg/polyglot) a clear outlier at roughly fifteen. No parser leads on every axis, so the right choice comes down to what a given project values most: broad coverage, few false positives, or raw speed.").into_iter()}
@@ -666,7 +666,6 @@ pub fn ParserView(name: String) -> Element {
         "accept / recall",
         "false pos",
         "round-trip",
-        "fidelity",
         "median ns",
         "p90 ns",
         "mean ns",
@@ -693,7 +692,6 @@ pub fn ParserView(name: String) -> Element {
                 })),
                 Cell::pct(m.and_then(|m| m.false_positive_pct)),
                 Cell::pct(m.and_then(|m| m.roundtrip_pct)),
-                Cell::pct(m.and_then(|m| m.fidelity_pct)),
                 Cell::ns(p.map(|p| p.median)),
                 Cell::ns(p.map(|p| p.p90)),
                 Cell::ns(p.map(|p| p.mean)),
@@ -749,7 +747,7 @@ pub fn ParserView(name: String) -> Element {
                 "Results by dialect"
             }
             p { class: "table-cap",
-                "One row per dialect. \"accept / recall\" is recall where a reference parser exists, otherwise the acceptance rate. \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original. \"median ns\" and \"p90 ns\" are per-statement parse times (lower is faster), \"mean ns\" the per-statement average, and \"batch ns/stmt\" the whole accepted set parsed as one script divided by its statement count, so compare it to the adjacent mean (blank where not measured or no batch entry point)."
+                "One row per dialect. \"accept / recall\" is recall where a reference parser exists, otherwise the acceptance rate. \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged. \"median ns\" and \"p90 ns\" are per-statement parse times (lower is faster), \"mean ns\" the per-statement average, and \"batch ns/stmt\" the whole accepted set parsed as one script divided by its statement count, so compare it to the adjacent mean (blank where not measured or no batch entry point)."
             }
             SortTable {
                 caption: format!("Per-dialect results for {}", parser),
@@ -971,7 +969,6 @@ fn VersionHistory(parser: String) -> Element {
         "accept / recall",
         "false pos",
         "round-trip",
-        "fidelity",
         "mean ns",
         "batch ns/stmt",
     ]
@@ -999,7 +996,6 @@ fn VersionHistory(parser: String) -> Element {
                     })),
                     Cell::pct(m.and_then(|m| m.false_positive_pct)),
                     Cell::pct(m.and_then(|m| m.roundtrip_pct)),
-                    Cell::pct(m.and_then(|m| m.fidelity_pct)),
                     Cell::ns(d.perf.as_ref().map(|p| p.mean)),
                     Cell::ns(d.batch.as_ref().and_then(|b| b.ns_per_stmt)),
                 ],
@@ -1895,7 +1891,6 @@ fn col_help(name: &str) -> Option<&'static str> {
         "accept / recall" => "Recall where a reference parser exists (agreement with it on valid statements), otherwise the plain acceptance rate. Higher is better.",
         "false pos" => "False positives: of the statements the reference parser rejects as invalid, the share this parser wrongly accepted. Lower is better.",
         "round-trip" | "RT %" => "Round-trip rate: of the statements it accepted, the share that print back to SQL and re-parse unchanged. Shown as n/a when the parser cannot print. Higher is better.",
-        "fidelity" => "Fidelity: of the accepted statements, the share whose printed form is semantically identical to the original under the reference parser's canonical form. Higher is better.",
         "missed %" => "Missed: the share of statements the parser was expected to accept but did not. On reference dialects this is one minus recall, elsewhere the unaccepted fraction. Lower is better.",
         "median ns" => "Median parse time per accepted statement, in nanoseconds: half of statements parse faster than this.",
         "p90 ns" => "90th-percentile parse time per accepted statement, in nanoseconds: nine in ten statements parse faster than this.",
@@ -2156,7 +2151,7 @@ fn memory_table(d: &DialectData) -> Element {
 fn correctness_table(d: &DialectData) -> Element {
     let reference = d.has_reference;
     let columns: Vec<String> = if reference {
-        ["recall", "false pos", "round-trip", "fidelity"]
+        ["recall", "false pos", "round-trip"]
             .iter()
             .map(ToString::to_string)
             .collect()
@@ -2177,7 +2172,6 @@ fn correctness_table(d: &DialectData) -> Element {
                     Cell::pct(m.recall_pct),
                     Cell::pct(m.false_positive_pct),
                     Cell::pct(m.roundtrip_pct),
-                    Cell::pct(m.fidelity_pct),
                 ]
             } else {
                 vec![Cell::pct(m.accept_pct), Cell::pct(m.roundtrip_pct)]
@@ -2192,7 +2186,7 @@ fn correctness_table(d: &DialectData) -> Element {
             }
             p { class: "table-cap",
                 if reference {
-                    "One row per parser, graded against this dialect's reference parser. \"recall\" is the share of reference-valid statements accepted (agreement with the reference on valid SQL, not whether the parser runs). \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original."
+                    "One row per parser, graded against this dialect's reference parser. \"recall\" is the share of reference-valid statements accepted (agreement with the reference on valid SQL, not whether the parser runs). \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged."
                 } else {
                     "One row per parser. With no reference parser here, every statement counts as expected-valid. \"accept\" is the share of the corpus accepted, \"round-trip\" the share of accepted statements that re-parse unchanged."
                 }
