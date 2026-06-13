@@ -59,6 +59,18 @@ harness = false
 name = "sqlbench"
 path = "src/bin/sqlbench.rs"
 
+[[bin]]
+name = "build_sqlite_suite"
+path = "src/bin/build_sqlite_suite.rs"
+
+[[bin]]
+name = "build_proc_suites"
+path = "src/bin/build_proc_suites.rs"
+
+[[bin]]
+name = "repair_corpus"
+path = "src/bin/repair_corpus.rs"
+
 # Strip only DWARF debug info from release builds. The WASM viewer is built with
 # `dx build --web --release`; rustc's DWARF tripped wasm-opt ("unsupported
 # version of DWARF"), so removing it lets wasm-opt succeed and shrinks the wasm.
