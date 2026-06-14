@@ -10,7 +10,9 @@
 //!   outrank a broad one that is mediocre everywhere.
 //! - Five sub-scores, each 0 to 100: correctness, robustness, speed, memory, and
 //!   project health. The overall is their weighted blend,
-//!   `0.45 correctness + 0.20 robustness + 0.15 health + 0.12 speed + 0.08 memory`.
+//!   `0.40 correctness + 0.30 robustness + 0.18 speed + 0.07 memory + 0.05 health`.
+//!   Correctness (not rejecting valid SQL) and robustness (not crashing) are the
+//!   fundamentals, then speed, then memory, with project health a small tiebreaker.
 //!   Any sub-score that does not apply to a parser (for example memory for an FFI
 //!   binding, whose allocations are invisible to the Rust allocator) is dropped
 //!   and the remaining weights are renormalized, so nothing is penalized for a
@@ -27,13 +29,14 @@ use crate::metadata::{license_ok, maintained, parser_meta, Fuzz};
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
-/// Weights of the five sub-scores in the overall blend. Correctness leads,
-/// safety next, then project health, with speed and memory as tiebreakers.
-const W_CORRECTNESS: f64 = 0.45;
-const W_ROBUSTNESS: f64 = 0.20;
-const W_HEALTH: f64 = 0.15;
-const W_SPEED: f64 = 0.12;
-const W_MEMORY: f64 = 0.08;
+/// Weights of the five sub-scores in the overall blend. Correctness (not
+/// rejecting valid SQL) and robustness (not crashing) are the fundamentals, then
+/// speed, then memory, with project health a small tiebreaker.
+const W_CORRECTNESS: f64 = 0.40;
+const W_ROBUSTNESS: f64 = 0.30;
+const W_SPEED: f64 = 0.18;
+const W_MEMORY: f64 = 0.07;
+const W_HEALTH: f64 = 0.05;
 
 /// One parser's composite score and the sub-scores behind it, each 0 to 100.
 /// A sub-score is `None` when the dimension does not apply to the parser.
@@ -105,11 +108,22 @@ fn compute_all() -> BTreeMap<String, ParserScore> {
     out
 }
 
-/// Correctness, 0 to 100: per dialect, blend the measured rates (primary
-/// recall or acceptance, plus false-positive avoidance and round-trip where
-/// they exist), then average over the dialects the parser models.
+/// Weight of a provenance dialect (no reference engine) relative to a reference
+/// dialect in the correctness blend. Provenance dialects only contribute an
+/// acceptance rate with no false-positive penalty, so a permissive parser that
+/// accepts everything looks perfect there. The false-positive penalty that
+/// catches over-permissiveness exists only on reference dialects, so those carry
+/// the correctness signal and provenance dialects are down-weighted to a
+/// coverage contribution rather than letting them inflate the score.
+const PROVENANCE_DIALECT_WEIGHT: f64 = 0.4;
+
+/// Correctness, 0 to 100: per dialect, blend the measured rates (primary recall
+/// or acceptance, plus false-positive avoidance and round-trip where they exist),
+/// then take a weighted average over the dialects the parser models, with
+/// provenance dialects down-weighted (see [`PROVENANCE_DIALECT_WEIGHT`]).
 fn correctness_score(parser: &str) -> Option<f64> {
-    let mut per_dialect = Vec::new();
+    let mut num_total = 0.0;
+    let mut weight_total = 0.0;
     for d in &bundle().dialects {
         let Some(m) = d.correctness.iter().find(|m| m.parser == parser) else {
             continue;
@@ -128,9 +142,16 @@ fn correctness_score(parser: &str) -> Option<f64> {
             num += 0.15 * (rt / 100.0);
             den += 0.15;
         }
-        per_dialect.push(num / den);
+        let dialect_score = num / den;
+        let weight = if d.has_reference {
+            1.0
+        } else {
+            PROVENANCE_DIALECT_WEIGHT
+        };
+        num_total += dialect_score * weight;
+        weight_total += weight;
     }
-    mean(&per_dialect).map(|v| v * 100.0)
+    (weight_total > 0.0).then(|| num_total / weight_total * 100.0)
 }
 
 /// Robustness, 0 to 100: how safely the parser behaves. Blends the observed
