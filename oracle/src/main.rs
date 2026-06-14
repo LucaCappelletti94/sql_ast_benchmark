@@ -564,7 +564,12 @@ fn label_sqlite(stmts: &[String]) -> Result<Vec<bool>> {
             "-i",
             "--entrypoint",
             "sqlite3",
-            "keinos/sqlite3",
+            // Pinned by digest for reproducible labels: this is keinos/sqlite3
+            // latest at label time, SQLite 3.53.0. The repo publishes no version
+            // tag for it, and a floating `latest` would silently change the SQLite
+            // version (and thus which statements are valid). Bump deliberately,
+            // then regenerate the SQLite cache.
+            "keinos/sqlite3@sha256:252363ef3cbbe11f1100dcbc734b89969b264df99a49008b34ca4578f503ff2a",
             ":memory:",
         ])
         .stdin(Stdio::piped())
