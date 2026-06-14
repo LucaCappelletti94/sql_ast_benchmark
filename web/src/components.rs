@@ -670,6 +670,7 @@ pub fn ParserView(name: String) -> Element {
         "median ns",
         "p90 ns",
         "mean ns",
+        "batch ok%",
         "batch ns/stmt",
     ]
     .iter()
@@ -697,6 +698,7 @@ pub fn ParserView(name: String) -> Element {
                 Cell::ns(p.map(|p| p.median)),
                 Cell::ns(p.map(|p| p.p90)),
                 Cell::ns(p.map(|p| p.mean)),
+                Cell::pct(batch_of(d, &parser).and_then(|x| x.accuracy_pct)),
                 Cell::ns(batch_of(d, &parser).and_then(|x| x.ns_per_stmt)),
             ],
         })
@@ -749,7 +751,7 @@ pub fn ParserView(name: String) -> Element {
                 "Results by dialect"
             }
             p { class: "table-cap",
-                "One row per dialect. \"accept / recall\" is recall where a reference parser exists, otherwise the acceptance rate. \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original. \"median ns\" and \"p90 ns\" are per-statement parse times (lower is faster), \"mean ns\" the per-statement average, and \"batch ns/stmt\" the whole accepted set parsed as one script divided by its statement count, so compare it to the adjacent mean (blank where not measured or no batch entry point)."
+                "One row per dialect. \"accept / recall\" is recall where a reference parser exists, otherwise the acceptance rate. \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original. \"median ns\" and \"p90 ns\" are per-statement parse times (lower is faster), \"mean ns\" the per-statement average. \"batch ok%\" is the share of 200 random 128-statement scripts (built from statements the parser accepts) that reparse to the exact count, and \"batch ns/stmt\" is the per-statement time over the scripts that did, so compare it to the adjacent mean."
             }
             SortTable {
                 caption: format!("Per-dialect results for {}", parser),
@@ -973,6 +975,7 @@ fn VersionHistory(parser: String) -> Element {
         "round-trip",
         "fidelity",
         "mean ns",
+        "batch ok%",
         "batch ns/stmt",
     ]
     .iter()
@@ -1001,6 +1004,7 @@ fn VersionHistory(parser: String) -> Element {
                     Cell::pct(m.and_then(|m| m.roundtrip_pct)),
                     Cell::pct(m.and_then(|m| m.fidelity_pct)),
                     Cell::ns(d.perf.as_ref().map(|p| p.mean)),
+                    Cell::pct(d.batch.as_ref().and_then(|b| b.accuracy_pct)),
                     Cell::ns(d.batch.as_ref().and_then(|b| b.ns_per_stmt)),
                 ],
             }
@@ -1147,7 +1151,7 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
                 "Memory by dialect"
             }
             p { class: "table-cap",
-                "One row per dialect, bytes per statement. \"peak\" is the high-water mark of live memory during a parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over the whole accepted set parsed as one script divided by its statement count, so compare each batch column to the adjacent mean (blank where not measured or no batch entry point)."
+                "One row per dialect, bytes per statement. \"peak\" is the high-water mark of live memory during a parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over random 128-statement scripts, averaged over the ones that reparsed correctly, so compare each batch column to the adjacent mean."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{}-mempeak-ecdf", slug(parser)), &peak_ecdf, &format!("Empirical CDF of {parser} peak memory, one curve per dialect."), "Peak live memory per parse, one curve per dialect. Further left is leaner (log scale).", &format!("{}-peak-memory-ecdf", slug(parser)))}
@@ -1903,6 +1907,8 @@ fn col_help(name: &str) -> Option<&'static str> {
         "peak p90" => "90th-percentile peak live memory per statement: nine in ten statements stay under this high-water mark.",
         "retained p50" => "Median retained memory per statement: the bytes the produced AST (plus the scaffolding it keeps alive) holds after parsing. Half of statements retain less.",
         "retained p90" => "90th-percentile retained memory per statement: the AST footprint nine in ten statements stay under.",
+        "batch ok%" => "Batch parse rate: of 200 random 128-statement scripts built from statements this parser accepts individually, the share it reparsed to the exact statement count. Below 100% means it mishandles a statement boundary (for example swallowing the terminator) in some multi-statement scripts. Higher is better.",
+        "batch ns/stmt" => "Per-statement parse time inside a multi-statement script, averaged over the batches that parsed correctly. Compare with mean ns to see what bulk parsing amortizes. Blank only when no sampled batch parsed correctly.",
         _ => return None,
     })
 }
@@ -2029,6 +2035,7 @@ fn perf_table(d: &DialectData) -> Element {
         "median ns",
         "p90 ns",
         "mean ns",
+        "batch ok%",
         "batch ns/stmt",
         "missed %",
         "RT %",
@@ -2046,6 +2053,7 @@ fn perf_table(d: &DialectData) -> Element {
                 Cell::ns(Some(p.median)),
                 Cell::ns(Some(p.p90)),
                 Cell::ns(Some(p.mean)),
+                Cell::pct(batch_of(d, &p.parser).and_then(|x| x.accuracy_pct)),
                 Cell::ns(batch_of(d, &p.parser).and_then(|x| x.ns_per_stmt)),
                 Cell::with(missed_pct(d, p), missed_val(d, p)),
                 Cell::pct(p.roundtrip_pct),
@@ -2059,7 +2067,7 @@ fn perf_table(d: &DialectData) -> Element {
                 "Speed"
             }
             p { class: "table-cap",
-                "One row per parser. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster). \"mean ns\" is the per-statement average, and \"batch ns/stmt\" is the whole accepted set parsed as one script divided by its statement count, so comparing those two adjacent averages shows what bulk parsing saves or costs (batch blank where not measured or no batch entry point). \"missed %\" is the share of expected statements not accepted, \"RT %\" the round-trip rate, the share of accepted statements that re-parse unchanged."
+                "One row per parser. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster). \"mean ns\" is the per-statement average. \"batch ok%\" is the share of 200 random 128-statement scripts (built from statements the parser accepts) that reparse to the exact count, and \"batch ns/stmt\" is the per-statement time over the scripts that did, so comparing it to the mean shows what bulk parsing saves or costs. \"missed %\" is the share of expected statements not accepted, \"RT %\" the round-trip rate, the share of accepted statements that re-parse unchanged."
             }
             SortTable {
                 caption: format!("Per-parser parse time in nanoseconds for {}", d.display_name),
@@ -2134,7 +2142,7 @@ fn memory_table(d: &DialectData) -> Element {
                 "Memory"
             }
             p { class: "table-cap",
-                "Bytes per statement, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over the whole accepted set parsed as one script divided by its statement count, so compare each batch column to the adjacent mean (batch retained is higher when every statement's AST is held at once, blank where not measured or no batch entry point). The libpg_query bindings are omitted (they parse in C, invisible to the Rust allocator)."
+                "Bytes per statement, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over random 128-statement scripts, averaged over the ones that reparsed correctly, so compare each batch column to the adjacent mean (batch retained is higher when every statement's AST is held at once). The libpg_query bindings are omitted (they parse in C, invisible to the Rust allocator)."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{}-mempeak-ecdf", d.dir_name), &peak_ecdf, &format!("Empirical CDF of peak memory for {}, one curve per parser.", d.display_name), "Peak live memory per parse, one curve per parser. Further left is leaner (log scale).", &format!("{}-peak-memory-ecdf", d.dir_name))}
