@@ -365,7 +365,7 @@ pub fn Overview() -> Element {
         }
         div { class: "block",
             p { class: "table-cap",
-                "A single composite score, 0 to 100, blending every dimension: correctness 40 percent, robustness 30, speed 18, memory 7, and project health 5. Each parser is judged only on the dialects it models, never penalised for dialects it never claimed, and breadth is not itself rewarded. Correctness and health are absolute; speed and memory are ranked against the field within each dialect, then averaged. Click any column to sort. A dimension that does not apply (memory for the FFI bindings) shows n/a and its weight is redistributed."
+                "A single composite score, 0 to 100, blending every dimension: correctness 40 percent, robustness 30, speed 18, memory 7, and project health 5. Each parser is judged only on the dialects it models, never penalised for dialects it never claimed, and breadth is not itself rewarded. Correctness and health are absolute. Speed and memory are ranked against the field within each dialect, then averaged. Click any column to sort. A dimension that does not apply (memory for the FFI bindings) shows n/a and its weight is redistributed."
             }
             {score_leaderboard()}
         }
@@ -1499,7 +1499,7 @@ fn score_leaderboard() -> Element {
 
 /// The overall-score leaderboard for one dialect page: every parser that models
 /// the dialect, ranked by its composite score on that dialect (correctness,
-/// speed, and memory measured here; robustness and health are parser-level).
+/// speed, and memory measured here, with robustness and health parser-level).
 fn dialect_leaderboard(d: &DialectData) -> Element {
     let columns = vec![
         "overall".to_string(),
@@ -1590,7 +1590,7 @@ fn parser_score_section(parser: &str) -> Element {
                 }
             }
             p { class: "table-cap",
-                "A composite of every dimension, 0 to 100, weighting correctness 40 percent, robustness 30, speed 18, memory 7, and project health 5. Computed only over the dialects this parser models. Speed and memory are ranked against the other parsers on each dialect; correctness and health are absolute. Each badge also shows this parser's rank on that dimension among all parsers."
+                "A composite of every dimension, 0 to 100, weighting correctness 40 percent, robustness 30, speed 18, memory 7, and project health 5. Computed only over the dialects this parser models. Speed and memory are ranked against the other parsers on each dialect, while correctness and health are absolute. Each badge also shows this parser's rank on that dimension among all parsers."
             }
             div { class: "meta-grid score-grid",
                 {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", s.correctness, crate::score::rank(parser, |x| x.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the dialects this parser models.".to_string())}
