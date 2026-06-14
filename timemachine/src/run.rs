@@ -11,7 +11,7 @@
 use sql_ast_benchmark::batch::{batch_eligible, evaluate_batches, reports_statement_count};
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::report::{self, load_dialect};
-use sql_ast_benchmark::{has_canonical, stats, Parser};
+use sql_ast_benchmark::{stats, Parser};
 use std::collections::BTreeMap;
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -125,7 +125,7 @@ fn load_corpus(full: bool) -> BTreeMap<&'static str, Vec<String>> {
 }
 
 /// `ParserMetrics` from a one-parser grading report.
-fn metrics_of(report: &report::DialectReport, dialect: Dialect) -> ParserMetrics {
+fn metrics_of(report: &report::DialectReport) -> ParserMetrics {
     let s = &report.stats[0];
     let id = report.parsers[0];
     let reference = report.has_reference;
@@ -146,11 +146,6 @@ fn metrics_of(report: &report::DialectReport, dialect: Dialect) -> ParserMetrics
         },
         roundtrip_pct: if s.can_reprint {
             pct(s.roundtrip_ok, s.accepted_valid)
-        } else {
-            None
-        },
-        fidelity_pct: if has_canonical(dialect) && s.can_reprint {
-            pct(s.fidelity_ok, s.accepted_valid)
         } else {
             None
         },
@@ -245,7 +240,7 @@ fn timing_dialect_run(p: &dyn Parser, d: Dialect, stmts: &[String]) -> DialectRu
     };
 
     let report = report::grade_chunk(stmts, d, &[p]);
-    let correctness = Some(metrics_of(&report, d));
+    let correctness = Some(metrics_of(&report));
 
     DialectRun {
         dir_name: d.dir_name().to_string(),

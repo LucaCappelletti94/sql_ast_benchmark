@@ -270,8 +270,6 @@ pub struct ParserMetrics {
     pub false_positive_pct: Option<f64>,
     /// Display round-trip rate among accepted (None without a printer).
     pub roundtrip_pct: Option<f64>,
-    /// Reference dialects: canonical-form fidelity among accepted.
-    pub fidelity_pct: Option<f64>,
     /// Provenance dialects: fraction of the corpus accepted.
     pub accept_pct: Option<f64>,
     /// Statements the parser attempted in this dialect (the panic-rate

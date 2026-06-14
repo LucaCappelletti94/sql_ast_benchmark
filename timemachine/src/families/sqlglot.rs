@@ -1,5 +1,5 @@
 //! Historical sqlglot-rust versions. Models every dialect and pretty-prints, so
-//! it is graded for round-trip and fidelity like the current build.
+//! it is graded for round-trip like the current build.
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::{Parser, ParserId};

@@ -16,10 +16,6 @@ use sqlparser::dialect::{
     RedshiftSqlDialect, SQLiteDialect,
 };
 
-fn pg_query_canonical(sql: &str) -> Option<String> {
-    pg_query::parse(sql).ok()?.deparse().ok()
-}
-
 // Multi-dialect benchmark layer. Each parser runs in its best-matching dialect.
 // One it does not model returns `None` (N/A). Correctness uses reference where
 // one exists (pg_query for PostgreSQL, lemon-rs for SQLite), else acceptance rate.
@@ -286,16 +282,6 @@ fn databend_reprint(sql: &str, d: DatabendDialect) -> Option<String> {
 
 // Reference.
 
-/// Canonical form for a reference-backed dialect, used for fidelity checks.
-/// `None` for dialects with no reference (or when the relevant feature is off).
-fn reference_canonical(sql: &str, d: Dialect) -> Option<String> {
-    match d {
-        Dialect::Postgresql => pg_query_canonical(sql),
-        Dialect::Sqlite => sqlite3_reprint(sql),
-        _ => None,
-    }
-}
-
 /// Does the reference accept this statement?
 ///
 /// The reference is the real database engine, validated offline and read from
@@ -314,20 +300,10 @@ pub fn has_reference(d: Dialect) -> bool {
     oracle_cache::has_reference(d)
 }
 
-/// Dialects with a library canonicalizer for the fidelity metric.
-///
-/// `PostgreSQL` via `pg_query`, `SQLite` via `lemon-rs`. This is independent of
-/// the validity reference (the real engine), which only labels statements
-/// valid/invalid.
-#[must_use]
-pub const fn has_canonical(d: Dialect) -> bool {
-    matches!(d, Dialect::Postgresql | Dialect::Sqlite)
-}
-
 // BenchParser.
 
 /// A parser under test. The single source of truth for dialect support,
-/// acceptance, round-trip stability and reference fidelity.
+/// acceptance, and round-trip stability.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BenchParser {
     Sqlparser,
@@ -769,8 +745,7 @@ impl BenchParser {
         }
     }
 
-    /// Whether this parser has a pretty-printer (can round-trip / be graded for
-    /// fidelity) for `dialect`.
+    /// Whether this parser has a pretty-printer (can round-trip) for `dialect`.
     #[must_use]
     pub fn can_reprint(self, dialect: Dialect) -> bool {
         match self {
@@ -797,26 +772,6 @@ impl BenchParser {
                 .is_some_and(|second| first == second),
         )
     }
-
-    /// Reference fidelity: the reference's canonical form of this parser's output
-    /// equals the reference's canonical form of the input. `None` if the parser
-    /// cannot reprint or the dialect has no reference.
-    #[must_use]
-    pub fn fidelity(self, sql: &str, dialect: Dialect) -> Option<bool> {
-        if !self.can_reprint(dialect) || !has_canonical(dialect) {
-            return None;
-        }
-        let Some(out) = self.reprint(sql, dialect) else {
-            return Some(false);
-        };
-        match (
-            reference_canonical(sql, dialect),
-            reference_canonical(&out, dialect),
-        ) {
-            (Some(a), Some(b)) => Some(a == b),
-            _ => Some(false),
-        }
-    }
 }
 
 /// Identity of one benchmarked parser build: which library and which version.
@@ -840,7 +795,7 @@ pub struct ParserId {
 /// drivers operate over `&dyn Parser`, so one implementation serves both.
 ///
 /// Implementors provide the required methods. `accepts`, `measure_mem_batch`,
-/// `roundtrips`, and `fidelity` have default implementations built on them
+/// and `roundtrips` have default implementations built on them
 /// (mirroring [`BenchParser`]'s inherent methods), so a historical version only
 /// needs the core parse hooks.
 pub trait Parser: Sync {
@@ -904,24 +859,6 @@ pub trait Parser: Sync {
                 .is_some_and(|second| first == second),
         )
     }
-
-    /// Reference fidelity: the reference canonical form of the parser's output
-    /// equals that of the input. `None` without a printer or reference.
-    fn fidelity(&self, sql: &str, dialect: Dialect) -> Option<bool> {
-        if !self.can_reprint(dialect) || !has_canonical(dialect) {
-            return None;
-        }
-        let Some(out) = self.reprint(sql, dialect) else {
-            return Some(false);
-        };
-        match (
-            reference_canonical(sql, dialect),
-            reference_canonical(&out, dialect),
-        ) {
-            (Some(a), Some(b)) => Some(a == b),
-            _ => Some(false),
-        }
-    }
 }
 
 /// Delegation shim: every method forwards to [`BenchParser`]'s inherent method,
@@ -973,9 +910,6 @@ impl Parser for BenchParser {
     fn roundtrips(&self, sql: &str, dialect: Dialect) -> Option<bool> {
         (*self).roundtrips(sql, dialect)
     }
-    fn fidelity(&self, sql: &str, dialect: Dialect) -> Option<bool> {
-        (*self).fidelity(sql, dialect)
-    }
 }
 
 pub mod batch;
@@ -990,7 +924,7 @@ pub mod stats;
 #[cfg(test)]
 mod tests {
     use super::ParseOutcome;
-    use super::{catch_outcome, has_canonical, has_reference, reference_accepts, BenchParser};
+    use super::{catch_outcome, has_reference, reference_accepts, BenchParser};
     use crate::datasets::Dialect;
 
     #[test]
@@ -1179,14 +1113,10 @@ mod tests {
             assert!(!has_reference(d), "{d:?} should never be reference-graded");
             assert_eq!(reference_accepts("SELECT 1", d), None);
         }
-        // PostgreSQL and SQLite keep a library canonicalizer for fidelity,
-        // independent of the validity cache.
-        assert!(has_canonical(Dialect::Postgresql));
-        assert!(has_canonical(Dialect::Sqlite));
     }
 
     #[test]
-    fn roundtrip_and_fidelity_gating() {
+    fn roundtrip_gating() {
         // No pretty-printer => round-trip is N/A.
         assert_eq!(
             BenchParser::Orql.roundtrips("SELECT 1 FROM dual", Dialect::Oracle),
@@ -1196,18 +1126,12 @@ mod tests {
             BenchParser::Qusql.roundtrips("SELECT 1", Dialect::Postgresql),
             None
         );
-        // Fidelity needs a library canonicalizer: None on a dialect without one
-        // even for a parser that can reprint.
-        assert_eq!(
-            BenchParser::Sqlparser.fidelity("SELECT 1", Dialect::Mysql),
-            None
-        );
-        // Reprintable parser on a reference dialect => a verdict (Some).
+        // Reprintable parser => a verdict (Some).
         assert!(BenchParser::Sqlparser
             .roundtrips("SELECT 1", Dialect::Postgresql)
             .is_some());
         assert!(BenchParser::Sqlparser
-            .fidelity("SELECT 1", Dialect::Sqlite)
+            .roundtrips("SELECT 1", Dialect::Sqlite)
             .is_some());
     }
 

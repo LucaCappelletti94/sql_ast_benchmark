@@ -1,5 +1,5 @@
 //! Historical polyglot-sql versions. Models every dialect and regenerates SQL,
-//! so it is graded for round-trip and fidelity.
+//! so it is graded for round-trip.
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::{Parser, ParserId};
