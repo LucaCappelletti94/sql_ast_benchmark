@@ -117,30 +117,112 @@ async fn label_postgresql(stmts: &[String]) -> Result<Vec<bool>> {
     let port = node.get_host_port_ipv4(5432).await?;
     let conn_str =
         format!("host={host} port={port} user=postgres password=postgres dbname=postgres");
-    let (client, connection) = tokio_postgres::connect(&conn_str, NoTls)
-        .await
-        .context("connect postgres")?;
-    tokio::spawn(async move {
-        let _ = connection.await;
-    });
 
     let mut valid = Vec::with_capacity(stmts.len());
-    for (i, s) in stmts.iter().enumerate() {
-        // Make sure no aborted transaction is left from a prior error.
-        let _ = client.batch_execute("ROLLBACK").await;
-        let _ = client.batch_execute("BEGIN").await;
-        let res = client.batch_execute(s).await;
-        let _ = client.batch_execute("ROLLBACK").await;
-        let v = match res {
-            Ok(()) => true,
-            Err(e) => e.code() != Some(&SqlState::SYNTAX_ERROR),
-        };
-        valid.push(v);
-        if i % 2000 == 0 {
-            eprintln!("  postgresql {i}/{}", stmts.len());
+    let mut reconnects = 0usize;
+    // A statement that terminates the backend twice at the same index is a
+    // confirmed "poison" (some pg_regress statements crash/kill the connection);
+    // it is marked invalid and skipped, mirroring the ClickHouse handling.
+    let mut death_idx: Option<usize> = None;
+    let mut death_count = 0usize;
+
+    'session: while valid.len() < stmts.len() {
+        let (client, connection) = tokio_postgres::connect(&conn_str, NoTls)
+            .await
+            .context("connect postgres")?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+
+        let mut unreachable_streak = 0usize;
+        while valid.len() < stmts.len() {
+            let i = valid.len();
+            // Make sure no aborted transaction is left from a prior error.
+            let _ = client.batch_execute("ROLLBACK").await;
+            let _ = client.batch_execute("BEGIN").await;
+            let res = client.batch_execute(&stmts[i]).await;
+            let _ = client.batch_execute("ROLLBACK").await;
+            // A verdict only counts if the server actually answered: an error with
+            // a SQLSTATE is a real result (syntax -> invalid, anything else parsed
+            // -> valid). An error with no code is a transport/connection failure,
+            // which must never be recorded as "valid".
+            let verdict = match res {
+                Ok(()) => Some(true),
+                Err(e) => e.code().map(|code| code != &SqlState::SYNTAX_ERROR),
+            };
+            match verdict {
+                Some(v) => {
+                    unreachable_streak = 0;
+                    valid.push(v);
+                    if i.is_multiple_of(2000) {
+                        eprintln!("  postgresql {i}/{}", stmts.len());
+                    }
+                }
+                None if is_copy_to_stdout(&stmts[i]) => {
+                    // `COPY ... TO STDOUT` parses fine but then streams rows over
+                    // the COPY sub-protocol, which `batch_execute` cannot consume,
+                    // so it breaks the connection with no SQLSTATE. Reaching that
+                    // stage proves it parsed (a syntax error would carry code
+                    // 42601 and be a real verdict above), so it is valid. Record it
+                    // and reconnect to replace the now-broken connection.
+                    valid.push(true);
+                    death_idx = None;
+                    death_count = 0;
+                    reconnects += 1;
+                    anyhow::ensure!(
+                        reconnects <= 50,
+                        "postgres reconnected {reconnects} times (last at statement {i}); aborting without writing a label cache"
+                    );
+                    continue 'session;
+                }
+                None if unreachable_streak + 1 < 6 => {
+                    unreachable_streak += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
+                None => {
+                    // Connection is gone: the backend died (often killed by the
+                    // statement itself). Reconnect and resume; if the same index
+                    // kills it twice, treat that statement as poison.
+                    if death_idx == Some(i) {
+                        death_count += 1;
+                    } else {
+                        death_idx = Some(i);
+                        death_count = 1;
+                    }
+                    if death_count >= 2 {
+                        eprintln!(
+                            "  postgresql: statement {i} repeatedly kills the backend; marking invalid and skipping: {}",
+                            stmts[i].chars().take(120).collect::<String>()
+                        );
+                        valid.push(false);
+                        death_idx = None;
+                        death_count = 0;
+                    } else {
+                        eprintln!(
+                            "  postgresql backend died at {i}/{}; reconnecting",
+                            stmts.len()
+                        );
+                    }
+                    reconnects += 1;
+                    anyhow::ensure!(
+                        reconnects <= 50,
+                        "postgres backend crashed {reconnects} times (last at statement {i}); aborting without writing a label cache"
+                    );
+                    continue 'session;
+                }
+            }
         }
     }
     Ok(valid)
+}
+
+/// Whether a statement is `COPY ... TO STDOUT`: valid SQL whose result is streamed
+/// over the COPY sub-protocol, which the simple-query probe cannot consume (it
+/// breaks the connection with no SQLSTATE). A syntactically invalid COPY instead
+/// returns a real syntax error, so this only matches genuinely-valid ones.
+fn is_copy_to_stdout(stmt: &str) -> bool {
+    let up = stmt.trim_start().to_ascii_uppercase();
+    up.starts_with("COPY") && up.contains("TO STDOUT")
 }
 
 /// MySQL: real server in a container. We use `PREPARE`, MySQL's parse-only path:
@@ -164,23 +246,43 @@ async fn label_mysql(stmts: &[String]) -> Result<Vec<bool>> {
     let mut conn = pool.get_conn().await.context("connect mysql")?;
 
     let mut valid = Vec::with_capacity(stmts.len());
-    for (i, s) in stmts.iter().enumerate() {
-        let stmt = s.trim().trim_end_matches(';');
+    let mut unreachable_streak = 0usize;
+    let mut i = 0;
+    while i < stmts.len() {
+        let stmt = stmts[i].trim().trim_end_matches(';');
         // Bind the statement text as a parameter (no injection), then PREPARE it.
-        let v = match conn.exec_drop("SET @q = ?", (stmt,)).await {
+        // Only a `Server` response is a real verdict (error 1064 = syntax ->
+        // invalid, any other server error parsed -> valid). A non-server error is
+        // a transport/connection failure and must never be recorded as "valid".
+        let verdict = match conn.exec_drop("SET @q = ?", (stmt,)).await {
             Ok(()) => match conn.query_drop("PREPARE _ck FROM @q").await {
                 Ok(()) => {
                     let _ = conn.query_drop("DEALLOCATE PREPARE _ck").await;
-                    true
+                    Some(true)
                 }
-                Err(mysql_async::Error::Server(e)) => e.code != 1064,
-                Err(_) => true,
+                Err(mysql_async::Error::Server(e)) => Some(e.code != 1064),
+                Err(_) => None,
             },
-            Err(_) => true,
+            Err(mysql_async::Error::Server(e)) => Some(e.code != 1064),
+            Err(_) => None,
         };
-        valid.push(v);
-        if i % 2000 == 0 {
-            eprintln!("  mysql {i}/{}", stmts.len());
+        match verdict {
+            Some(v) => {
+                unreachable_streak = 0;
+                valid.push(v);
+                i += 1;
+                if i.is_multiple_of(2000) {
+                    eprintln!("  mysql {i}/{}", stmts.len());
+                }
+            }
+            None => {
+                unreachable_streak += 1;
+                anyhow::ensure!(
+                    unreachable_streak < 10,
+                    "mysql became unreachable at statement {i}; aborting without writing a label cache"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
         }
     }
     drop(conn);
@@ -192,44 +294,153 @@ async fn label_mysql(stmts: &[String]) -> Result<Vec<bool>> {
 /// parses only (no execution, no tables needed). Invalid iff the exception code
 /// is 62 (SYNTAX_ERROR). Any other code (unknown table/identifier, not
 /// implemented) means it parsed, so it is valid.
+///
+/// Hardened on two fronts:
+///
+///  * Correctness: every response body is fully consumed before the connection is
+///    reused (the undrained error body was what desynced later responses and
+///    silently mislabeled statements valid), transport blips are retried, and a
+///    result that cannot be classified is never assumed valid.
+///  * Resilience: the pinned ClickHouse image segfaults nondeterministically under
+///    the sustained full-corpus load. When the engine stops responding the
+///    container is restarted and labeling resumes from the same statement (each
+///    `EXPLAIN AST` is independent, so a fresh engine yields identical verdicts).
+///    A restart cap stops an unrecoverable engine from looping forever.
 async fn label_clickhouse(stmts: &[String]) -> Result<Vec<bool>> {
     use testcontainers_modules::clickhouse::ClickHouse;
     use testcontainers_modules::testcontainers::runners::AsyncRunner;
 
-    let node = ClickHouse::default()
-        .start()
-        .await
-        .context("start clickhouse container")?;
-    let host = node.get_host().await?;
-    let port = node.get_host_port_ipv4(8123).await?;
-    let url = format!("http://{host}:{port}/");
-    let client = reqwest::Client::new();
+    let mut valid: Vec<bool> = Vec::with_capacity(stmts.len());
+    let mut restarts = 0usize;
+    let mut poisoned: Vec<usize> = Vec::new();
+    // Track repeated deaths at one index: a statement that crashes the engine twice
+    // in a row is a confirmed parser-crash ("poison") and is skipped as invalid.
+    let mut death_idx: Option<usize> = None;
+    let mut death_count = 0usize;
 
-    let mut valid = Vec::with_capacity(stmts.len());
-    for (i, s) in stmts.iter().enumerate() {
-        let query = format!("EXPLAIN AST {}", s.trim().trim_end_matches(';'));
-        let v = match client.post(&url).body(query).send().await {
-            Ok(resp) if resp.status().is_success() => true,
+    'engine: while valid.len() < stmts.len() {
+        let node = ClickHouse::default()
+            .start()
+            .await
+            .context("start clickhouse container")?;
+        let host = node.get_host().await?;
+        let port = node.get_host_port_ipv4(8123).await?;
+        let url = format!("http://{host}:{port}/");
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .context("build clickhouse http client")?;
+
+        let mut consecutive_unreachable = 0usize;
+        while valid.len() < stmts.len() {
+            let i = valid.len();
+            let query = format!("EXPLAIN AST {}", stmts[i].trim().trim_end_matches(';'));
+            match clickhouse_classify(&client, &url, &query).await {
+                Some(v) => {
+                    consecutive_unreachable = 0;
+                    valid.push(v);
+                    if i.is_multiple_of(5000) {
+                        eprintln!("  clickhouse {i}/{}", stmts.len());
+                    }
+                }
+                None if consecutive_unreachable + 1 < 6 => {
+                    // A transient blip: wait and retry the SAME statement (do not
+                    // advance, do not guess a verdict).
+                    consecutive_unreachable += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+                None => {
+                    // Engine unreachable: it has crashed. Was the crash provoked by
+                    // this exact statement (it died here last restart too)?
+                    if death_idx == Some(i) {
+                        death_count += 1;
+                    } else {
+                        death_idx = Some(i);
+                        death_count = 1;
+                    }
+                    drop(node);
+                    if death_count >= 2 {
+                        eprintln!(
+                            "  clickhouse: statement {i} repeatedly crashes the engine; marking invalid and skipping: {}",
+                            stmts[i].chars().take(120).collect::<String>()
+                        );
+                        valid.push(false);
+                        poisoned.push(i);
+                        death_idx = None;
+                        death_count = 0;
+                    } else {
+                        eprintln!(
+                            "  clickhouse unreachable at {i}/{}; restarting engine",
+                            stmts.len()
+                        );
+                    }
+                    restarts += 1;
+                    anyhow::ensure!(
+                        restarts <= 50,
+                        "ClickHouse crashed {restarts} times (last at statement {i}); aborting without writing a label cache"
+                    );
+                    continue 'engine;
+                }
+            }
+        }
+    }
+    if !poisoned.is_empty() {
+        eprintln!(
+            "  clickhouse: {} statement(s) crashed the engine and were marked invalid (indices: {:?})",
+            poisoned.len(),
+            poisoned
+        );
+    }
+    Ok(valid)
+}
+
+/// Classify one ClickHouse `EXPLAIN AST` request, retrying transient transport
+/// failures. The response body is always fully read before returning, so a
+/// connection is never left mid-stream (the bug that desynced reused connections).
+/// `Some(true)` if the request succeeded (2xx) or failed with a non-syntax
+/// exception code (the statement parsed, the engine just could not resolve or
+/// execute it); `Some(false)` for exception code 62 (`SYNTAX_ERROR`) or an
+/// unclassifiable response; `None` if the engine was unreachable after retries.
+async fn clickhouse_classify(client: &reqwest::Client, url: &str, query: &str) -> Option<bool> {
+    for attempt in 0..3 {
+        match client.post(url).body(query.to_string()).send().await {
             Ok(resp) => {
-                let code = resp
+                let success = resp.status().is_success();
+                let header_code = resp
                     .headers()
                     .get("x-clickhouse-exception-code")
                     .and_then(|h| h.to_str().ok())
                     .and_then(|s| s.parse::<i32>().ok());
-                match code {
+                let body = resp.text().await.unwrap_or_default();
+                if success {
+                    return Some(true);
+                }
+                return Some(match header_code.or_else(|| parse_clickhouse_code(&body)) {
                     Some(62) => false,
                     Some(_) => true,
-                    None => !resp.text().await.unwrap_or_default().contains("Code: 62."),
-                }
+                    None => false,
+                });
             }
-            Err(_) => true,
-        };
-        valid.push(v);
-        if i % 5000 == 0 {
-            eprintln!("  clickhouse {i}/{}", stmts.len());
+            Err(_) if attempt < 2 => {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+            Err(_) => return None,
         }
     }
-    Ok(valid)
+    None
+}
+
+/// Parse the leading exception code from a ClickHouse error body, e.g.
+/// `"Code: 62. DB::Exception: ..."` -> `Some(62)`.
+fn parse_clickhouse_code(body: &str) -> Option<i32> {
+    let digits: String = body
+        .trim_start()
+        .strip_prefix("Code:")?
+        .trim_start()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
 }
 
 /// SQL Server (T-SQL): real server in a container. `SET PARSEONLY ON` parses
@@ -273,14 +484,38 @@ async fn label_tsql(stmts: &[String]) -> Result<Vec<bool>> {
         .await?;
 
     let mut valid = Vec::with_capacity(stmts.len());
-    for (i, s) in stmts.iter().enumerate() {
-        let v = match client.simple_query(s.as_str()).await {
-            Ok(stream) => stream.into_results().await.is_ok(),
-            Err(_) => false,
+    let mut unreachable_streak = 0usize;
+    let mut i = 0;
+    while i < stmts.len() {
+        // Under PARSEONLY the only `Server` error is a syntax error (invalid). A
+        // non-server error is a transport/connection failure: never record it as a
+        // verdict, retry, and abort if the engine stays unreachable.
+        let verdict = match client.simple_query(stmts[i].as_str()).await {
+            Ok(stream) => match stream.into_results().await {
+                Ok(_) => Some(true),
+                Err(tiberius::error::Error::Server(_)) => Some(false),
+                Err(_) => None,
+            },
+            Err(tiberius::error::Error::Server(_)) => Some(false),
+            Err(_) => None,
         };
-        valid.push(v);
-        if i % 2000 == 0 {
-            eprintln!("  tsql {i}/{}", stmts.len());
+        match verdict {
+            Some(v) => {
+                unreachable_streak = 0;
+                valid.push(v);
+                i += 1;
+                if i.is_multiple_of(2000) {
+                    eprintln!("  tsql {i}/{}", stmts.len());
+                }
+            }
+            None => {
+                unreachable_streak += 1;
+                anyhow::ensure!(
+                    unreachable_streak < 10,
+                    "sql server became unreachable at statement {i}; aborting without writing a label cache"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
         }
     }
     Ok(valid)
@@ -346,6 +581,18 @@ fn label_sqlite(stmts: &[String]) -> Result<Vec<bool>> {
     });
     let out = child.wait_with_output().context("sqlite3 wait")?;
     let _ = writer.join();
+
+    // sqlite3 normally exits 0 (clean) or 1 (some statement errored, `.bail off`
+    // keeps going). A crash or container failure surfaces as the container exit
+    // code >= 128 (128 + signal, e.g. 139 = SIGSEGV) or a docker error (125-127),
+    // or no code at all. In those cases the script stopped early, so the unscanned
+    // tail would silently default to "valid" -- abort instead of writing garbage.
+    match out.status.code() {
+        Some(0 | 1) => {}
+        other => anyhow::bail!(
+            "sqlite3 ended abnormally (exit {other:?}); a statement likely crashed the CLI. Aborting without writing a label cache"
+        ),
+    }
     let stderr = String::from_utf8_lossy(&out.stderr);
 
     let mut valid = vec![true; stmts.len()];
@@ -391,7 +638,35 @@ fn is_sqlite_invalid(msg: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_sqlite_invalid, parse_sqlite_err};
+    use super::{is_copy_to_stdout, is_sqlite_invalid, parse_clickhouse_code, parse_sqlite_err};
+
+    #[test]
+    fn copy_to_stdout_is_recognized() {
+        assert!(is_copy_to_stdout("COPY (SELECT 1) TO STDOUT"));
+        assert!(is_copy_to_stdout("copy (select 1) to stdout"));
+        assert!(is_copy_to_stdout("COPY (SELECT 1) TO STDOUT WITH CSV"));
+        assert!(is_copy_to_stdout("  COPY t TO STDOUT"));
+        // Not COPY-to-stdout: a real syntax verdict handles these, or they differ.
+        assert!(!is_copy_to_stdout("SELECT 'COPY x TO STDOUT'"));
+        assert!(!is_copy_to_stdout("COPY t FROM STDIN"));
+        assert!(!is_copy_to_stdout("SELECT 1"));
+    }
+
+    #[test]
+    fn parse_clickhouse_code_reads_leading_code() {
+        assert_eq!(
+            parse_clickhouse_code("Code: 62. DB::Exception: Syntax error: ..."),
+            Some(62)
+        );
+        assert_eq!(
+            parse_clickhouse_code("Code: 47. DB::Exception: Unknown identifier"),
+            Some(47)
+        );
+        assert_eq!(parse_clickhouse_code("  Code: 999. foo"), Some(999));
+        // No parseable code -> None, which the caller treats as invalid.
+        assert_eq!(parse_clickhouse_code("totally unexpected body"), None);
+        assert_eq!(parse_clickhouse_code(""), None);
+    }
 
     #[test]
     fn missing_object_errors_are_valid() {

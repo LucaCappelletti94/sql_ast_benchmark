@@ -155,6 +155,44 @@ mod tests {
         Dialect::Multi,
     ];
 
+    /// Guard against issue #22: the corpus must keep `CREATE TRIGGER ... BEGIN
+    /// ... END` bodies intact. A trigger split on its inner semicolons is
+    /// incomplete and fails to parse. Skips when the corpus is not unpacked.
+    #[test]
+    fn sqlite_create_triggers_parse_as_complete_statements() {
+        if super::ensure_corpus().is_err() {
+            return;
+        }
+        let dir = std::path::Path::new("datasets/sqlite");
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut incomplete = Vec::new();
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("txt") {
+                continue;
+            }
+            let content = std::fs::read_to_string(&p).unwrap_or_default();
+            for line in content.lines() {
+                let l = line.trim();
+                let lower = l.to_ascii_lowercase();
+                if lower.starts_with("create")
+                    && lower.contains("trigger")
+                    && crate::BenchParser::Sqlite3.accepts(l, Dialect::Sqlite) != Some(true)
+                {
+                    incomplete.push(l.chars().take(90).collect::<String>());
+                }
+            }
+        }
+        assert!(
+            incomplete.is_empty(),
+            "{} CREATE TRIGGER statements do not parse (truncated?):\n{}",
+            incomplete.len(),
+            incomplete.join("\n")
+        );
+    }
+
     #[test]
     fn dir_name_roundtrips_for_every_variant() {
         for d in ALL {

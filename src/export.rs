@@ -130,11 +130,6 @@ fn metrics(report: &DialectReport) -> Vec<ParserMetrics> {
             } else {
                 None
             },
-            fidelity_pct: if crate::has_canonical(report.dialect) && s.can_reprint {
-                pct(s.fidelity_ok, s.accepted_valid)
-            } else {
-                None
-            },
             accept_pct: if reference {
                 None
             } else {
@@ -216,32 +211,30 @@ fn mem_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserMem> {
 }
 
 /// One row of the batch time summary (`batch_dist/summary.csv`):
-/// `dialect,parser,n_accepted,n_parsed,batch_bytes,batch_ns,ns_per_stmt`.
+/// `dialect,parser,n_eligible,k,n_correct,accuracy_pct,ns_per_stmt`. The last two
+/// may be blank (no batch parsed correctly).
 struct BatchPerfRow {
     dialect: String,
     parser: String,
-    n_accepted: usize,
-    n_parsed: usize,
-    ns_per_stmt: f64,
+    n_eligible: usize,
+    accuracy_pct: Option<f64>,
+    ns_per_stmt: Option<f64>,
 }
 
 /// One row of the batch memory summary (`batch_mem_dist/summary.csv`):
-/// `dialect,parser,n_accepted,n_parsed,peak_bytes,retained_bytes,peak_per_stmt,retained_per_stmt`.
+/// `dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt`.
+/// The per-statement figures may be blank (no batch parsed correctly).
 struct BatchMemRow {
     dialect: String,
     parser: String,
-    n_accepted: usize,
-    n_parsed: usize,
-    peak_per_stmt: f64,
-    retained_per_stmt: f64,
+    peak_per_stmt: Option<f64>,
+    retained_per_stmt: Option<f64>,
 }
 
-/// Whether a batch parse consumed the whole accepted set, so its normalized cost
-/// can be trusted. A fail-fast parser that errors partway yields `n_parsed`
-/// below `n_accepted`. Statements with internal `;` only push `n_parsed` higher,
-/// so `>=` is the right "fully consumed" test.
-const fn batch_complete(n_parsed: usize, n_accepted: usize) -> bool {
-    n_accepted > 0 && n_parsed >= n_accepted
+/// Parse a possibly-blank CSV float field into `Option<f64>`.
+fn opt_f64(s: &str) -> Option<f64> {
+    let s = s.trim();
+    (!s.is_empty()).then(|| s.parse().ok()).flatten()
 }
 
 fn parse_batch_perf(content: &str) -> Vec<BatchPerfRow> {
@@ -256,9 +249,9 @@ fn parse_batch_perf(content: &str) -> Vec<BatchPerfRow> {
             Some(BatchPerfRow {
                 dialect: f[0].to_string(),
                 parser: f[1].to_string(),
-                n_accepted: f[2].trim().parse().ok()?,
-                n_parsed: f[3].trim().parse().ok()?,
-                ns_per_stmt: f[6].trim().parse().ok()?,
+                n_eligible: f[2].trim().parse().ok()?,
+                accuracy_pct: opt_f64(f[5]),
+                ns_per_stmt: opt_f64(f[6]),
             })
         })
         .collect()
@@ -276,10 +269,8 @@ fn parse_batch_mem(content: &str) -> Vec<BatchMemRow> {
             Some(BatchMemRow {
                 dialect: f[0].to_string(),
                 parser: f[1].to_string(),
-                n_accepted: f[2].trim().parse().ok()?,
-                n_parsed: f[3].trim().parse().ok()?,
-                peak_per_stmt: f[6].trim().parse().ok()?,
-                retained_per_stmt: f[7].trim().parse().ok()?,
+                peak_per_stmt: opt_f64(f[6]),
+                retained_per_stmt: opt_f64(f[7]),
             })
         })
         .collect()
@@ -296,16 +287,16 @@ fn read_batch_mem() -> Vec<BatchMemRow> {
 }
 
 /// Merge batch time and batch memory rows for one dialect into per-parser
-/// `ParserBatch`. A parser appears only if at least one axis parsed the whole
-/// accepted set (see [`batch_complete`]). An axis whose batch bailed out early
-/// is dropped to `None` so the explorer never shows a misleading number. Pure,
-/// so the merge and the guard are testable.
+/// `ParserBatch`. Every batch-capable parser has a time row carrying its accuracy
+/// (the time bench runs them all), so it appears here; memory is added where the
+/// parser's allocations are Rust-visible. Pure, so the merge is testable.
 fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<ParserBatch> {
     use std::collections::BTreeMap;
     let mut map: BTreeMap<&str, ParserBatch> = BTreeMap::new();
     let blank = |parser: &str, n: usize| ParserBatch {
         parser: parser.to_string(),
         n_accepted: n,
+        accuracy_pct: None,
         ns_per_stmt: None,
         peak_per_stmt: None,
         retained_per_stmt: None,
@@ -313,25 +304,25 @@ fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<Parse
     for r in perf.iter().filter(|r| r.dialect == dir) {
         let e = map
             .entry(r.parser.as_str())
-            .or_insert_with(|| blank(&r.parser, r.n_accepted));
-        e.n_accepted = r.n_accepted;
-        if batch_complete(r.n_parsed, r.n_accepted) {
-            e.ns_per_stmt = Some(r.ns_per_stmt);
-        }
+            .or_insert_with(|| blank(&r.parser, r.n_eligible));
+        e.n_accepted = r.n_eligible;
+        e.accuracy_pct = r.accuracy_pct;
+        e.ns_per_stmt = r.ns_per_stmt;
     }
     for r in mem.iter().filter(|r| r.dialect == dir) {
         let e = map
             .entry(r.parser.as_str())
-            .or_insert_with(|| blank(&r.parser, r.n_accepted));
-        if batch_complete(r.n_parsed, r.n_accepted) {
-            e.peak_per_stmt = Some(r.peak_per_stmt);
-            e.retained_per_stmt = Some(r.retained_per_stmt);
-        }
+            .or_insert_with(|| blank(&r.parser, 0));
+        e.peak_per_stmt = r.peak_per_stmt;
+        e.retained_per_stmt = r.retained_per_stmt;
     }
-    // Drop parsers whose every axis was incomplete (nothing trustworthy to show).
+    // Keep a parser if it carries any batch signal.
     map.into_values()
         .filter(|b| {
-            b.ns_per_stmt.is_some() || b.peak_per_stmt.is_some() || b.retained_per_stmt.is_some()
+            b.accuracy_pct.is_some()
+                || b.ns_per_stmt.is_some()
+                || b.peak_per_stmt.is_some()
+                || b.retained_per_stmt.is_some()
         })
         .collect()
 }
@@ -616,8 +607,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        batch_complete, batch_for, build_coverage_matrix, format_failure_tsv, git_short, metrics,
-        now_utc, parse_batch_mem, parse_batch_perf, parse_summary, pct, perf_row_to_perf, PerfRow,
+        batch_for, build_coverage_matrix, format_failure_tsv, git_short, metrics, now_utc,
+        parse_batch_mem, parse_batch_perf, parse_summary, pct, perf_row_to_perf, PerfRow,
     };
     use crate::datasets::Dialect;
     use crate::report::{DialectReport, FileCoverage};
@@ -774,56 +765,54 @@ mod tests {
     }
 
     #[test]
-    fn batch_perf_parses_and_skips_short_lines() {
-        let csv = "dialect,parser,n_accepted,n_parsed,batch_bytes,batch_ns,ns_per_stmt\n\
-                   postgresql,sqlparser-rs,100,100,5000,400000.0,4000.0\n\
+    fn batch_perf_parses_accuracy_and_blank_fields() {
+        let csv = "dialect,parser,n_eligible,k,n_correct,accuracy_pct,ns_per_stmt\n\
+                   postgresql,sqlparser-rs,5000,200,180,90.000,4000.0\n\
+                   postgresql,worst,5000,200,0,0.000,\n\
                    short,row\n";
         let rows = parse_batch_perf(csv);
-        assert_eq!(rows.len(), 1);
+        assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].parser, "sqlparser-rs");
-        assert_eq!(rows[0].n_accepted, 100);
-        assert_eq!(rows[0].n_parsed, 100);
-        assert!((rows[0].ns_per_stmt - 4000.0).abs() < 1e-9);
+        assert_eq!(rows[0].n_eligible, 5000);
+        assert_eq!(rows[0].accuracy_pct, Some(90.0));
+        assert_eq!(rows[0].ns_per_stmt, Some(4000.0));
+        // No batch parsed correctly: accuracy 0, time blank.
+        assert_eq!(rows[1].accuracy_pct, Some(0.0));
+        assert_eq!(rows[1].ns_per_stmt, None);
     }
 
     #[test]
     fn batch_mem_parses_peak_and_retained_columns() {
-        let csv = "dialect,parser,n_accepted,n_parsed,peak_bytes,retained_bytes,peak_per_stmt,retained_per_stmt\n\
-                   sqlite,turso_parser,50,50,100000,40000,2000.0,800.0\n";
+        let csv =
+            "dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt\n\
+                   sqlite,turso_parser,5000,200,200,100.000,2000.0,800.0\n";
         let rows = parse_batch_mem(csv);
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].n_parsed, 50);
-        assert!((rows[0].peak_per_stmt - 2000.0).abs() < 1e-9);
-        assert!((rows[0].retained_per_stmt - 800.0).abs() < 1e-9);
+        assert_eq!(rows[0].peak_per_stmt, Some(2000.0));
+        assert_eq!(rows[0].retained_per_stmt, Some(800.0));
     }
 
     #[test]
-    fn batch_complete_requires_full_consumption() {
-        assert!(batch_complete(10, 10)); // exactly consumed
-        assert!(batch_complete(12, 10)); // internal-semicolon inflation is fine
-        assert!(!batch_complete(9, 10)); // bailed out early
-        assert!(!batch_complete(0, 0)); // nothing accepted
-    }
-
-    #[test]
-    fn batch_merge_combines_time_and_memory_and_filters_by_dialect() {
+    fn batch_merge_combines_accuracy_time_and_memory_by_dialect() {
         let perf = parse_batch_perf(
             "h,h,h,h,h,h,h\n\
-             postgresql,sqlparser-rs,10,10,1,100.0,10.0\n\
-             postgresql,pg_query.rs,10,10,1,80.0,8.0\n",
+             postgresql,sqlparser-rs,10,200,180,90.0,10.0\n\
+             postgresql,pg_query.rs,10,200,200,100.0,8.0\n",
         );
         let mem = parse_batch_mem(
             "h,h,h,h,h,h,h,h\n\
-             postgresql,sqlparser-rs,10,10,1,1,500.0,200.0\n",
+             postgresql,sqlparser-rs,10,200,180,90.0,500.0,200.0\n",
         );
         let merged = batch_for("postgresql", &perf, &mem);
         assert_eq!(merged.len(), 2);
         let sp = merged.iter().find(|x| x.parser == "sqlparser-rs").unwrap();
+        assert_eq!(sp.accuracy_pct, Some(90.0));
         assert_eq!(sp.ns_per_stmt, Some(10.0));
         assert_eq!(sp.peak_per_stmt, Some(500.0));
         assert_eq!(sp.retained_per_stmt, Some(200.0));
-        // pg_query has batch time but no Rust-visible batch memory.
+        // pg_query has batch time and accuracy but no Rust-visible batch memory.
         let pg = merged.iter().find(|x| x.parser == "pg_query.rs").unwrap();
+        assert_eq!(pg.accuracy_pct, Some(100.0));
         assert_eq!(pg.ns_per_stmt, Some(8.0));
         assert_eq!(pg.peak_per_stmt, None);
         // A different dialect yields nothing from the same rows.
@@ -831,22 +820,15 @@ mod tests {
     }
 
     #[test]
-    fn batch_merge_drops_incomplete_parses() {
-        // Time bailed out early (5 of 10): its ns_per_stmt is untrustworthy and
-        // dropped. Memory parsed fully, so it survives and keeps the entry.
-        let perf = parse_batch_perf("h,h,h,h,h,h,h\npostgresql,sqlparser-rs,10,5,1,100.0,10.0\n");
-        let mem =
-            parse_batch_mem("h,h,h,h,h,h,h,h\npostgresql,sqlparser-rs,10,10,1,1,500.0,200.0\n");
-        let merged = batch_for("postgresql", &perf, &mem);
+    fn batch_merge_keeps_accuracy_even_when_time_is_blank() {
+        // A parser whose batches never parsed correctly still appears, with its
+        // accuracy (0) recorded and time/memory left absent.
+        let perf = parse_batch_perf("h,h,h,h,h,h,h\npostgresql,worst,10,200,0,0.0,\n");
+        let merged = batch_for("postgresql", &perf, &[]);
         assert_eq!(merged.len(), 1);
-        assert_eq!(merged[0].ns_per_stmt, None); // dropped: incomplete
-        assert_eq!(merged[0].peak_per_stmt, Some(500.0));
-
-        // Both axes incomplete -> the parser is omitted entirely.
-        let perf2 = parse_batch_perf("h,h,h,h,h,h,h\npostgresql,sqlparser-rs,10,2,1,100.0,10.0\n");
-        let mem2 =
-            parse_batch_mem("h,h,h,h,h,h,h,h\npostgresql,sqlparser-rs,10,3,1,1,500.0,200.0\n");
-        assert!(batch_for("postgresql", &perf2, &mem2).is_empty());
+        assert_eq!(merged[0].accuracy_pct, Some(0.0));
+        assert_eq!(merged[0].ns_per_stmt, None);
+        assert_eq!(merged[0].peak_per_stmt, None);
     }
 
     #[test]

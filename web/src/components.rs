@@ -6,11 +6,12 @@ use crate::Route;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
-    FaArrowLeftLong, FaArrowsRotate, FaBan, FaBomb, FaBox, FaBug, FaBuilding, FaCalendarDays,
-    FaChartColumn, FaChartLine, FaCircleXmark, FaCode, FaCodeCommit, FaCodeFork, FaCopy, FaCube,
-    FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaHeartPulse, FaLayerGroup,
-    FaMicrochip, FaMobileScreen, FaScaleBalanced, FaServer, FaShieldHalved, FaSitemap, FaStar,
-    FaStopwatch, FaTableCells, FaTag, FaTriangleExclamation, FaUsers, FaVial,
+    FaArrowLeftLong, FaArrowsRotate, FaBan, FaBomb, FaBox, FaBug, FaBuilding, FaBullseye,
+    FaCalendarDays, FaChartColumn, FaChartLine, FaCircleXmark, FaCode, FaCodeCommit, FaCodeFork,
+    FaCopy, FaCube, FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaGaugeHigh,
+    FaHeartPulse, FaLayerGroup, FaMicrochip, FaMobileScreen, FaRankingStar, FaScaleBalanced,
+    FaServer, FaShieldHalved, FaSitemap, FaStar, FaStopwatch, FaTableCells, FaTag,
+    FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
 use std::cmp::Ordering;
@@ -350,12 +351,23 @@ pub fn Overview() -> Element {
                 {rich_text(&format!("We evaluated nine parser libraries: [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) (Apache DataFusion), [pg_query.rs](https://github.com/pganalyze/pg_query.rs) and its faster summary mode (Rust bindings to [libpg_query](https://github.com/pganalyze/libpg_query), PostgreSQL's own parser), [databend-common-ast](https://crates.io/crates/databend-common-ast), [polyglot-sql](https://github.com/tobilg/polyglot), [sqlglot-rust](https://crates.io/crates/sqlglot-rust), [qusql-parse](https://crates.io/crates/qusql-parse), [sqlite3-parser](https://crates.io/crates/sqlite3-parser) (lemon-rs), and [turso_parser](https://crates.io/crates/turso_parser) (the SQLite parser from Turso), plus [orql](https://codeberg.org/xitep/orql) on Oracle. We ran them against a corpus of 340,938 statements spanning these {} dialects, drawn from each engine's own regression suites and official samples and committed compressed so every run is reproducible.", b.dialects.len())).into_iter()}
             }
             p { class: "blurb",
-                {rich_text("We exercised each parser in the dialect that matches the corpus under test. Where a dialect has a runnable engine, we labelled each statement valid or invalid with the real database engine itself, run in Docker via [testcontainers](https://github.com/testcontainers/testcontainers-rs): a statement counts as valid unless the engine reports a syntax error, so a missing table or column still counts as parsed. Against that ground truth we scored the parsers on recall (valid statements accepted), false positives (invalid statements wrongly accepted), display round-trip stability, and canonical-form fidelity. The other dialects have no runnable engine, so their statements count as provenance-valid and the metric is simply the acceptance rate. Across all dialects, we captured speed as a per-statement parse-time distribution over every accepted statement, and memory as the peak and retained bytes per statement under a counting allocator. A batch axis additionally parses each parser's whole accepted set as a single script, showing what bulk parsing amortizes, and a time machine benchmarks the historical releases of every pure-Rust parser (59 versions in total, including every sqlparser-rs minor since January 2023), so each parser page also charts how coverage, speed, and memory evolved across releases.").into_iter()}
+                {rich_text("We exercised each parser in the dialect that matches the corpus under test. Where a dialect has a runnable engine, we labelled each statement valid or invalid with the real database engine itself, run in Docker via [testcontainers](https://github.com/testcontainers/testcontainers-rs): a statement counts as valid unless the engine reports a syntax error, so a missing table or column still counts as parsed. Against that ground truth we scored the parsers on recall (valid statements accepted), false positives (invalid statements wrongly accepted), and display round-trip stability. The other dialects have no runnable engine, so their statements count as provenance-valid and the metric is simply the acceptance rate. Across all dialects, we captured speed as a per-statement parse-time distribution over every accepted statement, and memory as the peak and retained bytes per statement under a counting allocator. A batch axis additionally parses each parser's whole accepted set as a single script, showing what bulk parsing amortizes, and a time machine benchmarks the historical releases of every pure-Rust parser (59 versions in total, including every sqlparser-rs minor since January 2023), so each parser page also charts how coverage, speed, and memory evolved across releases.").into_iter()}
             }
             p { class: "blurb",
                 {rich_text("On their home dialect the reference bindings are exact by construction, so the more telling comparison is among the pure-Rust parsers. There, [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) is the most broadly capable, the permissive parsers such as [polyglot-sql](https://github.com/tobilg/polyglot) accept the most statements but pay for it with a high false-positive rate, and the stricter parsers reject more in exchange for precision. Speed spans more than an order of magnitude, from well under a microsecond per statement for the fastest parsers to the low single-digit microseconds for most, with [polyglot-sql](https://github.com/tobilg/polyglot) a clear outlier at roughly fifteen. No parser leads on every axis, so the right choice comes down to what a given project values most: broad coverage, few false positives, or raw speed.").into_iter()}
             }
         }
+        div { class: "section-head",
+            h2 {
+                Icon { width: 18, height: 18, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaRankingStar }
+                "Overall ranking"
+            }
+        }
+        p { class: "table-cap",
+            "A single composite score, 0 to 100, blending every dimension: correctness 45 percent, robustness 20, project health 15, speed 12, and memory 8. Each parser is judged only on the dialects it models, never penalised for dialects it never claimed, and breadth is not itself rewarded. Correctness and health are absolute; speed and memory are ranked against the field within each dialect, then averaged. Click any column to sort. A dimension that does not apply (memory for the FFI bindings) shows n/a and its weight is redistributed."
+        }
+        {score_leaderboard()}
+
         div { class: "section-head",
             h2 {
                 Icon { width: 18, height: 18, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaDatabase }
@@ -666,10 +678,10 @@ pub fn ParserView(name: String) -> Element {
         "accept / recall",
         "false pos",
         "round-trip",
-        "fidelity",
         "median ns",
         "p90 ns",
         "mean ns",
+        "batch ok%",
         "batch ns/stmt",
     ]
     .iter()
@@ -693,10 +705,10 @@ pub fn ParserView(name: String) -> Element {
                 })),
                 Cell::pct(m.and_then(|m| m.false_positive_pct)),
                 Cell::pct(m.and_then(|m| m.roundtrip_pct)),
-                Cell::pct(m.and_then(|m| m.fidelity_pct)),
                 Cell::ns(p.map(|p| p.median)),
                 Cell::ns(p.map(|p| p.p90)),
                 Cell::ns(p.map(|p| p.mean)),
+                Cell::pct(batch_of(d, &parser).and_then(|x| x.accuracy_pct)),
                 Cell::ns(batch_of(d, &parser).and_then(|x| x.ns_per_stmt)),
             ],
         })
@@ -710,6 +722,9 @@ pub fn ParserView(name: String) -> Element {
                     h1 { "{parser}" }
                     p { class: "hero-stats",
                         span { class: "stat", strong { "{rows.len()}" } " of {b.dialects.len()} dialects" }
+                        if let Some(sc) = crate::score::parser_score(&parser) {
+                            span { class: "stat", strong { "{sc.overall:.0}" } " / 100 score" }
+                        }
                     }
                 }
                 {parser_meta_pills(&parser)}
@@ -717,6 +732,8 @@ pub fn ParserView(name: String) -> Element {
         }
 
         {blurb(crate::descriptions::parser_blurb(&parser))}
+
+        {parser_score_section(&parser)}
 
         if has_charts {
             section { class: "block",
@@ -749,7 +766,7 @@ pub fn ParserView(name: String) -> Element {
                 "Results by dialect"
             }
             p { class: "table-cap",
-                "One row per dialect. \"accept / recall\" is recall where a reference parser exists, otherwise the acceptance rate. \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original. \"median ns\" and \"p90 ns\" are per-statement parse times (lower is faster), \"mean ns\" the per-statement average, and \"batch ns/stmt\" the whole accepted set parsed as one script divided by its statement count, so compare it to the adjacent mean (blank where not measured or no batch entry point)."
+                "One row per dialect. \"accept / recall\" is recall where a reference parser exists, otherwise the acceptance rate. \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged. \"median ns\" and \"p90 ns\" are per-statement parse times (lower is faster), \"mean ns\" the per-statement average. \"batch ok%\" is the share of 200 random 128-statement scripts (built from statements the parser accepts) that reparse to the exact count, and \"batch ns/stmt\" is the per-statement time over the scripts that did, so compare it to the adjacent mean."
             }
             SortTable {
                 caption: format!("Per-dialect results for {}", parser),
@@ -971,8 +988,8 @@ fn VersionHistory(parser: String) -> Element {
         "accept / recall",
         "false pos",
         "round-trip",
-        "fidelity",
         "mean ns",
+        "batch ok%",
         "batch ns/stmt",
     ]
     .iter()
@@ -999,8 +1016,8 @@ fn VersionHistory(parser: String) -> Element {
                     })),
                     Cell::pct(m.and_then(|m| m.false_positive_pct)),
                     Cell::pct(m.and_then(|m| m.roundtrip_pct)),
-                    Cell::pct(m.and_then(|m| m.fidelity_pct)),
                     Cell::ns(d.perf.as_ref().map(|p| p.mean)),
+                    Cell::pct(d.batch.as_ref().and_then(|b| b.accuracy_pct)),
                     Cell::ns(d.batch.as_ref().and_then(|b| b.ns_per_stmt)),
                 ],
             }
@@ -1147,7 +1164,7 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
                 "Memory by dialect"
             }
             p { class: "table-cap",
-                "One row per dialect, bytes per statement. \"peak\" is the high-water mark of live memory during a parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over the whole accepted set parsed as one script divided by its statement count, so compare each batch column to the adjacent mean (blank where not measured or no batch entry point)."
+                "One row per dialect, bytes per statement. \"peak\" is the high-water mark of live memory during a parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over random 128-statement scripts, averaged over the ones that reparsed correctly, so compare each batch column to the adjacent mean."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{}-mempeak-ecdf", slug(parser)), &peak_ecdf, &format!("Empirical CDF of {parser} peak memory, one curve per dialect."), "Peak live memory per parse, one curve per dialect. Further left is leaner (log scale).", &format!("{}-peak-memory-ecdf", slug(parser)))}
@@ -1426,6 +1443,90 @@ fn dialect_meta_pills(dir: &str) -> Element {
 /// Repository and crate metadata pills for a parser, shown inside the parser
 /// hero banner. Renders nothing for a parser with no recorded metadata. Figures
 /// are a dated snapshot (see `metadata::SNAPSHOT`).
+/// The overall-score leaderboard for the overview: one row per parser, ranked
+/// by the composite score, with the five sub-scores as sortable columns.
+fn score_leaderboard() -> Element {
+    let columns = vec![
+        "overall".to_string(),
+        "correctness".to_string(),
+        "robustness".to_string(),
+        "speed".to_string(),
+        "memory".to_string(),
+        "health".to_string(),
+    ];
+    let cell = |v: Option<f64>| {
+        v.map_or_else(
+            || Cell::with("n/a".to_string(), None),
+            |x| Cell::with(format!("{x:.0}"), Some(x)),
+        )
+    };
+    let mut scored: Vec<(&String, &crate::score::ParserScore)> =
+        crate::score::all_scores().iter().collect();
+    scored.sort_by(|a, b| {
+        b.1.overall
+            .partial_cmp(&a.1.overall)
+            .unwrap_or(Ordering::Equal)
+    });
+    let rows: Vec<Row> = scored
+        .into_iter()
+        .map(|(name, s)| Row {
+            key: name.clone(),
+            head: Head::Parser(name.clone()),
+            cells: vec![
+                Cell::with(format!("{:.0}", s.overall), Some(s.overall)),
+                cell(s.correctness),
+                cell(s.robustness),
+                cell(s.speed),
+                cell(s.memory),
+                cell(s.health),
+            ],
+        })
+        .collect();
+    rsx! {
+        SortTable {
+            caption: "Overall parser score, ranked".to_string(),
+            corner: "parser".to_string(),
+            columns,
+            rows,
+            footer: None,
+        }
+    }
+}
+
+/// The per-parser score block on the parser page: the overall number plus the
+/// five sub-scores as pills, so the composite is never an opaque figure.
+fn parser_score_section(parser: &str) -> Element {
+    let Some(s) = crate::score::parser_score(parser) else {
+        return rsx! {};
+    };
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaRankingStar }
+                "Overall score"
+            }
+            p { class: "table-cap",
+                "A composite of every dimension, 0 to 100, weighting correctness 45 percent, robustness 20, project health 15, speed 12, and memory 8. Computed only over the dialects this parser models. Speed and memory are ranked against the other parsers on each dialect; correctness and health are absolute."
+            }
+            p { class: "hero-stats",
+                span { class: "stat", strong { "{s.overall:.0}" } " / 100 overall" }
+            }
+            div { class: "meta-grid",
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", fmt_score(s.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the dialects this parser models.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "robustness", fmt_score(s.robustness), "Robustness sub-score (0 to 100): empirical panic rate on the real corpus, recursion-depth guarding, unsafe surface, and static panic discipline.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGaugeHigh } }, "speed", fmt_score(s.speed), "Speed sub-score (0 to 100): median parse time ranked against the other parsers within each dialect on a log scale, then averaged.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "memory", fmt_score(s.memory), "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. Shown n/a for FFI parsers, whose C-side allocations are not measured.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "health", fmt_score(s.health), "Project-health sub-score (0 to 100): maintenance, tests, benches, fuzzing, sanitizers, supply-chain gates, licensing, release cadence, and contributor depth. Excludes popularity proxies.".to_string())}
+            }
+        }
+    }
+}
+
+/// Format a sub-score as a rounded number, or "n/a" when it does not apply.
+fn fmt_score(v: Option<f64>) -> String {
+    v.map_or_else(|| "n/a".to_string(), |x| format!("{x:.0}"))
+}
+
 fn parser_meta_pills(parser: &str) -> Element {
     use crate::metadata::{parser_meta, SNAPSHOT};
     let Some(m) = parser_meta(parser) else {
@@ -1890,12 +1991,17 @@ fn col_help(name: &str) -> Option<&'static str> {
     Some(match name {
         "parser" => "The SQL parser library under test.",
         "dialect" => "The SQL dialect the row reports on.",
+        "overall" => "Overall score (0 to 100): correctness 45 percent, robustness 20, project health 15, speed 12, memory 8, computed only over the dialects the parser models. Higher is better.",
+        "correctness" => "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the parser's dialects. Higher is better.",
+        "robustness" => "Robustness sub-score (0 to 100): empirical panic rate, recursion-depth guarding, unsafe surface, and static panic discipline. Higher is better.",
+        "speed" => "Speed sub-score (0 to 100): median parse time ranked against the field within each dialect on a log scale, then averaged. Higher is better.",
+        "memory" => "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. n/a for FFI parsers. Higher is better.",
+        "health" => "Project-health sub-score (0 to 100): maintenance, tests, fuzzing, sanitizers, supply-chain gates, licensing, cadence, and contributor depth. Higher is better.",
         "recall" => "Recall: of the statements the reference parser treats as valid, the share this parser also accepted. It measures agreement with the reference on what counts as valid SQL, not whether the parser runs. Higher is better.",
         "accept" => "Acceptance rate: the share of the corpus this parser accepted. Used where there is no reference parser, so every corpus statement is treated as expected-valid.",
         "accept / recall" => "Recall where a reference parser exists (agreement with it on valid statements), otherwise the plain acceptance rate. Higher is better.",
         "false pos" => "False positives: of the statements the reference parser rejects as invalid, the share this parser wrongly accepted. Lower is better.",
         "round-trip" | "RT %" => "Round-trip rate: of the statements it accepted, the share that print back to SQL and re-parse unchanged. Shown as n/a when the parser cannot print. Higher is better.",
-        "fidelity" => "Fidelity: of the accepted statements, the share whose printed form is semantically identical to the original under the reference parser's canonical form. Higher is better.",
         "missed %" => "Missed: the share of statements the parser was expected to accept but did not. On reference dialects this is one minus recall, elsewhere the unaccepted fraction. Lower is better.",
         "median ns" => "Median parse time per accepted statement, in nanoseconds: half of statements parse faster than this.",
         "p90 ns" => "90th-percentile parse time per accepted statement, in nanoseconds: nine in ten statements parse faster than this.",
@@ -1903,6 +2009,8 @@ fn col_help(name: &str) -> Option<&'static str> {
         "peak p90" => "90th-percentile peak live memory per statement: nine in ten statements stay under this high-water mark.",
         "retained p50" => "Median retained memory per statement: the bytes the produced AST (plus the scaffolding it keeps alive) holds after parsing. Half of statements retain less.",
         "retained p90" => "90th-percentile retained memory per statement: the AST footprint nine in ten statements stay under.",
+        "batch ok%" => "Batch parse rate: of 200 random 128-statement scripts built from statements this parser accepts individually, the share it reparsed to the exact statement count. Below 100% means it mishandles a statement boundary (for example swallowing the terminator) in some multi-statement scripts. Higher is better.",
+        "batch ns/stmt" => "Per-statement parse time inside a multi-statement script, averaged over the batches that parsed correctly. Compare with mean ns to see what bulk parsing amortizes. Blank only when no sampled batch parsed correctly.",
         _ => return None,
     })
 }
@@ -2029,6 +2137,7 @@ fn perf_table(d: &DialectData) -> Element {
         "median ns",
         "p90 ns",
         "mean ns",
+        "batch ok%",
         "batch ns/stmt",
         "missed %",
         "RT %",
@@ -2046,6 +2155,7 @@ fn perf_table(d: &DialectData) -> Element {
                 Cell::ns(Some(p.median)),
                 Cell::ns(Some(p.p90)),
                 Cell::ns(Some(p.mean)),
+                Cell::pct(batch_of(d, &p.parser).and_then(|x| x.accuracy_pct)),
                 Cell::ns(batch_of(d, &p.parser).and_then(|x| x.ns_per_stmt)),
                 Cell::with(missed_pct(d, p), missed_val(d, p)),
                 Cell::pct(p.roundtrip_pct),
@@ -2059,7 +2169,7 @@ fn perf_table(d: &DialectData) -> Element {
                 "Speed"
             }
             p { class: "table-cap",
-                "One row per parser. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster). \"mean ns\" is the per-statement average, and \"batch ns/stmt\" is the whole accepted set parsed as one script divided by its statement count, so comparing those two adjacent averages shows what bulk parsing saves or costs (batch blank where not measured or no batch entry point). \"missed %\" is the share of expected statements not accepted, \"RT %\" the round-trip rate, the share of accepted statements that re-parse unchanged."
+                "One row per parser. \"median ns\" and \"p90 ns\" are per-statement parse times in nanoseconds (lower is faster). \"mean ns\" is the per-statement average. \"batch ok%\" is the share of 200 random 128-statement scripts (built from statements the parser accepts) that reparse to the exact count, and \"batch ns/stmt\" is the per-statement time over the scripts that did, so comparing it to the mean shows what bulk parsing saves or costs. \"missed %\" is the share of expected statements not accepted, \"RT %\" the round-trip rate, the share of accepted statements that re-parse unchanged."
             }
             SortTable {
                 caption: format!("Per-parser parse time in nanoseconds for {}", d.display_name),
@@ -2134,7 +2244,7 @@ fn memory_table(d: &DialectData) -> Element {
                 "Memory"
             }
             p { class: "table-cap",
-                "Bytes per statement, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over the whole accepted set parsed as one script divided by its statement count, so compare each batch column to the adjacent mean (batch retained is higher when every statement's AST is held at once, blank where not measured or no batch entry point). The libpg_query bindings are omitted (they parse in C, invisible to the Rust allocator)."
+                "Bytes per statement, measured with a counting allocator. \"peak\" is the high-water mark of live memory during the parse, \"retained\" what the produced AST keeps alive afterwards. \"peak mean\" and \"retained mean\" are the per-statement averages, and \"batch peak/stmt\" and \"batch ret/stmt\" are the same over random 128-statement scripts, averaged over the ones that reparsed correctly, so compare each batch column to the adjacent mean (batch retained is higher when every statement's AST is held at once). The libpg_query bindings are omitted (they parse in C, invisible to the Rust allocator)."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{}-mempeak-ecdf", d.dir_name), &peak_ecdf, &format!("Empirical CDF of peak memory for {}, one curve per parser.", d.display_name), "Peak live memory per parse, one curve per parser. Further left is leaner (log scale).", &format!("{}-peak-memory-ecdf", d.dir_name))}
@@ -2156,7 +2266,7 @@ fn memory_table(d: &DialectData) -> Element {
 fn correctness_table(d: &DialectData) -> Element {
     let reference = d.has_reference;
     let columns: Vec<String> = if reference {
-        ["recall", "false pos", "round-trip", "fidelity"]
+        ["recall", "false pos", "round-trip"]
             .iter()
             .map(ToString::to_string)
             .collect()
@@ -2177,7 +2287,6 @@ fn correctness_table(d: &DialectData) -> Element {
                     Cell::pct(m.recall_pct),
                     Cell::pct(m.false_positive_pct),
                     Cell::pct(m.roundtrip_pct),
-                    Cell::pct(m.fidelity_pct),
                 ]
             } else {
                 vec![Cell::pct(m.accept_pct), Cell::pct(m.roundtrip_pct)]
@@ -2192,7 +2301,7 @@ fn correctness_table(d: &DialectData) -> Element {
             }
             p { class: "table-cap",
                 if reference {
-                    "One row per parser, graded against this dialect's reference parser. \"recall\" is the share of reference-valid statements accepted (agreement with the reference on valid SQL, not whether the parser runs). \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged, \"fidelity\" the share whose printed form matches the original."
+                    "One row per parser, graded against this dialect's reference parser. \"recall\" is the share of reference-valid statements accepted (agreement with the reference on valid SQL, not whether the parser runs). \"false pos\" is the share of invalid statements wrongly accepted (lower is better). \"round-trip\" is the share of accepted statements that re-parse unchanged."
                 } else {
                     "One row per parser. With no reference parser here, every statement counts as expected-valid. \"accept\" is the share of the corpus accepted, \"round-trip\" the share of accepted statements that re-parse unchanged."
                 }

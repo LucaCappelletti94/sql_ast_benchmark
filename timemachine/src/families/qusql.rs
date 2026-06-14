@@ -1,6 +1,6 @@
 //! Historical qusql-parse versions. Models PostgreSQL, MariaDB, and SQLite, is
 //! resilient (collects ranked issues rather than failing on the first error),
-//! and has no pretty-printer (so round-trip and fidelity are N/A).
+//! and has no pretty-printer (so round-trip is N/A).
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::{Parser, ParserId};

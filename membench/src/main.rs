@@ -26,7 +26,7 @@ use std::fs;
 use std::io::Write as _;
 use std::path::Path;
 
-use sql_ast_benchmark::batch::join_batch;
+use sql_ast_benchmark::batch::{batch_eligible, evaluate_batches, reports_statement_count};
 use sql_ast_benchmark::datasets::{ensure_corpus, Dialect};
 use sql_ast_benchmark::stats::slug;
 use sql_ast_benchmark::BenchParser;
@@ -172,16 +172,27 @@ fn run() {
     }
 }
 
-/// Whole-script (batch) memory: one (peak, retained) pair per (parser, dialect),
-/// normalized per statement, written to a single summary file. Only parsers with
-/// a batch entry point whose memory is visible to the Rust allocator take part.
+/// Parse one script to a statement count under panic protection, so a single
+/// pathological input cannot abort the whole batch run.
+fn safe_count(parser: BenchParser, sql: &str, dialect: Dialect) -> usize {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        parser.parse_batch(sql, dialect).unwrap_or(0)
+    }))
+    .unwrap_or(0)
+}
+
+/// Batch memory: per (parser, dialect) it samples the same random batches as the
+/// time bench (deterministic seed), measures peak/retained over the batches that
+/// reparse correctly, and records them normalized per statement to
+/// `target/batch_mem_dist/summary.csv`. Only parsers whose memory is visible to
+/// the Rust allocator take part (the libpg_query bindings report `None`).
 fn run_batch() {
     fs::create_dir_all(BATCH_OUT_DIR).expect("create batch_mem_dist dir");
     let mut summary =
         fs::File::create(format!("{BATCH_OUT_DIR}/summary.csv")).expect("create summary.csv");
     writeln!(
         summary,
-        "dialect,parser,n_accepted,n_parsed,peak_bytes,retained_bytes,peak_per_stmt,retained_per_stmt"
+        "dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt"
     )
     .expect("write header");
 
@@ -194,46 +205,66 @@ fn run_batch() {
             if !parser.can_batch() || !parser.supports(dialect) {
                 continue;
             }
-            let accepted: Vec<&str> = stmts
+            // Skip parsers whose memory is invisible to the Rust allocator (the
+            // libpg_query bindings parse in C and report None).
+            if parser.measure_mem_batch("SELECT 1", dialect).is_none() {
+                continue;
+            }
+            // Skip parsers whose batch entry point does not report a true count.
+            if !reports_statement_count(|s| safe_count(parser, s, dialect)) {
+                continue;
+            }
+            let eligible: Vec<&str> = stmts
                 .iter()
-                .filter(|s| parser.accepts(s, dialect) == Some(true))
+                .filter(|s| {
+                    parser.accepts(s, dialect) == Some(true)
+                        && batch_eligible(s)
+                        && safe_count(parser, s, dialect) == 1
+                })
                 .map(String::as_str)
                 .collect();
-            if accepted.is_empty() {
-                continue;
-            }
-            let batch = join_batch(&accepted);
-            // Warm up: let one-time caches/lazy statics allocate first, so they
-            // raise the baseline rather than this measurement. Also skips
-            // parsers whose memory is invisible to the Rust allocator (None).
-            if parser.measure_mem_batch(&batch, dialect).is_none() {
-                continue;
-            }
-            let Some((peak, retained)) = parser.measure_mem_batch(&batch, dialect) else {
-                continue;
-            };
-            // Statements the parser actually consumed from the script, so the
-            // export can drop a pair whose batch parse bailed out early.
-            let n_parsed = parser.parse_batch(&batch, dialect).unwrap_or(0);
+            let label = format!("{}/{}", dialect.dir_name(), parser.name());
+            let eval = evaluate_batches(&eligible, &label, |s| safe_count(parser, s, dialect));
 
-            let n = accepted.len() as f64;
+            let (peak_per_stmt, retained_per_stmt) = if eval.n_correct == 0 {
+                (String::new(), String::new())
+            } else {
+                let mut peak_sum = 0u128;
+                let mut ret_sum = 0u128;
+                for s in &eval.correct_scripts {
+                    if let Some((peak, retained)) = parser.measure_mem_batch(s, dialect) {
+                        peak_sum += peak as u128;
+                        ret_sum += retained as u128;
+                    }
+                }
+                let denom = (eval.n_correct * eval.effective_m) as f64;
+                (
+                    format!("{:.1}", peak_sum as f64 / denom),
+                    format!("{:.1}", ret_sum as f64 / denom),
+                )
+            };
+
+            let acc = eval
+                .accuracy_pct()
+                .map_or_else(String::new, |a| format!("{a:.3}"));
             writeln!(
                 summary,
-                "{},{},{},{n_parsed},{peak},{retained},{:.1},{:.1}",
+                "{},{},{},{},{},{acc},{peak_per_stmt},{retained_per_stmt}",
                 dialect.dir_name(),
                 parser.name(),
-                accepted.len(),
-                peak as f64 / n,
-                retained as f64 / n,
+                eval.n_eligible,
+                eval.k,
+                eval.n_correct,
             )
             .expect("write row");
             summary.flush().expect("flush summary");
-            let coverage = 100.0 * n_parsed as f64 / n;
             eprintln!(
-                "batch-mem {} {}: n={} seen={n_parsed} ({coverage:.0}%) peak={peak} retained={retained}",
+                "batch-mem {} {}: elig={} ok={}/{} peak/stmt={peak_per_stmt} ret/stmt={retained_per_stmt}",
                 dialect.dir_name(),
                 parser.name(),
-                accepted.len(),
+                eval.n_eligible,
+                eval.n_correct,
+                eval.k,
             );
         }
     }

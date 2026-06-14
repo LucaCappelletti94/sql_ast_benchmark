@@ -31,3 +31,6 @@ datasets/
 
 # Playwright MCP scratch output (screenshots, console logs, downloads)
 .playwright-mcp/
+
+# Full-run log from `sqlbench regen` (tee'd locally, not an artifact)
+regen.log

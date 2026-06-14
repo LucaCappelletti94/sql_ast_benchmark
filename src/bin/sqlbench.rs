@@ -76,10 +76,10 @@ fn print_report(r: &DialectReport) {
             reference, r.valid_total, r.invalid_total
         );
         println!(
-            "{:<nw$}  {:>7}  {:>7}  {:>7}  {:>8}",
-            "parser", "Recall", "FalseP", "RTrip", "Fidelity"
+            "{:<nw$}  {:>7}  {:>7}  {:>7}",
+            "parser", "Recall", "FalseP", "RTrip"
         );
-        println!("{}", "-".repeat(nw + 2 + 7 + 2 + 7 + 2 + 7 + 2 + 8));
+        println!("{}", "-".repeat(nw + 2 + 7 + 2 + 7 + 2 + 7));
         for (p, a) in r.parsers.iter().zip(r.stats.iter()) {
             let recall = cell(pct(a.accepted_valid, r.valid_total));
             let fp = if r.invalid_total > 0 {
@@ -92,12 +92,7 @@ fn print_report(r: &DialectReport) {
             } else {
                 NA.to_string()
             };
-            let fid = if a.can_reprint {
-                cell(pct(a.fidelity_ok, a.accepted_valid))
-            } else {
-                NA.to_string()
-            };
-            println!("{:<nw$}  {recall:>7}  {fp:>7}  {rt:>7}  {fid:>8}", p.family);
+            println!("{:<nw$}  {recall:>7}  {fp:>7}  {rt:>7}", p.family);
         }
     } else {
         println!(

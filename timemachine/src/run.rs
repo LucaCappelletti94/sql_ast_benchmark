@@ -8,10 +8,10 @@
 //! history. The timing binary merges in the memory sidecar and writes the final
 //! per-family file.
 
-use sql_ast_benchmark::batch::join_batch;
+use sql_ast_benchmark::batch::{batch_eligible, evaluate_batches, reports_statement_count};
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::report::{self, load_dialect};
-use sql_ast_benchmark::{has_canonical, stats, Parser};
+use sql_ast_benchmark::{stats, Parser};
 use std::collections::BTreeMap;
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -125,7 +125,7 @@ fn load_corpus(full: bool) -> BTreeMap<&'static str, Vec<String>> {
 }
 
 /// `ParserMetrics` from a one-parser grading report.
-fn metrics_of(report: &report::DialectReport, dialect: Dialect) -> ParserMetrics {
+fn metrics_of(report: &report::DialectReport) -> ParserMetrics {
     let s = &report.stats[0];
     let id = report.parsers[0];
     let reference = report.has_reference;
@@ -146,11 +146,6 @@ fn metrics_of(report: &report::DialectReport, dialect: Dialect) -> ParserMetrics
         },
         roundtrip_pct: if s.can_reprint {
             pct(s.roundtrip_ok, s.accepted_valid)
-        } else {
-            None
-        },
-        fidelity_pct: if has_canonical(dialect) && s.can_reprint {
-            pct(s.fidelity_ok, s.accepted_valid)
         } else {
             None
         },
@@ -207,28 +202,45 @@ fn timing_dialect_run(p: &dyn Parser, d: Dialect, stmts: &[String]) -> DialectRu
         ))
     };
 
-    let batch = if accepted.is_empty() || !p.can_batch() {
+    let count = |s: &str| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            p.parse_batch(s, d).unwrap_or(0)
+        }))
+        .unwrap_or(0)
+    };
+    let eligible: Vec<&str> = if !p.can_batch() || !reports_statement_count(|s| count(s)) {
+        Vec::new()
+    } else {
+        accepted
+            .iter()
+            .copied()
+            .filter(|s| batch_eligible(s) && count(s) == 1)
+            .collect()
+    };
+    let batch = if eligible.is_empty() {
         None
     } else {
-        let script = join_batch(&accepted);
-        let n_parsed = p.parse_batch(&script, d).unwrap_or(0);
-        // Only trust the batch number if the whole accepted set parsed.
-        if n_parsed >= accepted.len() {
-            let ns = time_batch(|| p.parse_batch(&script, d).unwrap_or(0));
-            Some(ParserBatch {
-                parser: p.id().family.to_string(),
-                n_accepted: accepted.len(),
-                ns_per_stmt: Some(ns / accepted.len() as f64),
-                peak_per_stmt: None,
-                retained_per_stmt: None,
-            })
-        } else {
+        let label = format!("{}/{}", d.dir_name(), p.id().family);
+        let eval = evaluate_batches(&eligible, &label, count);
+        let ns_per_stmt = if eval.n_correct == 0 {
             None
-        }
+        } else {
+            let denom = (eval.n_correct * eval.effective_m) as f64;
+            let ns = time_batch(|| eval.correct_scripts.iter().map(|s| count(s)).sum());
+            Some(ns / denom)
+        };
+        Some(ParserBatch {
+            parser: p.id().family.to_string(),
+            n_accepted: eval.n_eligible,
+            accuracy_pct: eval.accuracy_pct(),
+            ns_per_stmt,
+            peak_per_stmt: None,
+            retained_per_stmt: None,
+        })
     };
 
     let report = report::grade_chunk(stmts, d, &[p]);
-    let correctness = Some(metrics_of(&report, d));
+    let correctness = Some(metrics_of(&report));
 
     DialectRun {
         dir_name: d.dir_name().to_string(),

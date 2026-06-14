@@ -14,6 +14,7 @@ mod descriptions;
 mod dialect_meta;
 mod logos;
 mod metadata;
+mod score;
 
 use components::{DialectView, Overview, ParserView, Shell};
 
