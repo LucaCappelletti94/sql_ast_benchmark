@@ -1512,7 +1512,7 @@ fn parser_score_section(parser: &str) -> Element {
                 span { class: "stat", strong { "{s.overall:.0}" } " / 100 overall" }
             }
             div { class: "meta-grid",
-                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", fmt_score(s.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, round-trip, and fidelity, averaged over the dialects this parser models.".to_string())}
+                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", fmt_score(s.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the dialects this parser models.".to_string())}
                 {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "robustness", fmt_score(s.robustness), "Robustness sub-score (0 to 100): empirical panic rate on the real corpus, recursion-depth guarding, unsafe surface, and static panic discipline.".to_string())}
                 {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGaugeHigh } }, "speed", fmt_score(s.speed), "Speed sub-score (0 to 100): median parse time ranked against the other parsers within each dialect on a log scale, then averaged.".to_string())}
                 {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "memory", fmt_score(s.memory), "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. Shown n/a for FFI parsers, whose C-side allocations are not measured.".to_string())}
@@ -1992,7 +1992,7 @@ fn col_help(name: &str) -> Option<&'static str> {
         "parser" => "The SQL parser library under test.",
         "dialect" => "The SQL dialect the row reports on.",
         "overall" => "Overall score (0 to 100): correctness 45 percent, robustness 20, project health 15, speed 12, memory 8, computed only over the dialects the parser models. Higher is better.",
-        "correctness" => "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, round-trip, and fidelity, averaged over the parser's dialects. Higher is better.",
+        "correctness" => "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the parser's dialects. Higher is better.",
         "robustness" => "Robustness sub-score (0 to 100): empirical panic rate, recursion-depth guarding, unsafe surface, and static panic discipline. Higher is better.",
         "speed" => "Speed sub-score (0 to 100): median parse time ranked against the field within each dialect on a log scale, then averaged. Higher is better.",
         "memory" => "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. n/a for FFI parsers. Higher is better.",

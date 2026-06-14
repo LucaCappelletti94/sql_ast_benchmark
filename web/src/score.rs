@@ -106,8 +106,8 @@ fn compute_all() -> BTreeMap<String, ParserScore> {
 }
 
 /// Correctness, 0 to 100: per dialect, blend the measured rates (primary
-/// recall or acceptance, plus false-positive avoidance, round-trip, and
-/// fidelity where they exist), then average over the dialects the parser models.
+/// recall or acceptance, plus false-positive avoidance and round-trip where
+/// they exist), then average over the dialects the parser models.
 fn correctness_score(parser: &str) -> Option<f64> {
     let mut per_dialect = Vec::new();
     for d in &bundle().dialects {
@@ -126,10 +126,6 @@ fn correctness_score(parser: &str) -> Option<f64> {
         }
         if let Some(rt) = m.roundtrip_pct {
             num += 0.15 * (rt / 100.0);
-            den += 0.15;
-        }
-        if let Some(fid) = m.fidelity_pct {
-            num += 0.15 * (fid / 100.0);
             den += 0.15;
         }
         per_dialect.push(num / den);
@@ -311,13 +307,14 @@ mod tests {
                 "{name} overall {} out of range",
                 s.overall
             );
-            for sub in [s.correctness, s.robustness, s.speed, s.memory, s.health] {
-                if let Some(v) = sub {
-                    assert!(
-                        (0.0..=100.0).contains(&v),
-                        "{name} sub-score {v} out of range"
-                    );
-                }
+            for v in [s.correctness, s.robustness, s.speed, s.memory, s.health]
+                .into_iter()
+                .flatten()
+            {
+                assert!(
+                    (0.0..=100.0).contains(&v),
+                    "{name} sub-score {v} out of range"
+                );
             }
             // Correctness and health apply to every benchmarked parser.
             assert!(s.correctness.is_some(), "{name} has no correctness score");
