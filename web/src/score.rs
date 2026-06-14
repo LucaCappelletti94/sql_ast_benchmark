@@ -57,6 +57,20 @@ pub fn parser_score(name: &str) -> Option<&'static ParserScore> {
     all_scores().get(name)
 }
 
+/// The 1-based rank of `parser` on one dimension among all scored parsers that
+/// have it, with the number of ranked parsers (higher score is better, ties
+/// share a rank). `None` if the parser has no value for that dimension. Pass the
+/// dimension as `|s| s.correctness`, or `|s| Some(s.overall)` for the overall.
+#[must_use]
+pub fn rank(parser: &str, dim: impl Fn(&ParserScore) -> Option<f64>) -> Option<(usize, usize)> {
+    let scores = all_scores();
+    let mine = dim(scores.get(parser)?)?;
+    let values: Vec<f64> = scores.values().filter_map(&dim).collect();
+    let total = values.len();
+    let better = values.iter().filter(|&&v| v > mine).count();
+    Some((better + 1, total))
+}
+
 /// Every parser's score, computed once. Speed and memory need the whole field
 /// (they are relative within each dialect), so all parsers are scored together.
 #[must_use]
@@ -76,22 +90,13 @@ fn compute_all() -> BTreeMap<String, ParserScore> {
         let health = health_score(parser);
 
         // Weighted blend over the sub-scores that apply, weights renormalized.
-        let parts = [
+        let overall = blend(&[
             (correctness, W_CORRECTNESS),
             (robustness, W_ROBUSTNESS),
             (health, W_HEALTH),
             (speed, W_SPEED),
             (memory, W_MEMORY),
-        ];
-        let mut sum = 0.0;
-        let mut wsum = 0.0;
-        for (v, w) in parts {
-            if let Some(v) = v {
-                sum += v * w;
-                wsum += w;
-            }
-        }
-        let overall = if wsum > 0.0 { sum / wsum } else { 0.0 };
+        ]);
 
         out.insert(
             parser.clone(),
@@ -108,6 +113,81 @@ fn compute_all() -> BTreeMap<String, ParserScore> {
     out
 }
 
+/// Renormalized weighted blend of the sub-scores that apply: a sub-score of
+/// `None` (a dimension that cannot be measured for this parser) is dropped and
+/// its weight removed, so nothing is penalized for an unmeasurable dimension.
+fn blend(parts: &[(Option<f64>, f64)]) -> f64 {
+    let mut sum = 0.0;
+    let mut wsum = 0.0;
+    for &(v, w) in parts {
+        if let Some(v) = v {
+            sum += v * w;
+            wsum += w;
+        }
+    }
+    if wsum > 0.0 {
+        sum / wsum
+    } else {
+        0.0
+    }
+}
+
+/// The composite score for one parser on a single dialect: correctness, speed,
+/// and memory are measured on that dialect alone, while robustness and health are
+/// the parser-level values (they are not dialect-specific). `None` if the parser
+/// does not model `dir`.
+#[must_use]
+pub fn dialect_score(parser: &str, dir: &str) -> Option<ParserScore> {
+    let d = bundle().dialects.iter().find(|x| x.dir_name == dir)?;
+    let models = d.correctness.iter().any(|m| m.parser == parser)
+        || d.perf.iter().any(|p| p.parser == parser)
+        || d.memory.iter().any(|m| m.parser == parser);
+    if !models {
+        return None;
+    }
+    let correctness = d
+        .correctness
+        .iter()
+        .find(|m| m.parser == parser)
+        .and_then(correctness_in_dialect)
+        .map(|v| v * 100.0);
+    let speed = speed_in_dialect(d, parser).map(|v| v * 100.0);
+    let memory = memory_in_dialect(d, parser).map(|v| v * 100.0);
+    let robustness = robustness_score(parser);
+    let health = health_score(parser);
+    let overall = blend(&[
+        (correctness, W_CORRECTNESS),
+        (robustness, W_ROBUSTNESS),
+        (speed, W_SPEED),
+        (memory, W_MEMORY),
+        (health, W_HEALTH),
+    ]);
+    Some(ParserScore {
+        overall,
+        correctness,
+        robustness,
+        speed,
+        memory,
+        health,
+    })
+}
+
+/// Every parser that models `dir`, scored on that dialect and ranked best first.
+#[must_use]
+pub fn dialect_scores(dir: &str) -> Vec<(String, ParserScore)> {
+    let mut scored: Vec<(String, ParserScore)> = bundle()
+        .parsers
+        .iter()
+        .filter_map(|p| dialect_score(p, dir).map(|s| (p.clone(), s)))
+        .collect();
+    scored.sort_by(|a, b| {
+        b.1.overall
+            .partial_cmp(&a.1.overall)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    scored
+}
+
 /// Weight of a provenance dialect (no reference engine) relative to a reference
 /// dialect in the correctness blend. Provenance dialects only contribute an
 /// acceptance rate with no false-positive penalty, so a permissive parser that
@@ -117,10 +197,27 @@ fn compute_all() -> BTreeMap<String, ParserScore> {
 /// coverage contribution rather than letting them inflate the score.
 const PROVENANCE_DIALECT_WEIGHT: f64 = 0.4;
 
-/// Correctness, 0 to 100: per dialect, blend the measured rates (primary recall
-/// or acceptance, plus false-positive avoidance and round-trip where they exist),
-/// then take a weighted average over the dialects the parser models, with
-/// provenance dialects down-weighted (see [`PROVENANCE_DIALECT_WEIGHT`]).
+/// The correctness blend (0 to 1) for one dialect's metrics row: primary signal
+/// (recall on reference dialects, acceptance elsewhere), plus false-positive
+/// avoidance and round-trip where they exist.
+fn correctness_in_dialect(m: &viz::ParserMetrics) -> Option<f64> {
+    let primary = m.recall_pct.or(m.accept_pct)?;
+    let mut num = 0.5 * (primary / 100.0);
+    let mut den = 0.5;
+    if let Some(fp) = m.false_positive_pct {
+        num += 0.2 * (1.0 - fp / 100.0);
+        den += 0.2;
+    }
+    if let Some(rt) = m.roundtrip_pct {
+        num += 0.15 * (rt / 100.0);
+        den += 0.15;
+    }
+    Some(num / den)
+}
+
+/// Correctness, 0 to 100: the per-dialect blend ([`correctness_in_dialect`])
+/// averaged over the dialects the parser models, with provenance dialects
+/// down-weighted (see [`PROVENANCE_DIALECT_WEIGHT`]).
 fn correctness_score(parser: &str) -> Option<f64> {
     let mut num_total = 0.0;
     let mut weight_total = 0.0;
@@ -128,27 +225,15 @@ fn correctness_score(parser: &str) -> Option<f64> {
         let Some(m) = d.correctness.iter().find(|m| m.parser == parser) else {
             continue;
         };
-        // Primary signal: recall on reference dialects, acceptance elsewhere.
-        let Some(primary) = m.recall_pct.or(m.accept_pct) else {
+        let Some(score) = correctness_in_dialect(m) else {
             continue;
         };
-        let mut num = 0.5 * (primary / 100.0);
-        let mut den = 0.5;
-        if let Some(fp) = m.false_positive_pct {
-            num += 0.2 * (1.0 - fp / 100.0);
-            den += 0.2;
-        }
-        if let Some(rt) = m.roundtrip_pct {
-            num += 0.15 * (rt / 100.0);
-            den += 0.15;
-        }
-        let dialect_score = num / den;
         let weight = if d.has_reference {
             1.0
         } else {
             PROVENANCE_DIALECT_WEIGHT
         };
-        num_total += dialect_score * weight;
+        num_total += score * weight;
         weight_total += weight;
     }
     (weight_total > 0.0).then(|| num_total / weight_total * 100.0)
@@ -213,40 +298,61 @@ fn robustness_score(parser: &str) -> Option<f64> {
     (den > 0.0).then(|| num / den * 100.0)
 }
 
-/// Speed, 0 to 100: the parser's median parse time ranked against the field
-/// within each dialect on a log scale, averaged over its dialects.
-fn speed_score(parser: &str) -> Option<f64> {
-    relative_score(parser, |perf| (perf.n_accepted > 0).then_some(perf.median))
+/// Speed (0 to 1) for one dialect: the parser's median parse time ranked against
+/// the field on a log scale. `None` if it or all peers lack a measurement.
+fn speed_in_dialect(d: &viz::DialectData, parser: &str) -> Option<f64> {
+    let pick = |perf: &viz::ParserPerf| (perf.n_accepted > 0).then_some(perf.median);
+    let field: Vec<f64> = d.perf.iter().filter_map(pick).collect();
+    let mine = d.perf.iter().find(|p| p.parser == parser).and_then(pick)?;
+    relative_log(mine, &field)
 }
 
-/// Memory, 0 to 100: peak and retained per-statement footprints, each ranked
-/// against the field within each dialect on a log scale and averaged. `None`
-/// for FFI parsers, whose C-side allocations the Rust allocator never sees.
-fn memory_score(parser: &str) -> Option<f64> {
-    let b = bundle();
-    let mut per_dialect = Vec::new();
-    for d in &b.dialects {
-        if d.memory.iter().all(|m| m.parser != parser) {
-            continue;
-        }
-        let peak: Vec<f64> = d.memory.iter().map(|m| m.peak.median).collect();
-        let retained: Vec<f64> = d.memory.iter().map(|m| m.retained.median).collect();
-        let mine = d.memory.iter().find(|m| m.parser == parser).unwrap();
-        let rp = relative_log(mine.peak.median, &peak);
-        let rr = relative_log(mine.retained.median, &retained);
-        match (rp, rr) {
-            (Some(a), Some(c)) => per_dialect.push((a + c) / 2.0),
-            (Some(a), None) | (None, Some(a)) => per_dialect.push(a),
-            (None, None) => {}
-        }
+/// Speed, 0 to 100: per-dialect rank ([`speed_in_dialect`]) averaged over the
+/// dialects the parser models.
+fn speed_score(parser: &str) -> Option<f64> {
+    let per_dialect: Vec<f64> = bundle()
+        .dialects
+        .iter()
+        .filter_map(|d| speed_in_dialect(d, parser))
+        .collect();
+    mean(&per_dialect).map(|v| v * 100.0)
+}
+
+/// Memory (0 to 1) for one dialect: peak and retained per-statement footprints,
+/// each ranked against the field on a log scale and averaged. `None` for FFI
+/// parsers, whose C-side allocations the Rust allocator never sees.
+fn memory_in_dialect(d: &viz::DialectData, parser: &str) -> Option<f64> {
+    let mine = d.memory.iter().find(|m| m.parser == parser)?;
+    let peak: Vec<f64> = d.memory.iter().map(|m| m.peak.median).collect();
+    let retained: Vec<f64> = d.memory.iter().map(|m| m.retained.median).collect();
+    match (
+        relative_log(mine.peak.median, &peak),
+        relative_log(mine.retained.median, &retained),
+    ) {
+        (Some(a), Some(c)) => Some((a + c) / 2.0),
+        (Some(a), None) | (None, Some(a)) => Some(a),
+        (None, None) => None,
     }
+}
+
+/// Memory, 0 to 100: per-dialect footprint rank ([`memory_in_dialect`]) averaged
+/// over the dialects the parser models.
+fn memory_score(parser: &str) -> Option<f64> {
+    let per_dialect: Vec<f64> = bundle()
+        .dialects
+        .iter()
+        .filter_map(|d| memory_in_dialect(d, parser))
+        .collect();
     mean(&per_dialect).map(|v| v * 100.0)
 }
 
 /// Project health, 0 to 100: an unweighted average of engineering-practice
 /// indicators (maintenance, testing, fuzzing, sanitizers, supply-chain gates,
-/// licensing, release cadence, contributor depth). Deliberately excludes
-/// popularity proxies like stars and downloads: this is a merit signal.
+/// licensing, release cadence, contributor depth). Indicators that cannot apply
+/// to a crate are dropped from the average rather than scored zero: sanitizers
+/// and Miri only when the crate has `unsafe`, and supply-chain auditing only when
+/// it has dependencies. Deliberately excludes popularity proxies like stars and
+/// downloads: this is a merit signal.
 fn health_score(parser: &str) -> Option<f64> {
     let m = parser_meta(parser)?;
     let fuzz = match m.fuzz {
@@ -262,39 +368,34 @@ fn health_score(parser: &str) -> Option<f64> {
         Cadence::Multiyear => 0.3,
         Cadence::Dormant => 0.0,
     };
-    let indicators = [
+    let mut indicators = vec![
         f64::from(maintained(m.last_release)),
         fuzz,
         f64::from(m.tests),
         f64::from(m.benches),
         f64::from(license_ok(m.license)),
         f64::from(m.crates_io),
-        f64::from(!m.sanitizers.is_empty()),
-        f64::from(m.cargo_audit),
-        f64::from(m.cargo_deny),
         f64::from(m.cargo_mutants),
         cadence,
         // Bus-factor proxy: ten or more distinct contributors is full credit.
         (f64::from(m.contributors) / 10.0).min(1.0),
     ];
-    mean(&indicators).map(|v| v * 100.0)
-}
-
-/// Average a parser's per-dialect relative rank for a timing field (lower is
-/// better), over the dialects where it and at least one peer have the field.
-fn relative_score(parser: &str, pick: impl Fn(&viz::ParserPerf) -> Option<f64>) -> Option<f64> {
-    let b = bundle();
-    let mut per_dialect = Vec::new();
-    for d in &b.dialects {
-        let field: Vec<f64> = d.perf.iter().filter_map(&pick).collect();
-        let Some(mine) = d.perf.iter().find(|p| p.parser == parser).and_then(&pick) else {
-            continue;
-        };
-        if let Some(v) = relative_log(mine, &field) {
-            per_dialect.push(v);
-        }
+    let feats = parser_features(parser);
+    // Sanitizers and Miri only catch undefined behavior in `unsafe` code, so they
+    // are a meaningful health signal only when the crate actually has unsafe. A
+    // crate that forbids unsafe (or has none) is not penalized for skipping them:
+    // the indicator is dropped from the average rather than scored zero.
+    if feats.is_some_and(|f| !f.forbids_unsafe && f.counts.unsafe_total() > 0) {
+        indicators.push(f64::from(!m.sanitizers.is_empty()));
     }
-    mean(&per_dialect).map(|v| v * 100.0)
+    // Supply-chain auditing (cargo-audit, cargo-deny) only matters when there are
+    // dependencies to audit. A crate with no direct dependencies is not penalized
+    // for not running them.
+    if feats.is_some_and(|f| f.direct_deps > 0) {
+        indicators.push(f64::from(m.cargo_audit));
+        indicators.push(f64::from(m.cargo_deny));
+    }
+    mean(&indicators).map(|v| v * 100.0)
 }
 
 /// Position of `value` within `field` on a log scale, where the smallest value

@@ -363,10 +363,12 @@ pub fn Overview() -> Element {
                 "Overall ranking"
             }
         }
-        p { class: "table-cap",
-            "A single composite score, 0 to 100, blending every dimension: correctness 45 percent, robustness 20, project health 15, speed 12, and memory 8. Each parser is judged only on the dialects it models, never penalised for dialects it never claimed, and breadth is not itself rewarded. Correctness and health are absolute; speed and memory are ranked against the field within each dialect, then averaged. Click any column to sort. A dimension that does not apply (memory for the FFI bindings) shows n/a and its weight is redistributed."
+        div { class: "block",
+            p { class: "table-cap",
+                "A single composite score, 0 to 100, blending every dimension: correctness 40 percent, robustness 30, speed 18, memory 7, and project health 5. Each parser is judged only on the dialects it models, never penalised for dialects it never claimed, and breadth is not itself rewarded. Correctness and health are absolute; speed and memory are ranked against the field within each dialect, then averaged. Click any column to sort. A dimension that does not apply (memory for the FFI bindings) shows n/a and its weight is redistributed."
+            }
+            {score_leaderboard()}
         }
-        {score_leaderboard()}
 
         div { class: "section-head",
             h2 {
@@ -584,6 +586,8 @@ pub fn DialectView(dir: String) -> Element {
         }
 
         {blurb(crate::descriptions::dialect_blurb(&d.dir_name))}
+
+        {dialect_leaderboard(d)}
 
         section { class: "block",
             h2 {
@@ -1493,30 +1497,107 @@ fn score_leaderboard() -> Element {
     }
 }
 
+/// The overall-score leaderboard for one dialect page: every parser that models
+/// the dialect, ranked by its composite score on that dialect (correctness,
+/// speed, and memory measured here; robustness and health are parser-level).
+fn dialect_leaderboard(d: &DialectData) -> Element {
+    let columns = vec![
+        "overall".to_string(),
+        "correctness".to_string(),
+        "robustness".to_string(),
+        "speed".to_string(),
+        "memory".to_string(),
+        "health".to_string(),
+    ];
+    let cell = |v: Option<f64>| {
+        v.map_or_else(
+            || Cell::with("n/a".to_string(), None),
+            |x| Cell::with(format!("{x:.0}"), Some(x)),
+        )
+    };
+    let rows: Vec<Row> = crate::score::dialect_scores(&d.dir_name)
+        .into_iter()
+        .map(|(name, s)| Row {
+            key: name.clone(),
+            head: Head::Parser(name.clone()),
+            cells: vec![
+                Cell::with(format!("{:.0}", s.overall), Some(s.overall)),
+                cell(s.correctness),
+                cell(s.robustness),
+                cell(s.speed),
+                cell(s.memory),
+                cell(s.health),
+            ],
+        })
+        .collect();
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaRankingStar }
+                "Overall ranking on this dialect"
+            }
+            p { class: "table-cap",
+                "Parsers that model {d.display_name}, ranked by the composite score restricted to this dialect: correctness, speed, and memory are measured here, while robustness and project health are the parser-level values (not dialect-specific). Same weights as the overall score. Click any column to sort."
+            }
+            SortTable {
+                caption: format!("Per-parser overall score on {}, ranked", d.display_name),
+                corner: "parser".to_string(),
+                columns,
+                rows,
+                footer: None,
+            }
+        }
+    }
+}
+
 /// The per-parser score block on the parser page: the overall number plus the
 /// five sub-scores as pills, so the composite is never an opaque figure.
+/// One score pill on the parser page: icon, score, label, and the parser's rank
+/// on that dimension among all parsers (e.g. `#3/9`).
+fn score_badge(
+    icon: Element,
+    label: &str,
+    score: Option<f64>,
+    rank: Option<(usize, usize)>,
+    desc: String,
+) -> Element {
+    let val = fmt_score(score);
+    let rank_txt = rank.map(|(r, n)| format!("#{r}/{n}"));
+    rsx! {
+        span { class: "meta-item score-badge", title: "{desc}", "aria-label": "{desc}",
+            span { class: "meta-ico", "aria-hidden": "true", {icon} }
+            span { class: "meta-val", "aria-hidden": "true", "{val}" }
+            span { class: "meta-key", "aria-hidden": "true", "{label}" }
+            if let Some(r) = rank_txt {
+                span { class: "meta-rank", "aria-hidden": "true", "{r}" }
+            }
+        }
+    }
+}
+
 fn parser_score_section(parser: &str) -> Element {
     let Some(s) = crate::score::parser_score(parser) else {
         return rsx! {};
     };
+    let (or, on) = crate::score::rank(parser, |s| Some(s.overall)).unwrap_or((0, 0));
     rsx! {
         section { class: "block",
             h2 {
                 Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaRankingStar }
                 "Overall score"
+                span { class: "h2-aside",
+                    strong { "{s.overall:.0}" } " / 100 overall, ranked #{or} of {on}"
+                }
             }
             p { class: "table-cap",
-                "A composite of every dimension, 0 to 100, weighting correctness 45 percent, robustness 20, project health 15, speed 12, and memory 8. Computed only over the dialects this parser models. Speed and memory are ranked against the other parsers on each dialect; correctness and health are absolute."
+                "A composite of every dimension, 0 to 100, weighting correctness 40 percent, robustness 30, speed 18, memory 7, and project health 5. Computed only over the dialects this parser models. Speed and memory are ranked against the other parsers on each dialect; correctness and health are absolute. Each badge also shows this parser's rank on that dimension among all parsers."
             }
-            p { class: "hero-stats",
-                span { class: "stat", strong { "{s.overall:.0}" } " / 100 overall" }
-            }
-            div { class: "meta-grid",
-                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", fmt_score(s.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the dialects this parser models.".to_string())}
-                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "robustness", fmt_score(s.robustness), "Robustness sub-score (0 to 100): empirical panic rate on the real corpus, recursion-depth guarding, unsafe surface, and static panic discipline.".to_string())}
-                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGaugeHigh } }, "speed", fmt_score(s.speed), "Speed sub-score (0 to 100): median parse time ranked against the other parsers within each dialect on a log scale, then averaged.".to_string())}
-                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "memory", fmt_score(s.memory), "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. Shown n/a for FFI parsers, whose C-side allocations are not measured.".to_string())}
-                {meta_item(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "health", fmt_score(s.health), "Project-health sub-score (0 to 100): maintenance, tests, benches, fuzzing, sanitizers, supply-chain gates, licensing, release cadence, and contributor depth. Excludes popularity proxies.".to_string())}
+            div { class: "meta-grid score-grid",
+                {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", s.correctness, crate::score::rank(parser, |x| x.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the dialects this parser models.".to_string())}
+                {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "robustness", s.robustness, crate::score::rank(parser, |x| x.robustness), "Robustness sub-score (0 to 100): empirical panic rate on the real corpus, recursion-depth guarding, unsafe surface, and static panic discipline.".to_string())}
+                {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGaugeHigh } }, "speed", s.speed, crate::score::rank(parser, |x| x.speed), "Speed sub-score (0 to 100): median parse time ranked against the other parsers within each dialect on a log scale, then averaged.".to_string())}
+                {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "memory", s.memory, crate::score::rank(parser, |x| x.memory), "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. Shown n/a for FFI parsers, whose C-side allocations are not measured.".to_string())}
+                {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "health", s.health, crate::score::rank(parser, |x| x.health), "Project-health sub-score (0 to 100): maintenance, tests, benches, fuzzing, sanitizers, supply-chain gates, licensing, release cadence, and contributor depth. Excludes popularity proxies.".to_string())}
             }
         }
     }
@@ -1991,7 +2072,7 @@ fn col_help(name: &str) -> Option<&'static str> {
     Some(match name {
         "parser" => "The SQL parser library under test.",
         "dialect" => "The SQL dialect the row reports on.",
-        "overall" => "Overall score (0 to 100): correctness 45 percent, robustness 20, project health 15, speed 12, memory 8, computed only over the dialects the parser models. Higher is better.",
+        "overall" => "Overall score (0 to 100): correctness 40 percent, robustness 30, speed 18, memory 7, project health 5, computed only over the dialects the parser models. Higher is better.",
         "correctness" => "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the parser's dialects. Higher is better.",
         "robustness" => "Robustness sub-score (0 to 100): empirical panic rate, recursion-depth guarding, unsafe surface, and static panic discipline. Higher is better.",
         "speed" => "Speed sub-score (0 to 100): median parse time ranked against the field within each dialect on a log scale, then averaged. Higher is better.",
