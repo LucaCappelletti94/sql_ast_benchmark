@@ -156,8 +156,12 @@ mod tests {
     ];
 
     /// Guard against issue #22: the corpus must keep `CREATE TRIGGER ... BEGIN
-    /// ... END` bodies intact. A trigger split on its inner semicolons is
-    /// incomplete and fails to parse. Skips when the corpus is not unpacked.
+    /// ... END` bodies intact. A trigger split on its inner semicolons loses its
+    /// trailing `END`, so the structural invariant is that every `CREATE TRIGGER`
+    /// line contains a `BEGIN` and ends with `END`. This is a completeness check,
+    /// not a parse check: some valid triggers (recursive CTE bodies, `IS NOT
+    /// TRUE`) exceed what a given Rust parser supports, which is a parser gap, not
+    /// truncation. Skips when the corpus is not unpacked.
     #[test]
     fn sqlite_create_triggers_parse_as_complete_statements() {
         if super::ensure_corpus().is_err() {
@@ -177,17 +181,22 @@ mod tests {
             for line in content.lines() {
                 let l = line.trim();
                 let lower = l.to_ascii_lowercase();
-                if lower.starts_with("create")
-                    && lower.contains("trigger")
-                    && crate::BenchParser::Sqlite3.accepts(l, Dialect::Sqlite) != Some(true)
-                {
+                if !(lower.starts_with("create") && lower.contains("trigger")) {
+                    continue;
+                }
+                // A complete trigger has its body intact: a `BEGIN` opener and an
+                // `END` terminator at the end of the statement. Truncation on an
+                // inner `;` drops the trailing `END`.
+                let up = l.to_ascii_uppercase();
+                let body_closed = up.trim_end_matches(';').trim_end().ends_with("END");
+                if !up.contains("BEGIN") || !body_closed {
                     incomplete.push(l.chars().take(90).collect::<String>());
                 }
             }
         }
         assert!(
             incomplete.is_empty(),
-            "{} CREATE TRIGGER statements do not parse (truncated?):\n{}",
+            "{} CREATE TRIGGER statements look truncated (no BEGIN..END body):\n{}",
             incomplete.len(),
             incomplete.join("\n")
         );
