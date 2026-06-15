@@ -548,13 +548,27 @@ fn label_duckdb(stmts: &[String]) -> Result<Vec<bool>> {
 /// script of `EXPLAIN <stmt>;` (compiles, does not execute, so no side effects)
 /// and read stderr. `EXPLAIN` resolves names, so "no such table/column" surfaces
 /// as a non-syntax error (valid). Only a syntax error makes a statement invalid.
+///
+/// A statement that does not close its own quotes is graded invalid up front and
+/// kept out of the batch: it is not valid SQL, and an unterminated quote in the
+/// concatenated script would otherwise swallow every following `EXPLAIN` line as
+/// one string literal, silently grading the lot valid (the masking that a single
+/// malformed corpus line once caused). `batch[k]` maps the k-th batched script
+/// line back to its original statement index.
 fn label_sqlite(stmts: &[String]) -> Result<Vec<bool>> {
-    // Script line 1 is `.bail off`. Statement i is on line i + 2.
+    let mut valid = vec![true; stmts.len()];
+    // Script line 1 is `.bail off`; the k-th batched statement is on line k + 2.
     let mut script = String::from(".bail off\n");
-    for s in stmts {
+    let mut batch: Vec<usize> = Vec::with_capacity(stmts.len());
+    for (idx, s) in stmts.iter().enumerate() {
+        if !is_sqlite_balanced(s) {
+            valid[idx] = false;
+            continue;
+        }
         script.push_str("EXPLAIN ");
         script.push_str(s.trim().trim_end_matches(';'));
         script.push_str(";\n");
+        batch.push(idx);
     }
 
     let mut child = Command::new("docker")
@@ -600,13 +614,12 @@ fn label_sqlite(stmts: &[String]) -> Result<Vec<bool>> {
     }
     let stderr = String::from_utf8_lossy(&out.stderr);
 
-    let mut valid = vec![true; stmts.len()];
     for line in stderr.lines() {
         if let Some((lineno, msg)) = parse_sqlite_err(line) {
             if lineno >= 2 {
-                let idx = lineno - 2;
-                if idx < stmts.len() && is_sqlite_invalid(msg) {
-                    valid[idx] = false;
+                let k = lineno - 2;
+                if k < batch.len() && is_sqlite_invalid(msg) {
+                    valid[batch[k]] = false;
                 }
             }
         }
@@ -641,9 +654,88 @@ fn is_sqlite_invalid(msg: &str) -> bool {
     !(m.contains("no such") || m.contains("ambiguous column") || m.contains("unknown database"))
 }
 
+/// Whether a statement closes every string/identifier quote and block comment it
+/// opens, per SQLite lexing: `'..'`/`".."`/`` `..` `` with doubling escapes,
+/// `[..]` (no escape), `/* .. */`; backslash is an ordinary character. An
+/// unbalanced statement is invalid SQL and, fed into the batch script, its open
+/// quote would swallow the following statements, so the caller keeps it out.
+fn is_sqlite_balanced(s: &str) -> bool {
+    #[derive(PartialEq)]
+    enum Q {
+        None,
+        Sq,
+        Dq,
+        Bt,
+        Bk,
+        Bc,
+    }
+    let b = s.as_bytes();
+    let mut q = Q::None;
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        match q {
+            Q::None => match c {
+                b'\'' => q = Q::Sq,
+                b'"' => q = Q::Dq,
+                b'`' => q = Q::Bt,
+                b'[' => q = Q::Bk,
+                b'-' if b.get(i + 1) == Some(&b'-') => return true,
+                b'/' if b.get(i + 1) == Some(&b'*') => {
+                    q = Q::Bc;
+                    i += 1;
+                }
+                _ => {}
+            },
+            Q::Sq | Q::Dq | Q::Bt => {
+                let close = match q {
+                    Q::Sq => b'\'',
+                    Q::Dq => b'"',
+                    _ => b'`',
+                };
+                if c == close {
+                    if b.get(i + 1) == Some(&close) {
+                        i += 1;
+                    } else {
+                        q = Q::None;
+                    }
+                }
+            }
+            Q::Bk => {
+                if c == b']' {
+                    q = Q::None;
+                }
+            }
+            Q::Bc => {
+                if c == b'*' && b.get(i + 1) == Some(&b'/') {
+                    q = Q::None;
+                    i += 1;
+                }
+            }
+        }
+        i += 1;
+    }
+    q == Q::None
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{is_copy_to_stdout, is_sqlite_invalid, parse_clickhouse_code, parse_sqlite_err};
+    use super::{
+        is_copy_to_stdout, is_sqlite_balanced, is_sqlite_invalid, parse_clickhouse_code,
+        parse_sqlite_err,
+    };
+
+    #[test]
+    fn sqlite_balance_guard_excludes_swallowing_statements() {
+        assert!(is_sqlite_balanced("SELECT json_valid('\" \\ \"')"));
+        assert!(is_sqlite_balanced("SELECT 'a''b', \"c\", `d`, [e]"));
+        assert!(is_sqlite_balanced("SELECT '{\"a\":1}'"));
+        // Unterminated quote/identifier: invalid and would swallow the batch.
+        assert!(!is_sqlite_balanced("SELECT json_valid('\" \\ ;SELECT 1"));
+        assert!(!is_sqlite_balanced("select 'abc"));
+        assert!(!is_sqlite_balanced("select \"abc"));
+        assert!(!is_sqlite_balanced("select [abc"));
+    }
 
     #[test]
     fn copy_to_stdout_is_recognized() {
