@@ -9,6 +9,7 @@
 
 pub mod chart;
 pub mod color;
+pub mod marker;
 pub mod schema;
 
 pub use chart::{
@@ -16,6 +17,7 @@ pub use chart::{
     Line, TrendSeries,
 };
 pub use color::{parser_hex, parser_rgb};
+pub use marker::{marker_for, Marker};
 pub use schema::{
     Bundle, CoverageFile, CoverageMatrix, DepthReport, DepthScan, DialectData, DialectRun,
     FamilyHistory, FeatureCounts, FeatureScan, LintPolicy, MemDist, ParserBatch, ParserFailures,
