@@ -13,11 +13,38 @@
 )]
 
 use crate::color::parser_rgb;
+use crate::marker::{marker_for, Marker};
 use crate::schema::{DialectData, ParserMetrics, ParserPerf};
 use plotters::prelude::*;
 use plotters::style::RGBColor;
 
 type Res = Result<(), Box<dyn std::error::Error>>;
+
+/// Radius in pixels of the per-series glyphs drawn on curves and in legends.
+const MARKER_R: i32 = 4;
+
+/// Draw a filled marker glyph at a data point on a chart. Generic over the
+/// coordinate system so the same call serves the linear and log-scaled charts.
+/// The glyph's vertices are pixel offsets from the anchor, composed onto an
+/// [`EmptyElement`] at the data coordinate, so size stays constant regardless of
+/// the axis scale.
+fn draw_marker<DB, CT>(
+    chart: &mut ChartContext<DB, CT>,
+    marker: Marker,
+    x: f64,
+    y: f64,
+    color: RGBColor,
+) -> Res
+where
+    DB: DrawingBackend,
+    DB::ErrorType: std::error::Error + 'static,
+    CT: plotters::coord::CoordTranslate<From = (f64, f64)>,
+{
+    chart.draw_series(std::iter::once(
+        EmptyElement::at((x, y)) + Polygon::new(marker.vertices(MARKER_R), color.filled()),
+    ))?;
+    Ok(())
+}
 
 /// Pixels reserved on the right of each chart for the legend, sized to the
 /// widest label so short-label charts (e.g. a single-dialect parser page) do
@@ -80,6 +107,13 @@ where
             vec![(6, y + 6), (30, y + 6)],
             rgb(l.rgb).stroke_width(3),
         ))?;
+        // Marker glyph centered on the swatch so the legend matches the curve.
+        let verts: Vec<(i32, i32)> = marker_for(&l.label)
+            .vertices(MARKER_R)
+            .into_iter()
+            .map(|(dx, dy)| (18 + dx, y + 6 + dy))
+            .collect();
+        area.draw(&Polygon::new(verts, rgb(l.rgb).filled()))?;
         area.draw(&Text::new(
             l.label.clone(),
             (34, y),
@@ -139,6 +173,23 @@ pub fn ecdf_lines(title: &str, lines: &[Line], w: u32, h: u32, x_desc: &str) -> 
                     l.ecdf.iter().map(|pt| (pt[0], pt[1])),
                     rgb(l.rgb).stroke_width(2),
                 ))?;
+                // A handful of glyphs along each curve so series stay
+                // distinguishable without relying on color. Sampling (rather than
+                // one per eCDF point) keeps the curves readable.
+                let m = marker_for(&l.label);
+                let n = l.ecdf.len();
+                if n > 0 {
+                    let count = 6.min(n);
+                    for k in 0..count {
+                        let idx = if count == 1 {
+                            n / 2
+                        } else {
+                            k * (n - 1) / (count - 1)
+                        };
+                        let pt = l.ecdf[idx];
+                        draw_marker(&mut chart, m, pt[0], pt[1], rgb(l.rgb))?;
+                    }
+                }
             }
             draw_legend(&legend, lines)?;
             root.present()?;
@@ -216,6 +267,9 @@ pub fn box_lines(title: &str, lines: &[Line], w: u32, h: u32, y_desc: &str) -> S
                         c.stroke_width(1),
                     )))?;
                 }
+                // Glyph on the median so each box maps to its legend entry
+                // without relying on color or box order.
+                draw_marker(&mut chart, marker_for(&l.label), x, l.median, c)?;
             }
             draw_legend(&legend, lines)?;
             root.present()?;
@@ -454,7 +508,8 @@ pub fn trend_lines(title: &str, series: &[TrendSeries], w: u32, h: u32, y_desc: 
                     s.points.iter().map(|&(x, m, _, _)| (x, m)),
                     rgb(s.rgb).stroke_width(2),
                 ))?;
-                // Interquartile bar and a marker at each release.
+                // Interquartile bar and a per-series glyph at each release.
+                let m = marker_for(&s.label);
                 for &(x, median, p25, p75) in &s.points {
                     let lo = p25.max(ylo);
                     let hi = p75.max(lo);
@@ -462,11 +517,7 @@ pub fn trend_lines(title: &str, series: &[TrendSeries], w: u32, h: u32, y_desc: 
                         vec![(x, lo), (x, hi)],
                         rgb(s.rgb).mix(0.5).stroke_width(1),
                     )))?;
-                    chart.draw_series(std::iter::once(Circle::new(
-                        (x, median),
-                        3,
-                        rgb(s.rgb).filled(),
-                    )))?;
+                    draw_marker(&mut chart, m, x, median, rgb(s.rgb))?;
                 }
             }
             draw_legend(&legend_area, &legend)?;
@@ -555,12 +606,9 @@ pub fn pct_trend_lines(
                     s.points.iter().map(|&(x, v, _, _)| (x, v)),
                     rgb(s.rgb).stroke_width(2),
                 ))?;
+                let m = marker_for(&s.label);
                 for &(x, v, _, _) in &s.points {
-                    chart.draw_series(std::iter::once(Circle::new(
-                        (x, v),
-                        3,
-                        rgb(s.rgb).filled(),
-                    )))?;
+                    draw_marker(&mut chart, m, x, v, rgb(s.rgb))?;
                 }
             }
             draw_legend(&legend_area, &legend)?;
