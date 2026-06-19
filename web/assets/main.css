@@ -504,8 +504,16 @@ main { display: block; }
   text-decoration: none;
   transition: color 0.12s ease, border-color 0.12s ease;
 }
-.copy-btn:hover,
-.report-btn:hover { color: #1f2328; border-color: #b9b9b9; }
+.copy-btn:hover { color: #1f2328; border-color: #b9b9b9; }
+/* Each feedback button is tinted by its meaning: red for "should be rejected"
+   (the statement is an error), amber for "propose contentious" (a judgment
+   call), blue for "dispute" (push back on the tag). Copy stays neutral. */
+.report-reject { color: #c0202a; }
+.report-reject:hover { color: #c0202a; border-color: #e7a3a3; background: #fdf3f3; }
+.report-propose { color: #b06e1f; }
+.report-propose:hover { color: #b06e1f; border-color: #e3c08a; background: #fdf7ee; }
+.report-dispute { color: #1c4e80; }
+.report-dispute:hover { color: #1c4e80; border-color: #a9c6e6; background: #eef4fb; }
 /* The parser's error message for a rejected statement, under its preview. */
 .fail-reason {
   margin: 0.2rem 0 0;

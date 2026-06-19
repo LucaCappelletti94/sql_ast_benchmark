@@ -201,7 +201,13 @@ const PROVENANCE_DIALECT_WEIGHT: f64 = 0.4;
 /// (recall on reference dialects, acceptance elsewhere), plus false-positive
 /// avoidance and round-trip where they exist.
 fn correctness_in_dialect(m: &viz::ParserMetrics) -> Option<f64> {
-    let primary = m.recall_pct.or(m.accept_pct)?;
+    // Recall excluding contentious constructs, so a parser is not ranked down for
+    // deliberately declining an engine-accepted quirk. Falls back to strict recall
+    // where there is no contentious layer, then to acceptance on provenance dialects.
+    let primary = m
+        .recall_excl_contentious_pct
+        .or(m.recall_pct)
+        .or(m.accept_pct)?;
     let mut num = 0.5 * (primary / 100.0);
     let mut den = 0.5;
     if let Some(fp) = m.false_positive_pct {
