@@ -1233,7 +1233,7 @@ fn fail_preview_row(
                 if has_ref {
                     if let Some(sql) = sql {
                         a {
-                            class: "report-btn",
+                            class: "report-btn report-reject",
                             href: issue_url("should-be-rejected.yml", dialect, parser, sql, reason, &[]),
                             target: "_blank",
                             rel: "noopener noreferrer",
@@ -1244,7 +1244,7 @@ fn fail_preview_row(
                         if let Some(rule) = rule {
                             // Already tagged contentious: let people argue it is not.
                             a {
-                                class: "report-btn",
+                                class: "report-btn report-dispute",
                                 href: issue_url("not-contentious.yml", dialect, parser, sql, reason, &[("rule", rule.title.as_str())]),
                                 target: "_blank",
                                 rel: "noopener noreferrer",
@@ -1254,7 +1254,7 @@ fn fail_preview_row(
                             }
                         } else {
                             a {
-                                class: "report-btn",
+                                class: "report-btn report-propose",
                                 href: issue_url("contentious-construct.yml", dialect, parser, sql, reason, &[]),
                                 target: "_blank",
                                 rel: "noopener noreferrer",
@@ -1747,7 +1747,7 @@ fn parser_score_section(parser: &str) -> Element {
                 "A composite of every dimension, 0 to 100, weighting correctness 40 percent, robustness 30, speed 18, memory 7, and project health 5. Computed only over the dialects this parser models. Speed and memory are ranked against the other parsers on each dialect, while correctness and health are absolute. Each badge also shows this parser's rank on that dimension among all parsers."
             }
             div { class: "meta-grid score-grid",
-                {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", s.correctness, crate::score::rank(parser, |x| x.correctness), "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the dialects this parser models.".to_string())}
+                {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaBullseye } }, "correctness", s.correctness, crate::score::rank(parser, |x| x.correctness), "Correctness sub-score (0 to 100): recall (excluding contentious constructs) or acceptance, false-positive avoidance, and round-trip, averaged over the dialects this parser models.".to_string())}
                 {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaShieldHalved } }, "robustness", s.robustness, crate::score::rank(parser, |x| x.robustness), "Robustness sub-score (0 to 100): empirical panic rate on the real corpus, recursion-depth guarding, unsafe surface, and static panic discipline.".to_string())}
                 {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGaugeHigh } }, "speed", s.speed, crate::score::rank(parser, |x| x.speed), "Speed sub-score (0 to 100): median parse time ranked against the other parsers within each dialect on a log scale, then averaged.".to_string())}
                 {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "memory", s.memory, crate::score::rank(parser, |x| x.memory), "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. Shown n/a for FFI parsers, whose C-side allocations are not measured.".to_string())}
@@ -2253,7 +2253,7 @@ fn col_help(name: &str) -> Option<&'static str> {
         "parser" => "The SQL parser library under test.",
         "dialect" => "The SQL dialect the row reports on.",
         "overall" => "Overall score (0 to 100): correctness 40 percent, robustness 30, speed 18, memory 7, project health 5, computed only over the dialects the parser models. Higher is better.",
-        "correctness" => "Correctness sub-score (0 to 100): recall or acceptance, false-positive avoidance, and round-trip, averaged over the parser's dialects. Higher is better.",
+        "correctness" => "Correctness sub-score (0 to 100): recall (excluding contentious constructs) or acceptance, false-positive avoidance, and round-trip, averaged over the parser's dialects. Higher is better.",
         "robustness" => "Robustness sub-score (0 to 100): empirical panic rate, recursion-depth guarding, unsafe surface, and static panic discipline. Higher is better.",
         "speed" => "Speed sub-score (0 to 100): median parse time ranked against the field within each dialect on a log scale, then averaged. Higher is better.",
         "memory" => "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. n/a for FFI parsers. Higher is better.",
