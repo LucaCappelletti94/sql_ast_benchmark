@@ -1,0 +1,63 @@
+name: Contentious construct (a parser may reasonably reject)
+description: Propose a statement that the engine accepts but that a parser may reasonably decline to support.
+title: "[contentious] "
+labels: ["contentious"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when the reference engine accepts a statement but you think a parser may reasonably reject it anyway (for example an engine-specific quirk, a non-standard extension, or a construct with surprising semantics). This feeds the contentious-construct rule registry described in [docs/contentious-constructs.md](https://github.com/LucaCappelletti94/sql_ast_benchmark/blob/main/docs/contentious-constructs.md). The strict, engine-graded recall is never changed by this. Most fields are prefilled when you arrive here from the failures view.
+  - type: input
+    id: dialect
+    attributes:
+      label: Dialect
+      description: The reference dialect whose engine accepts the statement.
+    validations:
+      required: true
+  - type: input
+    id: parser
+    attributes:
+      label: Parser
+      description: The parser whose failures view you came from (optional context).
+    validations:
+      required: false
+  - type: textarea
+    id: statement
+    attributes:
+      label: Statement
+      description: The SQL the engine accepts but a parser may reasonably reject. Prefilled from the failures view.
+    validations:
+      required: true
+  - type: textarea
+    id: parser_error
+    attributes:
+      label: Parser error
+      description: The error the parser returned (prefilled from the failures view).
+    validations:
+      required: false
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: Why is this construct contentious? See the design doc for the meaning of each category.
+      options:
+        - engine-specific
+        - non-standard
+        - lossy-or-ambiguous
+        - deprecated
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why a parser may reasonably reject it
+      description: Explain the divergence and why declining to support it is defensible.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to the SQL standard, engine documentation, or peer-parser behavior that support the category.
+    validations:
+      required: false

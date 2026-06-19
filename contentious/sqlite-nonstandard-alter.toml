@@ -1,0 +1,27 @@
+id = "sqlite-nonstandard-alter"
+title = "Non-standard SQLite ALTER TABLE operations"
+category = "non-standard"
+dialects = ["sqlite"]
+kind = "regex"
+# SQLite's documented ALTER TABLE supports only RENAME, ADD COLUMN, RENAME COLUMN,
+# and DROP COLUMN. Its grammar nonetheless tolerates ADD/DROP CONSTRAINT, ADD
+# CHECK, and ALTER [COLUMN] <col> SET/DROP NOT NULL without a syntax error, so the
+# engine labels them valid. The alternation is anchored on ALTER TABLE and targets
+# only the unsupported operations, so the supported forms never match.
+pattern = '(?i)\balter\s+table\b.*(\b(add|drop)\s+constraint\b|\badd\s+check\b|\balter\s+(column\s+)?\S+\s+(set|drop)\s+not\s+null\b)'
+description = "ALTER TABLE operations the SQLite grammar accepts without a syntax error but that are not part of supported SQLite (ADD/DROP CONSTRAINT, ADD CHECK, ALTER COLUMN SET/DROP NOT NULL). A parser modeling real SQLite may reasonably reject them."
+references = [
+  "https://www.sqlite.org/lang_altertable.html",
+  "https://github.com/tursodatabase/turso",
+]
+matches = [
+  "ALTER TABLE t1 ADD CONSTRAINT c1 CHECK(a=b)",
+  "ALTER TABLE t2 ALTER x SET NOT NULL",
+  "ALTER TABLE abc DROP CONSTRAINT two",
+  "ALTER TABLE abc ADD CHECK (z>=0)",
+]
+non_matches = [
+  "ALTER TABLE t ADD COLUMN c INTEGER",
+  "ALTER TABLE t RENAME TO t2",
+  "ALTER TABLE t DROP COLUMN c",
+]

@@ -1,0 +1,24 @@
+id = "tcl-variables"
+title = "TCL bind variables"
+category = "engine-specific"
+dialects = ["sqlite"]
+kind = "regex"
+# Matched against the masked form (string and blob literals and comments
+# replaced), so `$::x` inside a string literal does not trigger. Covers `$::name`
+# and `$namespace::name`.
+pattern = '\$\w*::'
+description = "Bind variables using TCL :: namespaces, valid only because SQLite began as a TCL extension and meaningless outside a TCL interpreter."
+references = [
+  "https://sqlite.org/lang_expr.html#parameters",
+  "https://github.com/gwenn/lemon-rs/issues/102",
+]
+matches = [
+  "INSERT INTO t1 VALUES($::w,$::x,$::y,$::z)",
+  "select $testnamespace::xyz",
+  "SELECT strftime($::FMT,$::TS,'unixepoch')",
+]
+non_matches = [
+  "SELECT :w, :x",
+  "SELECT '$::x' AS lit",
+  "SELECT x::int",
+]

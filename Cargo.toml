@@ -39,6 +39,7 @@ sqlite3-parser = "0.16.0"
 turso_parser = "0.6.1"
 fallible-iterator = "0.3.0"
 viz = { path = "viz" }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Compress the per-(dialect, parser) rejected-statement TSV downloads.
 zstd = "0.13"
@@ -46,6 +47,10 @@ zstd = "0.13"
 # time, so the web viewer ships no runtime syntax highlighter. `default-fancy`
 # uses the pure-Rust regex engine, avoiding the oniguruma C dependency.
 syntect = { version = "5", default-features = false, features = ["default-fancy"] }
+# Contentious-construct rule registry: regex rules matched in guaranteed linear
+# time (no backreferences) and one TOML file per rule under `contentious/`.
+regex = "1"
+toml = "0.8"
 
 [[bench]]
 name = "parsing"

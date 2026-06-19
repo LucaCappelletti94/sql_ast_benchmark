@@ -914,6 +914,7 @@ impl Parser for BenchParser {
 
 pub mod batch;
 pub mod bench_dist;
+pub mod contentious;
 pub mod datasets;
 pub mod export;
 pub mod mem;

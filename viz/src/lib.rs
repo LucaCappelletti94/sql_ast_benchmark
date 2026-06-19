@@ -21,5 +21,5 @@ pub use marker::{marker_for, Marker};
 pub use schema::{
     Bundle, CoverageFile, CoverageMatrix, DepthReport, DepthScan, DialectData, DialectRun,
     FamilyHistory, FeatureCounts, FeatureScan, LintPolicy, MemDist, ParserBatch, ParserFailures,
-    ParserFeatures, ParserMem, ParserMetrics, ParserPerf, VersionRun,
+    ParserFeatures, ParserMem, ParserMetrics, ParserPerf, RuleMeta, VersionRun,
 };

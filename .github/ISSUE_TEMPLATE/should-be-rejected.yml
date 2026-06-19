@@ -1,0 +1,51 @@
+name: Statement should be rejected (invalid syntax)
+description: Report a statement the reference engine accepted but that is actually invalid, so its valid label is wrong.
+title: "[invalid-label] "
+labels: ["oracle-label"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when a statement is shown as a parser miss but you believe the statement is actually invalid and should be rejected. The benchmark labels a statement valid only when the reference database engine accepts it, so this report is about the engine's label, not about any parser. Most fields are prefilled when you arrive here from the failures view.
+  - type: input
+    id: dialect
+    attributes:
+      label: Dialect
+      description: The reference dialect whose engine labeled the statement valid.
+    validations:
+      required: true
+  - type: input
+    id: parser
+    attributes:
+      label: Parser
+      description: The parser whose failures view you came from (optional context).
+    validations:
+      required: false
+  - type: textarea
+    id: statement
+    attributes:
+      label: Statement
+      description: The SQL the engine accepted. Prefilled from the failures view.
+    validations:
+      required: true
+  - type: textarea
+    id: parser_error
+    attributes:
+      label: Parser error
+      description: The error the parser returned (prefilled from the failures view).
+    validations:
+      required: false
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why it should be rejected
+      description: Explain why this statement is invalid SQL despite the engine accepting it.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to the SQL standard, the engine's own documentation, or anything showing the statement should be rejected.
+    validations:
+      required: false

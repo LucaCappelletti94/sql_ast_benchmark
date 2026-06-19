@@ -129,6 +129,23 @@ pub struct Bundle {
     pub parsers: Vec<String>,
     /// One entry per dialect, in display order.
     pub dialects: Vec<DialectData>,
+    /// Display metadata for every contentious-construct rule, so the viewer's
+    /// legend and per-row badges are data-driven (empty in older snapshots).
+    #[serde(default)]
+    pub contentious_rules: Vec<RuleMeta>,
+}
+
+/// Display metadata for one contentious-construct rule, copied into the export so
+/// the web viewer needs no code change when a rule is added. The matching logic
+/// stays in the native crate.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RuleMeta {
+    pub id: String,
+    pub title: String,
+    /// Kebab-case category (`engine-specific`, `non-standard`, ...).
+    pub category: String,
+    pub description: String,
+    pub references: Vec<String>,
 }
 
 /// Everything the viewer shows for one dialect.
@@ -139,6 +156,10 @@ pub struct DialectData {
     pub has_reference: bool,
     pub valid_total: usize,
     pub invalid_total: usize,
+    /// Reference dialects: number of valid statements matched by at least one
+    /// contentious rule (`Cv`). 0 in older snapshots and on provenance dialects.
+    #[serde(default)]
+    pub contentious_valid: usize,
     /// Per-parser correctness metrics (reference dialects) or acceptance
     /// (provenance dialects).
     pub correctness: Vec<ParserMetrics>,
@@ -247,6 +268,18 @@ pub struct ParserFailures {
     /// `preview_html` (same index). Plain text, escaped by the viewer at render.
     #[serde(default)]
     pub preview_reasons: Vec<String>,
+    /// The raw SQL of each previewed statement, aligned with `preview_html` (same
+    /// index). The highlighted `preview_html` is not usable as plain text, so the
+    /// failures-view feedback buttons read the statement from here to prefill a
+    /// GitHub issue. Empty in older snapshots.
+    #[serde(default)]
+    pub preview_sql: Vec<String>,
+    /// The contentious-rule id matched by each previewed statement, aligned with
+    /// `preview_html` (same index), or `None` for a genuine gap. Drives the
+    /// per-row "intentional divergence" badge and the dispute button. Empty in
+    /// older snapshots.
+    #[serde(default)]
+    pub preview_tags: Vec<Option<String>>,
     /// Path (relative to the site root) of the full `.tsv.zst` download, or
     /// `None` when there were no failures to ship.
     pub download: Option<String>,
@@ -264,8 +297,19 @@ pub struct ParserMetrics {
     pub version: String,
     pub accepted_valid: usize,
     pub accepted_invalid: usize,
+    /// Reference dialects: accepted-valid statements that are also contentious
+    /// (`Avc`), the numerator adjustment for `recall_excl_contentious_pct`. 0 in
+    /// older snapshots.
+    #[serde(default)]
+    pub accepted_valid_contentious: usize,
     /// Reference dialects: accepted among reference-valid.
     pub recall_pct: Option<f64>,
+    /// Reference dialects: recall excluding contentious constructs,
+    /// `(accepted_valid - accepted_valid_contentious) / (valid_total -
+    /// contentious_valid)`. `None` on provenance dialects, in older snapshots, or
+    /// when every valid statement is contentious.
+    #[serde(default)]
+    pub recall_excl_contentious_pct: Option<f64>,
     /// Reference dialects: accepted among reference-invalid (lower is better).
     pub false_positive_pct: Option<f64>,
     /// Display round-trip rate among accepted (None without a printer).

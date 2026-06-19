@@ -700,13 +700,14 @@ pub fn ParserView(name: String) -> Element {
                 name: d.display_name.clone(),
             },
             cells: vec![
-                Cell::pct(m.and_then(|m| {
-                    if d.has_reference {
-                        m.recall_pct
-                    } else {
-                        m.accept_pct
-                    }
-                })),
+                if d.has_reference {
+                    Cell::recall(
+                        m.and_then(|m| m.recall_pct),
+                        m.and_then(|m| m.recall_excl_contentious_pct),
+                    )
+                } else {
+                    Cell::pct(m.and_then(|m| m.accept_pct))
+                },
                 Cell::pct(m.and_then(|m| m.false_positive_pct)),
                 Cell::pct(m.and_then(|m| m.roundtrip_pct)),
                 Cell::ns(p.map(|p| p.median)),
@@ -1189,22 +1190,123 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
 /// rejected-statement count, a short syntax-highlighted preview, and a download
 /// link to the full capped `.tsv.zst`. Renders nothing if the parser rejected
 /// nothing anywhere (or has no recorded failure data).
+/// Render one failing-statement preview: the highlighted SQL, the copy button,
+/// the per-row feedback buttons (reference dialects only), and, when the
+/// statement matches a contentious rule, an intentional-divergence badge with a
+/// dispute button in place of the "propose" button.
+#[allow(clippy::too_many_arguments)]
+fn fail_preview_row(
+    b: &viz::Bundle,
+    di: usize,
+    i: usize,
+    dialect: &str,
+    has_ref: bool,
+    parser: &str,
+    f: &viz::ParserFailures,
+    html: &str,
+) -> Element {
+    let reason = f.preview_reasons.get(i).map(String::as_str).unwrap_or("");
+    let sql = f.preview_sql.get(i).map(String::as_str);
+    // The contentious rule this statement matched, if any, resolved against the
+    // exported rule metadata.
+    let rule = f
+        .preview_tags
+        .get(i)
+        .and_then(|t| t.as_deref())
+        .and_then(|id| b.contentious_rules.iter().find(|r| r.id == id));
+    rsx! {
+        div { class: "fail-code-wrap", key: "{i}",
+            div { class: "fail-actions",
+                button {
+                    class: "copy-btn",
+                    r#type: "button",
+                    aria_label: "Copy this statement to the clipboard",
+                    title: "Copy statement",
+                    onclick: move |_| {
+                        document::eval(&format!(
+                            "{{ const el = document.getElementById('fail-{di}-{i}'); if (el) {{ navigator.clipboard.writeText(el.textContent); }} }}"
+                        ));
+                    },
+                    Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaCopy }
+                }
+                // Feedback reports only where the engine assigned a validity label.
+                if has_ref {
+                    if let Some(sql) = sql {
+                        a {
+                            class: "report-btn",
+                            href: issue_url("should-be-rejected.yml", dialect, parser, sql, reason, &[]),
+                            target: "_blank",
+                            rel: "noopener noreferrer",
+                            aria_label: "Report that this statement should be rejected as invalid",
+                            title: "Should be rejected (invalid syntax)",
+                            Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaCircleXmark }
+                        }
+                        if let Some(rule) = rule {
+                            // Already tagged contentious: let people argue it is not.
+                            a {
+                                class: "report-btn",
+                                href: issue_url("not-contentious.yml", dialect, parser, sql, reason, &[("rule", rule.title.as_str())]),
+                                target: "_blank",
+                                rel: "noopener noreferrer",
+                                aria_label: "Dispute this: argue the statement is not actually contentious",
+                                title: "Dispute: argue this is not contentious",
+                                Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaBan }
+                            }
+                        } else {
+                            a {
+                                class: "report-btn",
+                                href: issue_url("contentious-construct.yml", dialect, parser, sql, reason, &[]),
+                                target: "_blank",
+                                rel: "noopener noreferrer",
+                                aria_label: "Propose this as a contentious construct a parser may reasonably reject",
+                                title: "Parser may reject (contentious)",
+                                Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaScaleBalanced }
+                            }
+                        }
+                    }
+                }
+            }
+            pre { id: "fail-{di}-{i}", class: "fail-code", dangerous_inner_html: "{html}" }
+            if let Some(rule) = rule {
+                div { class: "contentious-badge", title: "{rule.description}",
+                    "Intentional divergence: {rule.title} ({rule.category})"
+                }
+            }
+            if !reason.is_empty() {
+                div { class: "fail-reason", "{reason}" }
+            }
+        }
+    }
+}
+
 fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
     // Gather (dialect display name, failures) for dialects where this parser
     // has at least one rejected statement.
-    let entries: Vec<(&str, &viz::ParserFailures)> = b
+    let entries: Vec<(&str, bool, &viz::ParserFailures)> = b
         .dialects
         .iter()
         .filter_map(|d| {
             d.failures
                 .iter()
                 .find(|f| f.parser == parser && f.rejected_total > 0)
-                .map(|f| (d.display_name.as_str(), f))
+                .map(|f| (d.display_name.as_str(), d.has_reference, f))
         })
         .collect();
     if entries.is_empty() {
         return rsx! {};
     }
+
+    // Rules that tag at least one of this parser's previewed statements, used to
+    // build a legend explaining the badges below.
+    let tagged: std::collections::BTreeSet<&str> = entries
+        .iter()
+        .flat_map(|(_, _, f)| f.preview_tags.iter().filter_map(Option::as_deref))
+        .collect();
+    let legend_rules: Vec<&viz::RuleMeta> = b
+        .contentious_rules
+        .iter()
+        .filter(|r| tagged.contains(r.id.as_str()))
+        .collect();
 
     rsx! {
         section { class: "block",
@@ -1215,7 +1317,29 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
             p { class: "fail-intro",
                 "Statements this parser was expected to accept but rejected. Each dialect links to the full set (capped at 1,000) as a compressed TSV."
             }
-            for (di , (dialect , f)) in entries.into_iter().enumerate() {
+            if !legend_rules.is_empty() {
+                div { class: "contentious-legend",
+                    h3 { "Intentional divergences" }
+                    p {
+                        "Statements tagged below are engine-accepted constructs a parser may reasonably reject. They are flagged for context and do not change the strict recall above."
+                    }
+                    ul {
+                        for r in legend_rules.iter() {
+                            li { key: "{r.id}",
+                                span { class: "cat", "{r.title}" }
+                                " ({r.category}): {r.description}"
+                                for (k , href) in r.references.iter().enumerate() {
+                                    span { key: "{k}",
+                                        " "
+                                        a { class: "inline-link", href: "{href}", target: "_blank", rel: "noopener noreferrer", "[ref]" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for (di , (dialect , has_ref , f)) in entries.into_iter().enumerate() {
                 div { class: "fail-dialect", key: "{dialect}",
                     div { class: "fail-head",
                         span { class: "fail-title",
@@ -1233,29 +1357,59 @@ fn failures_section(b: &viz::Bundle, parser: &str) -> Element {
                         }
                     }
                     for (i , html) in f.preview_html.iter().enumerate() {
-                        div { class: "fail-code-wrap", key: "{i}",
-                            button {
-                                class: "copy-btn",
-                                r#type: "button",
-                                aria_label: "Copy this statement to the clipboard",
-                                title: "Copy statement",
-                                onclick: move |_| {
-                                    document::eval(&format!(
-                                        "{{ const el = document.getElementById('fail-{di}-{i}'); if (el) {{ navigator.clipboard.writeText(el.textContent); }} }}"
-                                    ));
-                                },
-                                Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaCopy }
-                            }
-                            pre { id: "fail-{di}-{i}", class: "fail-code", dangerous_inner_html: "{html}" }
-                            if let Some(reason) = f.preview_reasons.get(i).filter(|r| !r.is_empty()) {
-                                div { class: "fail-reason", "{reason}" }
-                            }
-                        }
+                        {fail_preview_row(b, di, i, dialect, has_ref, parser, f, html)}
                     }
                 }
             }
         }
     }
+}
+
+// ---- feedback issue links ----
+
+/// Percent-encode a value for safe inclusion in a URL query string. Only the
+/// RFC 3986 unreserved set passes through unescaped, so newlines, spaces, and SQL
+/// punctuation are all encoded.
+fn url_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Build a link to a prefilled GitHub issue form. `template` is the issue-form
+/// file name under `.github/ISSUE_TEMPLATE/`, and the values prefill the form
+/// fields with matching `id`s. `extra` carries any form-specific fields (e.g. the
+/// disputed rule). Long statements may be truncated by GitHub's URL length limit,
+/// in which case the reader pastes via the copy button.
+fn issue_url(
+    template: &str,
+    dialect: &str,
+    parser: &str,
+    sql: &str,
+    reason: &str,
+    extra: &[(&str, &str)],
+) -> String {
+    let mut url = format!(
+        "{REPO}/issues/new?template={template}&dialect={}&parser={}&statement={}&parser_error={}",
+        url_encode(dialect),
+        url_encode(parser),
+        url_encode(sql),
+        url_encode(reason),
+    );
+    for (key, value) in extra {
+        url.push('&');
+        url.push_str(key);
+        url.push('=');
+        url.push_str(&url_encode(value));
+    }
+    url
 }
 
 // ---- formatting helpers ----
@@ -1743,7 +1897,7 @@ fn empirical_panic_pill(totals: Option<(usize, usize)>) -> Element {
 /// expected to accept, summed across every dialect. Neutral (informational):
 /// every parser misses some real-world SQL, so this is a coverage figure, not an
 /// alarm, and a red flag on every parser would dilute the genuine red flags. The
-/// value is the absolute count the user asked for; the rate is in the tooltip.
+/// value is the absolute count the user asked for, and the rate is in the tooltip.
 fn failures_pill(totals: Option<(usize, usize)>) -> Element {
     let (value, desc) = match totals {
         None => (
@@ -1950,6 +2104,9 @@ impl Head {
 struct Cell {
     text: String,
     num: Option<f64>,
+    /// Optional small grey second line under the value (e.g. recall excluding
+    /// contentious constructs). Display only, never a sort key.
+    sub: Option<String>,
 }
 
 impl Cell {
@@ -1958,6 +2115,23 @@ impl Cell {
         Cell {
             text: fmt_pct(v),
             num: v,
+            sub: None,
+        }
+    }
+    /// Recall cell with a grey sub-line showing recall excluding contentious
+    /// constructs, shown only when it differs from strict recall. The strict value
+    /// stays the text and the sort key, so the headline number is unchanged.
+    fn recall(strict: Option<f64>, excl: Option<f64>) -> Cell {
+        let sub = match (strict, excl) {
+            (Some(s), Some(e)) if (s - e).abs() >= 0.05 => {
+                Some(format!("{} excl. contentious", fmt_pct(Some(e))))
+            }
+            _ => None,
+        };
+        Cell {
+            text: fmt_pct(strict),
+            num: strict,
+            sub,
         }
     }
     /// Nanosecond cell from an optional value (comma-grouped, "N/A" if missing).
@@ -1965,6 +2139,7 @@ impl Cell {
         Cell {
             text: v.map_or_else(|| "N/A".to_string(), |x| commas(x as usize)),
             num: v,
+            sub: None,
         }
     }
     /// Byte cell from an optional value, formatted as B / KB / MB ("N/A" if missing).
@@ -1972,11 +2147,16 @@ impl Cell {
         Cell {
             text: v.map_or_else(|| "N/A".to_string(), fmt_bytes),
             num: v,
+            sub: None,
         }
     }
     /// Cell with explicit text and a numeric sort key.
     fn with(text: String, num: Option<f64>) -> Cell {
-        Cell { text, num }
+        Cell {
+            text,
+            num,
+            sub: None,
+        }
     }
 }
 
@@ -2169,7 +2349,12 @@ fn SortTable(
                         tr { key: "{row.key}",
                             {render_head(&row.head)}
                             for cell in row.cells.iter() {
-                                td { "{cell.text}" }
+                                td {
+                                    "{cell.text}"
+                                    if let Some(sub) = &cell.sub {
+                                        div { class: "cell-sub", "{sub}" }
+                                    }
+                                }
                             }
                         }
                     }
@@ -2365,7 +2550,7 @@ fn correctness_table(d: &DialectData) -> Element {
             head: Head::Parser(m.parser.clone()),
             cells: if reference {
                 vec![
-                    Cell::pct(m.recall_pct),
+                    Cell::recall(m.recall_pct, m.recall_excl_contentious_pct),
                     Cell::pct(m.false_positive_pct),
                     Cell::pct(m.roundtrip_pct),
                 ]

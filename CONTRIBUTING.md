@@ -34,6 +34,24 @@ cargo run --bin sqlbench -- export       # read all of the above, write web/asse
 
 The charts are rendered in the browser from the JSON by the shared `viz` crate (plotters, SVG backend), so no chart images are committed.
 
+## Contentious constructs
+
+A contentious construct is one the reference engine accepts but a parser may reasonably decline to support (a niche engine quirk, a non-standard extension, a lossy or deprecated form). The benchmark keeps strict, oracle-graded recall as the headline number and adds a secondary "recall excluding contentious" beside it, plus a per-statement badge on the failures view. The design is written up in [docs/contentious-constructs.md](docs/contentious-constructs.md).
+
+Rules are data: one TOML file per rule under `contentious/`. A regex rule needs no Rust (the pattern is matched against a masked form of the statement, so string literals and comments cannot trigger it). A structural rule (for a property a regex cannot express, like a repeated identifier) names a built-in predicate added in `src/contentious.rs`. Each file declares `id`, `title`, `category` (`engine-specific`, `non-standard`, `lossy-or-ambiguous`, or `deprecated`), the `dialects` it may fire in, `description`, `references`, and `matches` / `non_matches` example statements. See the two existing files for the shape.
+
+To add a rule:
+
+```bash
+# 1. write contentious/<id>.toml
+cargo test -p sql_ast_benchmark --lib contentious   # guards: examples match/non-match,
+                                                     # ids unique, each rule covers >=1
+                                                     # engine-valid corpus statement
+cargo run --release --bin sqlbench -- export         # refresh web/assets/bench.json.zst
+```
+
+Then open a PR. A regex rule is a data-only change. Review is a data review: is the construct genuinely engine-valid, is the category honest, are the references real. The classifier only ever runs on engine-valid statements, so a rule can never change strict recall or excuse genuinely-invalid SQL.
+
 ## Time machine (per-version history)
 
 The `timemachine` crate benchmarks several historical versions of each pure-Rust parser and writes `web/assets/history.json.zst` (committed, embedded and decompressed in wasm with `ruzstd`, so the site still does no runtime fetch). It hosts many versions of one crate at once with `package`-rename aliases, which works because different `0.x` minors are semver-incompatible. The FFI parsers (`pg_query`) are excluded: two libpg_query builds export the same C symbols and collide at link.

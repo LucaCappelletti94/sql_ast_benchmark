@@ -1,0 +1,51 @@
+name: Dispute a contentious classification
+description: Argue that a statement currently marked as a contentious construct is not actually contentious and a parser should be expected to accept it.
+title: "[not-contentious] "
+labels: ["contentious-dispute"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to push back on a statement the site marks as a contentious construct (an intentional divergence). If you think it is a normal statement that a parser should accept, not a quirk a parser may reasonably reject, say so here. This challenges the rule, not any parser. See [docs/contentious-constructs.md](https://github.com/LucaCappelletti94/sql_ast_benchmark/blob/main/docs/contentious-constructs.md). Most fields are prefilled when you arrive here from the failures view.
+  - type: input
+    id: rule
+    attributes:
+      label: Contentious rule being disputed
+      description: The rule that currently tags this statement (prefilled from the failures view).
+    validations:
+      required: true
+  - type: input
+    id: dialect
+    attributes:
+      label: Dialect
+      description: The reference dialect the statement is from.
+    validations:
+      required: true
+  - type: input
+    id: parser
+    attributes:
+      label: Parser
+      description: The parser whose failures view you came from (optional context).
+    validations:
+      required: false
+  - type: textarea
+    id: statement
+    attributes:
+      label: Statement
+      description: The statement tagged contentious. Prefilled from the failures view.
+    validations:
+      required: true
+  - type: textarea
+    id: parser_error
+    attributes:
+      label: Parser error
+      description: The error the parser returned (prefilled from the failures view).
+    validations:
+      required: false
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why it is not contentious
+      description: Explain why this is a normal statement a parser should accept, not a quirk a parser may reasonably reject.
+    validations:
+      required: true
