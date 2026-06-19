@@ -86,7 +86,7 @@ main { display: block; }
 
 .intro { padding: 2rem 1.2rem 0.5rem; }
 .intro h1 { font-size: 1.9rem; margin: 0 0 0.3em; letter-spacing: -0.01em; }
-/* Title row with the snapshot/commit pills; wraps under the title on mobile. */
+/* Title row with the snapshot/commit pills, wraps under the title on mobile. */
 .intro-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.8rem; }
 .intro-head h1 { margin-bottom: 0; }
 .stamp { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -270,7 +270,7 @@ main { display: block; }
   border-radius: 999px;
   font-size: 0.78rem;
 }
-/* The source-repository pill is a link; keep the pill look, add a hover cue. */
+/* The source-repository pill is a link. Keep the pill look, add a hover cue. */
 .meta-link { text-decoration: none; color: inherit; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
 .meta-link:hover { border-color: var(--accent); background: var(--card-hover, #eef2f7); }
 .meta-val { font-weight: 700; color: var(--fg); }
@@ -280,7 +280,7 @@ main { display: block; }
   letter-spacing: 0.03em;
   font-size: 0.7rem;
 }
-/* Constrain the icon so it never balloons; size is set on the SVG by the icon. */
+/* Constrain the icon so it never balloons. Size is set on the SVG by the icon. */
 .meta-ico { flex: none; display: inline-flex; color: var(--accent); }
 .meta-ico svg { width: 12px; height: 12px; display: block; }
 /* A problematic fact (not fuzzed, no test suite, no benchmarks) flagged red. */
@@ -475,11 +475,21 @@ main { display: block; }
   background: #fbfbfb;
   color: #1f2328;
 }
-/* Copy-to-clipboard button, revealed on hover over a preview. */
-.copy-btn {
+/* Action buttons (copy, and the two feedback reports) over a preview, revealed
+   on hover or when one is focused. */
+.fail-actions {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: inline-flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.fail-code-wrap:hover .fail-actions,
+.fail-actions:focus-within { opacity: 1; }
+.copy-btn,
+.report-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -491,12 +501,11 @@ main { display: block; }
   background: #fff;
   color: var(--muted);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  text-decoration: none;
+  transition: color 0.12s ease, border-color 0.12s ease;
 }
-.fail-code-wrap:hover .copy-btn,
-.copy-btn:focus-visible { opacity: 1; }
-.copy-btn:hover { color: #1f2328; border-color: #b9b9b9; }
+.copy-btn:hover,
+.report-btn:hover { color: #1f2328; border-color: #b9b9b9; }
 /* The parser's error message for a rejected statement, under its preview. */
 .fail-reason {
   margin: 0.2rem 0 0;
@@ -508,6 +517,47 @@ main { display: block; }
   line-height: 1.35;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* Marks a previewed statement as a known contentious construct (an intentional
+   divergence the engine accepts but a parser may reasonably reject). Neutral and
+   non-red on purpose: red is reserved for genuine rejections, and the category is
+   carried as text rather than a color, per the contentious-constructs design. */
+.contentious-badge {
+  margin: 0.2rem 0 0;
+  padding: 0.3rem 0.5rem 0.3rem 0.7rem;
+  border-left: 3px solid #c4c8d4;
+  background: #eef0f4;
+  color: #45506b;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+/* Legend explaining the intentional-divergence badges, shown on the failures
+   view when a parser has at least one tagged statement. */
+.contentious-legend {
+  margin: 0.2rem 0 0.9rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f8fa;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.contentious-legend h3 {
+  font-size: 0.82rem;
+  margin: 0 0 0.3rem;
+  color: var(--fg);
+}
+.contentious-legend ul { margin: 0; padding-left: 1.1rem; }
+.contentious-legend li { margin: 0.15rem 0; }
+.contentious-legend .cat { color: var(--fg); font-weight: 600; }
+/* Secondary value under a table cell (e.g. recall excluding contentious). */
+.cell-sub {
+  margin-top: 0.1rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 /* Tables */

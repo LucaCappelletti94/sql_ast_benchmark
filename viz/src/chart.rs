@@ -650,6 +650,7 @@ mod tests {
             has_reference: true,
             valid_total: 90,
             invalid_total: 10,
+            contentious_valid: 0,
             correctness: vec![],
             perf: vec![perf],
             coverage: CoverageMatrix {

@@ -1,0 +1,23 @@
+id = "duplicate-target-columns"
+title = "Duplicate columns in a target list"
+category = "non-standard"
+dialects = ["sqlite"]
+# A repeated identifier inside one group cannot be a regex (Rust's regex has no
+# backreferences), so this is a structural rule backed by a named predicate.
+kind = "structural"
+predicate = "duplicate_columns"
+description = "A column named more than once in an INSERT target list, an UPDATE SET column group, or a USING clause. SQLite accepts these (INSERT keeps the first value for a repeated column, UPDATE ... SET keeps the last), but PostgreSQL rejects them and a parser that does the same is arguably safer."
+references = [
+  "https://github.com/gwenn/lemon-rs/issues/89",
+  "https://www.postgresql.org/docs/current/sql-insert.html",
+]
+matches = [
+  "INSERT INTO dup1(a,b,c,a,b,c) VALUES(1,2,3,4,5,6)",
+  "UPDATE t1 SET (a,a,a,b)=(SELECT 99,100,101,102)",
+  "SELECT y FROM t1 JOIN t1 USING (y,y)",
+]
+non_matches = [
+  "INSERT INTO t(a,b,c) VALUES(1,2,3)",
+  "UPDATE t1 SET (a,b)=(SELECT 1,2)",
+  "SELECT y FROM t1 JOIN t2 USING (y)",
+]

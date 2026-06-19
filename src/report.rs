@@ -9,7 +9,7 @@
 //! for speed.
 
 use crate::datasets::Dialect;
-use crate::{has_reference, reference_accepts, Parser, ParserId};
+use crate::{contentious, has_reference, reference_accepts, Parser, ParserId};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -27,6 +27,10 @@ pub struct ParserStat {
     /// provenance dialect (no reference) every statement is treated as valid, so
     /// this is the plain acceptance count.
     pub accepted_valid: usize,
+    /// Accepted among reference-valid statements that are also contentious (the
+    /// `Avc` subtracted from the secondary "recall excluding contentious" metric).
+    /// Always a subset of `accepted_valid`. Reference dialects only.
+    pub accepted_valid_contentious: usize,
     /// Accepted among reference-invalid statements (false-positive numerator).
     pub accepted_invalid: usize,
     /// Round-trip-stable among accepted-valid.
@@ -43,6 +47,7 @@ pub struct ParserStat {
 impl ParserStat {
     const fn merge(&mut self, other: &Self) {
         self.accepted_valid += other.accepted_valid;
+        self.accepted_valid_contentious += other.accepted_valid_contentious;
         self.accepted_invalid += other.accepted_invalid;
         self.roundtrip_ok += other.roundtrip_ok;
         self.attempted += other.attempted;
@@ -55,6 +60,10 @@ pub struct DialectReport {
     pub dialect: Dialect,
     pub has_reference: bool,
     pub valid_total: usize,
+    /// Reference dialects: valid statements matched by at least one contentious
+    /// rule (`Cv`, the denominator adjustment for the secondary metric). 0 on
+    /// provenance dialects.
+    pub contentious_valid: usize,
     pub invalid_total: usize,
     /// Identity (family + version) of each graded parser, aligned with `stats`.
     pub parsers: Vec<ParserId>,
@@ -69,6 +78,7 @@ impl DialectReport {
             dialect,
             has_reference: has_reference(dialect),
             valid_total: 0,
+            contentious_valid: 0,
             invalid_total: 0,
             parsers: parsers.iter().map(|p| p.id()).collect(),
             stats: parsers
@@ -84,6 +94,7 @@ impl DialectReport {
     /// Add another report's tallies (same dialect and parser order assumed).
     pub fn merge(&mut self, other: &Self) {
         self.valid_total += other.valid_total;
+        self.contentious_valid += other.contentious_valid;
         self.invalid_total += other.invalid_total;
         for (a, b) in self.stats.iter_mut().zip(other.stats.iter()) {
             a.merge(b);
@@ -115,6 +126,14 @@ pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[&dyn Parser]) 
         } else {
             report.invalid_total += 1;
         }
+        // Classify once per statement (a property of the SQL, not the parser).
+        // Only reference dialects carry a contentious layer, and the rules are
+        // dialect-scoped, so this is a no-op elsewhere.
+        let is_contentious =
+            reference && is_valid && contentious::registry().classify(sql, dialect).is_some();
+        if is_contentious {
+            report.contentious_valid += 1;
+        }
 
         for (i, &p) in parsers.iter().enumerate() {
             // A panic is still a non-acceptance (it does not enter the accepted
@@ -134,6 +153,9 @@ pub fn grade_chunk(stmts: &[String], dialect: Dialect, parsers: &[&dyn Parser]) 
             }
             if is_valid {
                 report.stats[i].accepted_valid += 1;
+                if is_contentious {
+                    report.stats[i].accepted_valid_contentious += 1;
+                }
                 if report.stats[i].can_reprint && p.roundtrips(sql, dialect) == Some(true) {
                     report.stats[i].roundtrip_ok += 1;
                 }

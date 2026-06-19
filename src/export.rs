@@ -10,12 +10,12 @@
 
 use crate::datasets::Dialect;
 use crate::report::{self, DialectReport};
-use crate::{bench_dist, stats, BenchParser, Parser};
+use crate::{bench_dist, contentious, stats, BenchParser, Parser};
 use std::cmp::Ordering;
 use std::path::Path;
 use viz::{
     Bundle, CoverageFile, CoverageMatrix, DialectData, MemDist, ParserBatch, ParserFailures,
-    ParserMem, ParserMetrics, ParserPerf,
+    ParserMem, ParserMetrics, ParserPerf, RuleMeta,
 };
 
 /// Output path (relative to repo root, where `cargo run` runs from).
@@ -115,8 +115,19 @@ fn metrics(report: &DialectReport) -> Vec<ParserMetrics> {
             version: p.version.to_string(),
             accepted_valid: s.accepted_valid,
             accepted_invalid: s.accepted_invalid,
+            accepted_valid_contentious: s.accepted_valid_contentious,
             recall_pct: if reference {
                 pct(s.accepted_valid, report.valid_total)
+            } else {
+                None
+            },
+            recall_excl_contentious_pct: if reference {
+                // Drop contentious valid statements from both numerator and
+                // denominator. `pct` returns None when V == Cv (zero base).
+                pct(
+                    s.accepted_valid - s.accepted_valid_contentious,
+                    report.valid_total - report.contentious_valid,
+                )
             } else {
                 None
             },
@@ -288,7 +299,7 @@ fn read_batch_mem() -> Vec<BatchMemRow> {
 
 /// Merge batch time and batch memory rows for one dialect into per-parser
 /// `ParserBatch`. Every batch-capable parser has a time row carrying its accuracy
-/// (the time bench runs them all), so it appears here; memory is added where the
+/// (the time bench runs them all), so it appears here. Memory is added where the
 /// parser's allocations are Rust-visible. Pure, so the merge is testable.
 fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<ParserBatch> {
     use std::collections::BTreeMap;
@@ -407,6 +418,8 @@ fn failures_for(dir: &str, parsers: &[&dyn Parser]) -> Vec<ParserFailures> {
                 expected_total: f.total,
                 preview_html: Vec::new(),
                 preview_reasons: Vec::new(),
+                preview_sql: Vec::new(),
+                preview_tags: Vec::new(),
                 download: None,
             });
             continue;
@@ -423,6 +436,25 @@ fn failures_for(dir: &str, parsers: &[&dyn Parser]) -> Vec<ParserFailures> {
             .take(FAIL_PREVIEW)
             .cloned()
             .collect::<Vec<_>>();
+        // Raw statement text for each previewed row, aligned with `preview`, so the
+        // failures-view feedback buttons can prefill an issue with the statement.
+        let preview_sql = f
+            .rejected
+            .iter()
+            .take(FAIL_PREVIEW)
+            .cloned()
+            .collect::<Vec<_>>();
+        // Tag each previewed statement with the contentious rule it matches (if
+        // any), so the viewer can mark it an intentional divergence. Rules are
+        // dialect-scoped, so this is a no-op where no rule applies.
+        let preview_tags = preview_sql
+            .iter()
+            .map(|s| {
+                contentious::registry()
+                    .classify(s, dialect)
+                    .map(|r| r.meta.id.clone())
+            })
+            .collect::<Vec<_>>();
         let file = format!("{dir}__{}.tsv.zst", stats::slug(name));
         match write_failure_tsv(&file, &f.rejected, &f.reasons) {
             Ok(()) => out.push(ParserFailures {
@@ -431,6 +463,8 @@ fn failures_for(dir: &str, parsers: &[&dyn Parser]) -> Vec<ParserFailures> {
                 expected_total: f.total,
                 preview_html: preview,
                 preview_reasons,
+                preview_sql,
+                preview_tags,
                 download: Some(format!("failures/{file}")),
             }),
             Err(e) => {
@@ -441,6 +475,8 @@ fn failures_for(dir: &str, parsers: &[&dyn Parser]) -> Vec<ParserFailures> {
                     expected_total: f.total,
                     preview_html: preview,
                     preview_reasons,
+                    preview_sql,
+                    preview_tags,
                     download: None,
                 });
             }
@@ -570,6 +606,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             has_reference: report.has_reference,
             valid_total: report.valid_total,
             invalid_total: report.invalid_total,
+            contentious_valid: report.contentious_valid,
             correctness: metrics(&report),
             perf: perf_for(d.dir_name(), &summary),
             coverage: coverage_for(d, &dyn_parsers),
@@ -584,6 +621,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         git_commit: git_short(),
         parsers: parsers.iter().map(|p| p.name().to_string()).collect(),
         dialects,
+        contentious_rules: contentious::registry()
+            .rules
+            .iter()
+            .map(|r| RuleMeta {
+                id: r.meta.id.clone(),
+                title: r.meta.title.clone(),
+                category: r.meta.category.as_str().to_string(),
+                description: r.meta.description.clone(),
+                references: r.meta.references.clone(),
+            })
+            .collect(),
     };
 
     // Compact JSON, zstd-compressed: the viewer embeds and decompresses it in
