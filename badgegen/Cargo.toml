@@ -1,0 +1,13 @@
+[package]
+name = "badgegen"
+version = "0.1.0"
+edition = "2021"
+description = "Writes the static per-parser README badges into web/static/badges"
+license = "MIT"
+publish = false
+
+[lints.clippy]
+all = "warn"
+
+[dependencies]
+sql_ast_benchmark_web = { path = "../web" }

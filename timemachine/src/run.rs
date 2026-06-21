@@ -154,6 +154,10 @@ fn metrics_of(report: &report::DialectReport) -> ParserMetrics {
         } else {
             pct(s.accepted_valid, report.valid_total)
         },
+        // The time machine does not classify contentious constructs, so it reports
+        // no excluding-contentious recall and counts none accepted.
+        accepted_valid_contentious: 0,
+        recall_excl_contentious_pct: None,
         // The time machine does not measure the empirical panic rate (only the
         // current build does, via BenchParser's panic-detecting parse_outcome), so
         // it is left unmeasured rather than reported as a misleading zero.

@@ -50,6 +50,7 @@ jobs:
           cp web/static/robots.txt _site/robots.txt         # crawler directives + sitemap pointer
           cp web/static/sitemap.xml _site/sitemap.xml       # sitemap for search engines
           cp -r web/static/failures _site/failures          # rejected-statement TSV downloads
+          cp -r web/static/badges _site/badges              # per-parser README badge SVGs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

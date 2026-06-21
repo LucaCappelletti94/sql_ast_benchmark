@@ -249,7 +249,7 @@ pub fn Shell() -> Element {
 }
 
 /// URL-safe slug for a parser display name (matches the route param).
-fn slug(s: &str) -> String {
+pub(crate) fn slug(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut prev_us = false;
     for ch in s.chars() {
@@ -739,6 +739,8 @@ pub fn ParserView(name: String) -> Element {
         {blurb(crate::descriptions::parser_blurb(&parser))}
 
         {parser_score_section(&parser)}
+
+        {parser_badges_section(&parser)}
 
         if has_charts {
             section { class: "block",
@@ -1752,6 +1754,55 @@ fn parser_score_section(parser: &str) -> Element {
                 {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaGaugeHigh } }, "speed", s.speed, crate::score::rank(parser, |x| x.speed), "Speed sub-score (0 to 100): median parse time ranked against the other parsers within each dialect on a log scale, then averaged.".to_string())}
                 {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaMicrochip } }, "memory", s.memory, crate::score::rank(parser, |x| x.memory), "Memory sub-score (0 to 100): peak and retained per-statement footprints ranked against the field within each dialect. Shown n/a for FFI parsers, whose C-side allocations are not measured.".to_string())}
                 {score_badge(rsx! { Icon { width: 12, height: 12, fill: "currentColor".to_string(), icon: FaHeartPulse } }, "health", s.health, crate::score::rank(parser, |x| x.health), "Project-health sub-score (0 to 100): maintenance, tests, benches, fuzzing, sanitizers, supply-chain gates, licensing, release cadence, and contributor depth. Excludes popularity proxies.".to_string())}
+            }
+        }
+    }
+}
+
+/// README badges for this parser: an inline preview of each variant next to the
+/// copy-paste Markdown that embeds it and links back to this page.
+fn parser_badges_section(parser: &str) -> Element {
+    let pslug = slug(parser);
+    // Precompute (svg, dom id, markdown, copy script) so the rsx loop stays flat.
+    let items: Vec<(String, String, String, String)> = crate::badges::variants(parser)
+        .into_iter()
+        .map(|v| {
+            let dom_id = format!("badge-md-{pslug}-{}", v.id);
+            let js = format!(
+                "{{ const el = document.getElementById('{dom_id}'); if (el) {{ navigator.clipboard.writeText(el.textContent); }} }}"
+            );
+            (v.svg, dom_id, v.markdown, js)
+        })
+        .collect();
+    if items.is_empty() {
+        return rsx! {};
+    }
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaTag }
+                "Badges"
+            }
+            p { class: "table-cap",
+                "Show this parser's standing in your README: copy a variant below and the badge refreshes each time the benchmark is republished. The benchmark is open to suggestions and exists to share which parser ideas work best and how they evolve."
+            }
+            div { class: "badge-list",
+                for (vi , (svg , dom_id , md , js)) in items.into_iter().enumerate() {
+                    div { class: "badge-row", key: "{vi}",
+                        span { class: "badge-preview", "aria-hidden": "true", dangerous_inner_html: "{svg}" }
+                        code { id: "{dom_id}", class: "badge-md", "{md}" }
+                        button {
+                            class: "copy-btn",
+                            r#type: "button",
+                            aria_label: "Copy the Markdown for this badge",
+                            title: "Copy Markdown",
+                            onclick: move |_| {
+                                document::eval(&js);
+                            },
+                            Icon { width: 13, height: 13, fill: "currentColor".to_string(), icon: FaCopy }
+                        }
+                    }
+                }
             }
         }
     }

@@ -54,17 +54,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
       - name: Validate SVG files
         run: |
-          shopt -s nullglob
-          svg_files=(*.svg **/*.svg)
-          if [ ${#svg_files[@]} -eq 0 ]; then
-            echo "No SVG files found"
-            exit 0
+          set -euo pipefail
+          # Validate every tracked SVG (the prior glob missed nested files such as
+          # the per-parser badges under web/static/badges/). Tracked-only, so build
+          # output and the dataset cache are never picked up.
+          mapfile -t svgs < <(git ls-files '*.svg')
+          if [ ${#svgs[@]} -eq 0 ]; then
+            echo "No tracked SVG files found"
+            exit 1
           fi
-          echo "Validating ${#svg_files[@]} SVG file(s)..."
-          for svg in "${svg_files[@]}"; do
-            echo "  Checking $svg"
-            xmllint --noout "$svg"
-          done
+          echo "Validating ${#svgs[@]} SVG file(s)..."
+          xmllint --noout "${svgs[@]}"
           echo "All SVG files are valid XML"
 
   test:
