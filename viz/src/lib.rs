@@ -7,6 +7,7 @@
 //! so no font rasterization or fontconfig is needed). It deliberately depends on
 //! nothing but `serde` and `plotters` so it stays wasm-clean.
 
+pub mod badge;
 pub mod chart;
 pub mod color;
 pub mod marker;

@@ -259,7 +259,7 @@ fn run_regen() {
             ],
         ), // web/assets/history.json.zst
     ];
-    let total = steps.len() + 1;
+    let total = steps.len() + 2;
     for (i, (cmd, args)) in steps.iter().enumerate() {
         eprintln!("\n[regen {}/{total}] {cmd} {}", i + 1, args.join(" "));
         let status = std::process::Command::new(cmd)
@@ -274,9 +274,24 @@ fn run_regen() {
             std::process::exit(1);
         }
     }
-    eprintln!("\n[regen {total}/{total}] export");
+    eprintln!("\n[regen {}/{total}] export", total - 1);
     if let Err(e) = export::run() {
         eprintln!("ERROR: {e}");
+        std::process::exit(1);
+    }
+
+    // Badges read the snapshot the web crate embeds, so regenerate them last,
+    // after export has rewritten it.
+    eprintln!("\n[regen {total}/{total}] cargo run -p badgegen");
+    let status = std::process::Command::new("cargo")
+        .args(["run", "-p", "badgegen"])
+        .status()
+        .unwrap_or_else(|e| {
+            eprintln!("ERROR: could not launch `cargo run -p badgegen`: {e}");
+            std::process::exit(1);
+        });
+    if !status.success() {
+        eprintln!("ERROR: step failed: `cargo run -p badgegen`");
         std::process::exit(1);
     }
 }

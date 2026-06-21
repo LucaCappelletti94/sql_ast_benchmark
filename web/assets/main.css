@@ -514,6 +514,26 @@ main { display: block; }
 .report-propose:hover { color: #b06e1f; border-color: #e3c08a; background: #fdf7ee; }
 .report-dispute { color: #1c4e80; }
 .report-dispute:hover { color: #1c4e80; border-color: #a9c6e6; background: #eef4fb; }
+/* README badges on the parser page: an inline SVG preview, the copy-paste
+   Markdown, and a copy button, one row per variant. */
+.badge-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.badge-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.badge-preview { flex: none; display: inline-flex; }
+.badge-preview svg { display: block; height: 20px; }
+.badge-md {
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfbfb;
+  color: #1f2328;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+.badge-row .copy-btn { flex: none; }
 /* The parser's error message for a rejected statement, under its preview. */
 .fail-reason {
   margin: 0.2rem 0 0;

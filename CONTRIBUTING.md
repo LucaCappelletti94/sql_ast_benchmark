@@ -34,6 +34,14 @@ cargo run --bin sqlbench -- export       # read all of the above, write web/asse
 
 The charts are rendered in the browser from the JSON by the shared `viz` crate (plotters, SVG backend), so no chart images are committed.
 
+The per-parser README badges under `web/static/badges/` are derived from the same scoring, so refresh them whenever the snapshot changes:
+
+```bash
+cargo run -p badgegen                     # rewrite web/static/badges/*.svg from the embedded snapshot
+```
+
+`badgegen` reads the snapshot the `web` crate embeds, so run it after `export`. The shields-style SVG renderer lives in `viz::badge` and is shared with the parser page, which previews the same badges and shows their copy-paste Markdown.
+
 ## Contentious constructs
 
 A contentious construct is one the reference engine accepts but a parser may reasonably decline to support (a niche engine quirk, a non-standard extension, a lossy or deprecated form). The benchmark keeps strict, oracle-graded recall as the headline number and adds a secondary "recall excluding contentious" beside it, plus a per-statement badge on the failures view. The design is written up in [docs/contentious-constructs.md](docs/contentious-constructs.md).
