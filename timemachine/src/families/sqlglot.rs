@@ -29,6 +29,22 @@ macro_rules! sqlglot_version {
         }
 
         impl Parser for $name {
+            // Surface a caught panic (the adapters fold one into `Err("panicked")`)
+            // so `grade_chunk` records the empirical panic rate across releases.
+            fn parse_outcome(
+                &self,
+                sql: &str,
+                dialect: Dialect,
+            ) -> sql_ast_benchmark::ParseOutcome {
+                use sql_ast_benchmark::ParseOutcome;
+                match self.try_parse(sql, dialect) {
+                    None => ParseOutcome::Unsupported,
+                    Some(Ok(())) => ParseOutcome::Accepted,
+                    Some(Err(e)) if e == "panicked" => ParseOutcome::Panicked(e),
+                    Some(Err(e)) => ParseOutcome::Rejected(e),
+                }
+            }
+
             fn id(&self) -> ParserId {
                 ParserId {
                     family: "sqlglot-rust",

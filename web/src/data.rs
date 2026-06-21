@@ -52,6 +52,12 @@ pub fn history(family: &str) -> Option<&'static FamilyHistory> {
     histories().iter().find(|h| h.family == family)
 }
 
+/// Every family's version history, for the cross-family overlay.
+#[must_use]
+pub fn all_histories() -> &'static [FamilyHistory] {
+    histories()
+}
+
 /// The static source-feature scan (parsed once).
 fn featurescan() -> &'static FeatureScan {
     static CACHE: OnceLock<FeatureScan> = OnceLock::new();

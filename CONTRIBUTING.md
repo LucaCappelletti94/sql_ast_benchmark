@@ -72,6 +72,17 @@ Every version implements the `sql_ast_benchmark::Parser` trait (the same trait `
 
 A new family is a new `families/<name>.rs` with its own adapter (each library has a different parse API) plus its aliases and registry entries.
 
+Both runner passes are resumable family by family on a `--full` run. The memory pass writes `target/timemachine/<family>.mem.json` and skips families that already have one. The timing pass writes `target/timemachine/<family>.timing.json` and reuses it when it is no older than the memory sidecar, so a refreshed memory pass invalidates a stale timing checkpoint automatically. An interruption resumes at the next family (a family interrupted partway is recomputed from its start). Delete `target/timemachine/` for a from-scratch run.
+
+To correct only a few versions (for example after fixing the dialect mapping for some old releases) without redoing the whole history, use the incremental refresh. It reads the committed `history.json.zst`, recomputes only the listed versions, reuses every other version verbatim, and recomputes the family's deltas from freshly determined accepted sets, so the result matches a full re-run without re-measuring unchanged points:
+
+```bash
+cargo run --release -p timemachine --bin timemachine-mem -- --refresh sqlparser-rs:0.8.0,0.14.0
+cargo run --release -p timemachine --bin timemachine -- --refresh sqlparser-rs:0.8.0,0.14.0
+```
+
+Run the memory refresh first (it rewrites only those versions' entries in the memory sidecar), then the timing refresh (which merges them and writes `history.json.zst`).
+
 ## Coverage
 
 ```bash

@@ -396,6 +396,28 @@ pub struct VersionRun {
     pub released: String,
     /// One entry per dialect this version models, in display order.
     pub dialects: Vec<DialectRun>,
+    /// Per-dialect change in the accepted set versus the previous benchmarked
+    /// version of this family. Empty for the first version (no predecessor).
+    #[serde(default)]
+    pub deltas: Vec<DialectDelta>,
+}
+
+/// How one version's accepted set changed from the previous version, in one
+/// dialect. The counts are exact, the examples a small illustrative sample.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DialectDelta {
+    pub dir_name: String,
+    /// Statements this version accepts that the previous version rejected.
+    pub gained: usize,
+    /// Statements this version rejects that the previous version accepted (a
+    /// regression in raw coverage).
+    pub lost: usize,
+    /// A few newly accepted statements, for display.
+    #[serde(default)]
+    pub examples_gained: Vec<String>,
+    /// A few newly rejected statements, for display.
+    #[serde(default)]
+    pub examples_lost: Vec<String>,
 }
 
 /// One version's results in one dialect. The same per-parser shapes as the main

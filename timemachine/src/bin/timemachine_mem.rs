@@ -49,8 +49,10 @@ fn main() {
         eprintln!("ERROR: could not prepare datasets/: {e}");
         std::process::exit(1);
     }
-    let full = std::env::args().any(|a| a == "--full");
-    if !full {
+    let args: Vec<String> = std::env::args().collect();
+    let refresh = timemachine::run::parse_refresh(&args);
+    let full = args.iter().any(|a| a == "--full");
+    if refresh.is_none() && !full {
         eprintln!(
             "(smoke run: first {} statements per dialect; pass --full for the whole corpus)",
             timemachine::run::SMOKE_LIMIT
@@ -60,7 +62,13 @@ fn main() {
         .stack_size(WORKER_STACK)
         .spawn(move || {
             let versions = timemachine::registry::all();
-            timemachine::run::run_memory(&versions, full);
+            if let Some((family, vers)) = refresh {
+                eprintln!("refreshing memory for {family} versions {vers:?}");
+                timemachine::run::run_memory_refresh(&versions, &family, &vers);
+                eprintln!("memory refreshed for {family}");
+            } else {
+                timemachine::run::run_memory(&versions, full);
+            }
         })
         .expect("spawn worker")
         .join()

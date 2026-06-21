@@ -14,13 +14,13 @@ pub mod marker;
 pub mod schema;
 
 pub use chart::{
-    box_lines, box_svg, ecdf_lines, ecdf_svg, mem_line, pct_trend_lines, trend_lines, year_frac,
-    Line, TrendSeries,
+    box_lines, box_svg, count_trend_lines, ecdf_lines, ecdf_svg, mem_line, pct_trend_lines,
+    trend_lines, year_frac, Line, TrendSeries,
 };
 pub use color::{parser_hex, parser_rgb};
 pub use marker::{marker_for, Marker};
 pub use schema::{
-    Bundle, CoverageFile, CoverageMatrix, DepthReport, DepthScan, DialectData, DialectRun,
-    FamilyHistory, FeatureCounts, FeatureScan, LintPolicy, MemDist, ParserBatch, ParserFailures,
-    ParserFeatures, ParserMem, ParserMetrics, ParserPerf, RuleMeta, VersionRun,
+    Bundle, CoverageFile, CoverageMatrix, DepthReport, DepthScan, DialectData, DialectDelta,
+    DialectRun, FamilyHistory, FeatureCounts, FeatureScan, LintPolicy, MemDist, ParserBatch,
+    ParserFailures, ParserFeatures, ParserMem, ParserMetrics, ParserPerf, RuleMeta, VersionRun,
 };
