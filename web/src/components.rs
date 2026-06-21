@@ -351,7 +351,7 @@ pub fn Overview() -> Element {
                 {rich_text(&format!("We evaluated nine parser libraries: [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) (Apache DataFusion), [pg_query.rs](https://github.com/pganalyze/pg_query.rs) and its faster summary mode (Rust bindings to [libpg_query](https://github.com/pganalyze/libpg_query), PostgreSQL's own parser), [databend-common-ast](https://crates.io/crates/databend-common-ast), [polyglot-sql](https://github.com/tobilg/polyglot), [sqlglot-rust](https://crates.io/crates/sqlglot-rust), [qusql-parse](https://crates.io/crates/qusql-parse), [sqlite3-parser](https://crates.io/crates/sqlite3-parser) (lemon-rs), and [turso_parser](https://crates.io/crates/turso_parser) (the SQLite parser from Turso), plus [orql](https://codeberg.org/xitep/orql) on Oracle. We ran them against a corpus of 340,938 statements spanning these {} dialects, drawn from each engine's own regression suites and official samples and committed compressed so every run is reproducible.", b.dialects.len())).into_iter()}
             }
             p { class: "blurb",
-                {rich_text("We exercised each parser in the dialect that matches the corpus under test. Where a dialect has a runnable engine, we labelled each statement valid or invalid with the real database engine itself, run in Docker via [testcontainers](https://github.com/testcontainers/testcontainers-rs): a statement counts as valid unless the engine reports a syntax error, so a missing table or column still counts as parsed. Against that ground truth we scored the parsers on recall (valid statements accepted), false positives (invalid statements wrongly accepted), and display round-trip stability. The other dialects have no runnable engine, so their statements count as provenance-valid and the metric is simply the acceptance rate. Across all dialects, we captured speed as a per-statement parse-time distribution over every accepted statement, and memory as the peak and retained bytes per statement under a counting allocator. A batch axis additionally parses each parser's whole accepted set as a single script, showing what bulk parsing amortizes, and a time machine benchmarks the historical releases of every pure-Rust parser (59 versions in total, including every sqlparser-rs minor since January 2023), so each parser page also charts how coverage, speed, and memory evolved across releases.").into_iter()}
+                {rich_text("We exercised each parser in the dialect that matches the corpus under test. Where a dialect has a runnable engine, we labelled each statement valid or invalid with the real database engine itself, run in Docker via [testcontainers](https://github.com/testcontainers/testcontainers-rs): a statement counts as valid unless the engine reports a syntax error, so a missing table or column still counts as parsed. Against that ground truth we scored the parsers on recall (valid statements accepted), false positives (invalid statements wrongly accepted), and display round-trip stability. The other dialects have no runnable engine, so their statements count as provenance-valid and the metric is simply the acceptance rate. Across all dialects, we captured speed as a per-statement parse-time distribution over every accepted statement, and memory as the peak and retained bytes per statement under a counting allocator. A batch axis additionally parses each parser's whole accepted set as a single script, showing what bulk parsing amortizes, and a time machine benchmarks the historical releases of every pure-Rust parser (more than 80 versions in total, reaching back to sqlparser-rs 0.6 in mid-2020), so each parser page also charts how coverage, speed, memory, recall, round-trip, and panic rate evolved across releases, down to the exact statements each release gained or lost, and the section below compares the families against one another over calendar time.").into_iter()}
             }
             p { class: "blurb",
                 {rich_text("On their home dialect the reference bindings are exact by construction, so the more telling comparison is among the pure-Rust parsers. There, [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs) is the most broadly capable, the permissive parsers such as [polyglot-sql](https://github.com/tobilg/polyglot) accept the most statements but pay for it with a high false-positive rate, and the stricter parsers reject more in exchange for precision. Speed spans more than an order of magnitude, from well under a microsecond per statement for the fastest parsers to the low single-digit microseconds for most, with [polyglot-sql](https://github.com/tobilg/polyglot) a clear outlier at roughly fifteen. No parser leads on every axis, so the right choice comes down to what a given project values most: broad coverage, few false positives, or raw speed.").into_iter()}
@@ -369,6 +369,8 @@ pub fn Overview() -> Element {
             }
             {score_leaderboard()}
         }
+
+        {cross_family_section()}
 
         div { class: "section-head",
             h2 {
@@ -435,6 +437,111 @@ pub fn Overview() -> Element {
             }
         }
     }
+}
+
+/// Cross-family overlay: every family's trajectory on one chart, recall and
+/// median parse time over calendar time, one line per family. Renders nothing
+/// when the history is empty.
+fn cross_family_section() -> Element {
+    let mut recall_series = Vec::new();
+    let mut speed_series = Vec::new();
+    for h in crate::data::all_histories() {
+        let rgb = parser_rgb(&h.family);
+        let mut recall_pts = Vec::new();
+        let mut speed_pts = Vec::new();
+        for v in &h.versions {
+            let Some(x) = viz::year_frac(&v.released) else {
+                continue;
+            };
+            let recalls: Vec<f64> = v
+                .dialects
+                .iter()
+                .filter_map(|d| {
+                    d.correctness.as_ref().and_then(|c| {
+                        if d.has_reference {
+                            c.recall_pct
+                        } else {
+                            c.accept_pct
+                        }
+                    })
+                })
+                .collect();
+            if let Some(m) = mean_of(&recalls) {
+                recall_pts.push((x, m, m, m));
+            }
+            let speeds: Vec<f64> = v
+                .dialects
+                .iter()
+                .filter_map(|d| d.perf.as_ref().map(|p| p.median))
+                .collect();
+            if let Some(md) = median_of(&speeds) {
+                speed_pts.push((x, md, md, md));
+            }
+        }
+        if !recall_pts.is_empty() {
+            recall_series.push(viz::TrendSeries {
+                label: h.family.clone(),
+                rgb,
+                points: recall_pts,
+            });
+        }
+        if !speed_pts.is_empty() {
+            speed_series.push(viz::TrendSeries {
+                label: h.family.clone(),
+                rgb,
+                points: speed_pts,
+            });
+        }
+    }
+    if recall_series.is_empty() && speed_series.is_empty() {
+        return rsx! {};
+    }
+    let recall_svg = viz::pct_trend_lines(
+        "Recall over time",
+        &recall_series,
+        760,
+        460,
+        "% accepted (mean over dialects)",
+    );
+    let speed_svg = viz::trend_lines(
+        "Parse time over time",
+        &speed_series,
+        760,
+        460,
+        "ns / statement (median over dialects)",
+    );
+    rsx! {
+        div { class: "section-head",
+            h2 {
+                Icon { width: 18, height: 18, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaChartLine }
+                "Across parsers over time"
+            }
+        }
+        div { class: "block",
+            p { class: "table-cap",
+                "Each pure-Rust family's trajectory on one chart, placed at each release's date, one line per family. Recall is averaged over the dialects a family models (acceptance rate where there is no reference engine), and parse time is the median over those dialects on a log scale. This is a coarse cross-family view: the per-parser pages break each line down by dialect."
+            }
+            div { class: "charts",
+                {chart_figure("chart-xfam-recall", &recall_svg, "Recall over calendar time, one line per parser family.", "Mean recall by release date, one line per family. Higher is better.", "cross-family-recall")}
+                {chart_figure("chart-xfam-speed", &speed_svg, "Median parse time over calendar time, one line per parser family.", "Median parse time by release date, one line per family (log scale). Lower is faster.", "cross-family-speed")}
+            }
+        }
+    }
+}
+
+/// Mean of a slice, or `None` when empty.
+fn mean_of(xs: &[f64]) -> Option<f64> {
+    (!xs.is_empty()).then(|| xs.iter().sum::<f64>() / xs.len() as f64)
+}
+
+/// Median of a slice (upper-middle for even lengths), or `None` when empty.
+fn median_of(xs: &[f64]) -> Option<f64> {
+    if xs.is_empty() {
+        return None;
+    }
+    let mut v = xs.to_vec();
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    Some(v[v.len() / 2])
 }
 
 /// Browser script that serializes the inline `<svg>` inside a figure and saves
@@ -797,6 +904,62 @@ pub fn ParserView(name: String) -> Element {
     }
 }
 
+/// Panel showing exactly which statements the selected version gained or lost
+/// versus the previous release, per dialect, with a few example statements.
+fn version_delta_panel(
+    version: &str,
+    deltas: &[viz::DialectDelta],
+    dialects: &[(String, String)],
+) -> Element {
+    let display = |dir: &str| {
+        dialects
+            .iter()
+            .find(|(d, _)| d == dir)
+            .map_or_else(|| dir.to_string(), |(_, n)| n.clone())
+    };
+    let rows: Vec<(String, &viz::DialectDelta)> = deltas
+        .iter()
+        .filter(|d| d.gained > 0 || d.lost > 0)
+        .map(|d| (display(&d.dir_name), d))
+        .collect();
+    if rows.is_empty() {
+        return rsx! {};
+    }
+    rsx! {
+        div { class: "version-delta",
+            h3 { class: "version-delta-head", "What {version} changed from the previous version" }
+            p { class: "table-cap",
+                "Statements this version newly accepts (gained) or no longer accepts (regressed) versus the previous benchmarked release, per dialect, with a few examples. Counts are exact."
+            }
+            for (name , d) in rows {
+                div { class: "delta-row", key: "{name}",
+                    div { class: "delta-head",
+                        span { class: "delta-dialect", "{name}" }
+                        span { class: "delta-gained", "{d.gained} gained" }
+                        span { class: "delta-lost", "{d.lost} lost" }
+                    }
+                    if !d.examples_gained.is_empty() {
+                        div { class: "delta-examples",
+                            span { class: "delta-tag delta-tag-gained", "newly parsed" }
+                            for (i , ex) in d.examples_gained.iter().enumerate() {
+                                code { key: "g{i}", class: "delta-ex", "{ex}" }
+                            }
+                        }
+                    }
+                    if !d.examples_lost.is_empty() {
+                        div { class: "delta-examples",
+                            span { class: "delta-tag delta-tag-lost", "regressed" }
+                            for (i , ex) in d.examples_lost.iter().enumerate() {
+                                code { key: "l{i}", class: "delta-ex", "{ex}" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// The "Across versions" section: time and memory trends over the benchmarked
 /// versions of this family (median with an interquartile bar, one line per
 /// dialect), plus a selector that shows the chosen version's full per-dialect
@@ -829,12 +992,20 @@ fn VersionHistory(parser: String) -> Element {
     let mut peak_series = Vec::new();
     let mut recall_series = Vec::new();
     let mut fp_series = Vec::new();
+    let mut coverage_series = Vec::new();
+    let mut roundtrip_series = Vec::new();
+    let mut panic_series = Vec::new();
+    let mut contentious_series = Vec::new();
     for (dir, name) in &dialects {
         let rgb = brand(dir).accent_rgb;
         let mut time_points = Vec::new();
         let mut peak_points = Vec::new();
         let mut recall_points = Vec::new();
         let mut fp_points = Vec::new();
+        let mut coverage_points = Vec::new();
+        let mut roundtrip_points = Vec::new();
+        let mut panic_points = Vec::new();
+        let mut contentious_points = Vec::new();
         for v in &hist.versions {
             let Some(x) = viz::year_frac(&v.released) else {
                 continue;
@@ -860,31 +1031,44 @@ fn VersionHistory(parser: String) -> Element {
                 if let Some(fp) = c.false_positive_pct {
                     fp_points.push((x, fp, fp, fp));
                 }
+                // Capability growth: the raw count of valid statements accepted.
+                let acc = c.accepted_valid as f64;
+                coverage_points.push((x, acc, acc, acc));
+                if let Some(rt) = c.roundtrip_pct {
+                    roundtrip_points.push((x, rt, rt, rt));
+                }
+                if let Some(pp) = c.panic_pct {
+                    panic_points.push((x, pp, pp, pp));
+                }
+                if let Some(rc) = c.recall_excl_contentious_pct {
+                    contentious_points.push((x, rc, rc, rc));
+                }
             }
         }
-        time_series.push(viz::TrendSeries {
+        let series = |points| viz::TrendSeries {
             label: name.clone(),
             rgb,
-            points: time_points,
-        });
-        peak_series.push(viz::TrendSeries {
-            label: name.clone(),
-            rgb,
-            points: peak_points,
-        });
+            points,
+        };
+        time_series.push(series(time_points));
+        peak_series.push(series(peak_points));
         if !recall_points.is_empty() {
-            recall_series.push(viz::TrendSeries {
-                label: name.clone(),
-                rgb,
-                points: recall_points,
-            });
+            recall_series.push(series(recall_points));
         }
         if !fp_points.is_empty() {
-            fp_series.push(viz::TrendSeries {
-                label: name.clone(),
-                rgb,
-                points: fp_points,
-            });
+            fp_series.push(series(fp_points));
+        }
+        if coverage_points.iter().any(|&(_, v, ..)| v > 0.0) {
+            coverage_series.push(series(coverage_points));
+        }
+        if !roundtrip_points.is_empty() {
+            roundtrip_series.push(series(roundtrip_points));
+        }
+        if panic_points.iter().any(|&(_, v, ..)| v > 0.0) {
+            panic_series.push(series(panic_points));
+        }
+        if !contentious_points.is_empty() {
+            contentious_series.push(series(contentious_points));
         }
     }
     let time_trend = viz::trend_lines(
@@ -920,6 +1104,44 @@ fn VersionHistory(parser: String) -> Element {
     } else {
         String::new()
     };
+    // Optional trends, rendered only where the snapshot carries the data.
+    let opt_trend = |series: &[viz::TrendSeries], title: String, y: &str, pct: bool| {
+        if series.is_empty() {
+            return None;
+        }
+        Some(if pct {
+            viz::pct_trend_lines(&title, series, 760, 460, y)
+        } else {
+            viz::count_trend_lines(&title, series, 760, 460, y)
+        })
+    };
+    let coverage_trend = opt_trend(
+        &coverage_series,
+        format!("{parser} coverage"),
+        "valid accepted",
+        false,
+    );
+    let roundtrip_trend = opt_trend(
+        &roundtrip_series,
+        format!("{parser} round-trip"),
+        "% round-trip ok",
+        true,
+    );
+    let panic_trend = opt_trend(
+        &panic_series,
+        format!("{parser} panics"),
+        "% panicked",
+        true,
+    );
+    let contentious_trend = opt_trend(
+        &contentious_series,
+        format!("{parser} recall excl. contentious"),
+        "% accepted",
+        true,
+    );
+
+    // Coverage delta for the selected version versus its predecessor.
+    let sel_delta = hist.versions[sel].deltas.clone();
 
     // Selected version: full per-dialect charts and a results table.
     let run = &hist.versions[sel];
@@ -1041,14 +1263,26 @@ fn VersionHistory(parser: String) -> Element {
                 "Across versions"
             }
             p { class: "table-cap",
-                "How {parser} changed across releases, each version placed at its release date. For time and memory each point is the median over a dialect's accepted statements with an interquartile (p25 to p75) bar on a log scale, so the heavily right-skewed tails do not distort it: lower is faster and leaner. The quality trends show the share of expected statements accepted (recall where a reference engine exists, acceptance rate elsewhere) and, on reference dialects, the share of invalid statements wrongly accepted (lower is better). Pick a version to see its full charts and results below."
+                "How {parser} changed across releases, each version placed at its release date. For time and memory each point is the median over a dialect's accepted statements with an interquartile (p25 to p75) bar on a log scale, so the heavily right-skewed tails do not distort it: lower is faster and leaner. Coverage is the raw count of valid statements accepted, and the quality trends show recall (acceptance rate where there is no reference engine), recall excluding contentious constructs, round-trip stability, the share of invalid statements wrongly accepted (lower is better), and the empirical panic rate. Pick a version to see its full charts, its results, and exactly which statements it gained or lost versus the previous release."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{pslug}-time-trend"), &time_trend, &format!("Parse-time trend for {parser} across releases, one line per dialect."), "Median parse time by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-time-trend"))}
                 {chart_figure(&format!("chart-{pslug}-mem-trend"), &peak_trend, &format!("Peak-memory trend for {parser} across releases, one line per dialect."), "Median peak memory by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-mem-trend"))}
+                if let Some(t) = &coverage_trend {
+                    {chart_figure(&format!("chart-{pslug}-coverage-trend"), t, &format!("Coverage trend for {parser} across releases, one line per dialect."), "Count of valid statements accepted by release date, one line per dialect (linear scale). Higher is broader coverage.", &format!("{pslug}-coverage-trend"))}
+                }
                 {chart_figure(&format!("chart-{pslug}-recall-trend"), &recall_trend, &format!("Accept and recall trend for {parser} across releases, one line per dialect."), "Share of expected statements accepted by release date (recall on reference dialects, acceptance rate elsewhere). Higher is better.", &format!("{pslug}-recall-trend"))}
+                if let Some(t) = &contentious_trend {
+                    {chart_figure(&format!("chart-{pslug}-contentious-trend"), t, &format!("Recall excluding contentious constructs for {parser} across releases, one line per reference dialect."), "Recall over the non-contentious valid statements, by release date. Higher is better.", &format!("{pslug}-contentious-trend"))}
+                }
+                if let Some(t) = &roundtrip_trend {
+                    {chart_figure(&format!("chart-{pslug}-roundtrip-trend"), t, &format!("Round-trip stability for {parser} across releases, one line per dialect."), "Share of accepted statements that reprint stably, by release date. Higher is better.", &format!("{pslug}-roundtrip-trend"))}
+                }
                 if has_fp {
                     {chart_figure(&format!("chart-{pslug}-fp-trend"), &fp_trend, &format!("False-positive trend for {parser} across releases, one line per reference dialect."), "Share of reference-invalid statements wrongly accepted, by release date. Lower is better.", &format!("{pslug}-fp-trend"))}
+                }
+                if let Some(t) = &panic_trend {
+                    {chart_figure(&format!("chart-{pslug}-panic-trend"), t, &format!("Empirical panic rate for {parser} across releases, one line per dialect."), "Share of statements that panicked the parser, by release date. Lower is better.", &format!("{pslug}-panic-trend"))}
                 }
             }
             div { class: "version-picker",
@@ -1061,6 +1295,7 @@ fn VersionHistory(parser: String) -> Element {
                     }
                 }
             }
+            {version_delta_panel(&sel_version, &sel_delta, &dialects)}
             div { class: "charts",
                 if has_time {
                     {chart_figure(&format!("chart-{pslug}-{vslug}-ecdf"), &sel_ecdf, &format!("Parse-time eCDF for {parser} {sel_version}, one curve per dialect."), "Per-statement parse time for the selected version, one curve per dialect (log scale).", &format!("{pslug}-{vslug}-ecdf"))}

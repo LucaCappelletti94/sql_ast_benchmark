@@ -531,8 +531,9 @@ pub fn trend_lines(title: &str, series: &[TrendSeries], w: u32, h: u32, y_desc: 
 /// Percentage trend chart: x = release date, y = a rate in percent on a linear
 /// axis, one line per series. Each point's `median` slot carries the value (the
 /// p25/p75 slots are ignored, since a rate is a single number rather than a
-/// distribution). Used for the accept/recall and false-positive trends. The y
-/// range hugs the data so small changes between releases stay visible.
+/// distribution). Used for the accept/recall, false-positive, panic, round-trip,
+/// and contentious-recall trends. The y range hugs the data, clamped to 0..102,
+/// so small changes between releases stay visible.
 #[must_use]
 pub fn pct_trend_lines(
     title: &str,
@@ -540,6 +541,40 @@ pub fn pct_trend_lines(
     w: u32,
     h: u32,
     y_desc: &str,
+) -> String {
+    linear_trend(title, series, w, h, y_desc, |ymin, ymax| {
+        let ylo = (ymin - 2.0).max(0.0);
+        let yhi = (ymax + 2.0).min(102.0).max(ylo + 1.0);
+        (ylo, yhi)
+    })
+}
+
+/// Count trend chart: like [`pct_trend_lines`] but on a linear axis anchored at
+/// zero with no upper clamp, for absolute counts (such as accepted-statement
+/// coverage) rather than rates.
+#[must_use]
+pub fn count_trend_lines(
+    title: &str,
+    series: &[TrendSeries],
+    w: u32,
+    h: u32,
+    y_desc: &str,
+) -> String {
+    linear_trend(title, series, w, h, y_desc, |_ymin, ymax| {
+        (0.0, (ymax * 1.08).max(1.0))
+    })
+}
+
+/// Shared linear-axis trend renderer. `y_bounds` maps the data's `(ymin, ymax)`
+/// to the drawn `(ylo, yhi)`, the one axis difference between the rate and count
+/// variants. Each point's `median` slot carries the value.
+fn linear_trend(
+    title: &str,
+    series: &[TrendSeries],
+    w: u32,
+    h: u32,
+    y_desc: &str,
+    y_bounds: impl Fn(f64, f64) -> (f64, f64),
 ) -> String {
     let legend: Vec<Line> = series
         .iter()
@@ -582,8 +617,7 @@ pub fn pct_trend_lines(
             }
             let xpad = ((xmax - xmin) * 0.08).max(0.08);
             let (xlo, xhi) = (xmin - xpad, xmax + xpad);
-            let ylo = (ymin - 2.0).max(0.0);
-            let yhi = (ymax + 2.0).min(102.0).max(ylo + 1.0);
+            let (ylo, yhi) = y_bounds(ymin, ymax);
 
             let mut chart = ChartBuilder::on(&plot)
                 .caption(title, ("sans-serif", 16))

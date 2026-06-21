@@ -534,6 +534,31 @@ main { display: block; }
   white-space: pre;
 }
 .badge-row .copy-btn { flex: none; }
+/* Per-version coverage delta panel: which statements a release gained or lost. */
+.version-delta { margin: 0.6rem 0 0.2rem; }
+.version-delta-head { font-size: 0.95rem; margin: 0 0 0.2rem; }
+.delta-row { padding: 0.5rem 0; border-top: 1px solid var(--line); }
+.delta-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.delta-dialect { font-weight: 600; }
+.delta-gained { color: #1a7f37; font-variant-numeric: tabular-nums; }
+.delta-lost { color: #c0202a; font-variant-numeric: tabular-nums; }
+.delta-examples { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem; }
+.delta-tag { flex: none; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.delta-tag-gained { color: #1a7f37; }
+.delta-tag-lost { color: #c0202a; }
+.delta-ex {
+  display: block;
+  width: 100%;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfbfb;
+  color: #1f2328;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  overflow-x: auto;
+  white-space: pre;
+}
 /* The parser's error message for a rejected statement, under its preview. */
 .fail-reason {
   margin: 0.2rem 0 0;
