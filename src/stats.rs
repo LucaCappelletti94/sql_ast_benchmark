@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn ecdf_empty_is_empty() {
-        assert!(ecdf_points(&[], 10).is_empty());
+        assert_eq!(ecdf_points(&[], 10), [] as [(f64, f64); 0]);
     }
 
     #[test]

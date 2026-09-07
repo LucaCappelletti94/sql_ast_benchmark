@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn sampler_handles_small_and_empty_pools() {
-        assert!(sample_batches(0, 128, 200, 1).is_empty());
+        assert_eq!(sample_batches(0, 128, 200, 1), [] as [std::vec::Vec<usize>; 0]);
         let small = sample_batches(10, 128, 5, 1);
         assert_eq!(small.len(), 5);
         for batch in &small {

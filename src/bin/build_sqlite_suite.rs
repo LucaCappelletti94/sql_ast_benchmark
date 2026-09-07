@@ -357,7 +357,7 @@ fn is_balanced(stmt: &str) -> bool {
 /// Index just past the `}` matching the `{` at `open`, using TCL brace rules:
 /// braces nest, but `\{`, `\}`, and `\\` are escapes that do not affect nesting
 /// (no other substitution happens inside braces). `None` if unbalanced.
-fn matching_brace(bytes: &[u8], open: usize) -> Option<usize> {
+const fn matching_brace(bytes: &[u8], open: usize) -> Option<usize> {
     let mut depth = 0usize;
     let mut i = open;
     while i < bytes.len() {
@@ -589,7 +589,7 @@ mod tests {
     #[test]
     fn skips_quoted_script_forms() {
         // `execsql "..."` (double-quoted, TCL-substituted) is not a `{...}` body.
-        assert!(extract_sql_bodies("execsql \"SELECT $x\"\n").is_empty());
+        assert_eq!(extract_sql_bodies("execsql \"SELECT $x\"\n"), [] as [std::string::String; 0]);
     }
 
     #[test]
