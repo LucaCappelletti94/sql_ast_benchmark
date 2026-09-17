@@ -1,7 +1,12 @@
 [workspace]
 members = [".", "viz", "web", "badgegen", "membench", "oracle", "timemachine", "featurescan"]
 default-members = ["."]
-resolver = "2"
+# Resolver 3 resolves under `rust-version`, so a dependency raising its MSRV
+# in a patch release is not selected and needs no hand-written upper bound.
+resolver = "3"
+
+[workspace.package]
+rust-version = "1.88"
 
 [package]
 name = "sql_ast_benchmark"
@@ -14,6 +19,7 @@ authors = ["Luca Cappelletti"]
 keywords = ["sql", "parser", "benchmark", "postgresql"]
 categories = ["development-tools::profiling"]
 publish = false
+rust-version.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -30,13 +36,12 @@ cast_sign_loss = { level = "allow", priority = 1 }
 sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
 # libpg_query, the PostgreSQL server's own parser, the reference for PostgreSQL.
 pg_query = { git = "https://github.com/pganalyze/pg_query.rs" }
-qusql-parse = "0.8.0"
+qusql-parse = "0.11.0"
 polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
 databend-common-ast = "0.2.5"
-orql = { git = "https://codeberg.org/xitep/orql" }
-sqlglot-rust = "0.10.1"
-sqlite3-parser = "0.16.0"
-turso_parser = "0.6.1"
+sqlglot-rust = "0.10.29"
+sqlite3-parser = "0.17.0"
+turso_parser = "0.7.2"
 fallible-iterator = "0.3.0"
 viz = { path = "viz" }
 serde = { version = "1", features = ["derive"] }

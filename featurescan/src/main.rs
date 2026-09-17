@@ -26,7 +26,6 @@ const PARSERS: &[(&str, &str)] = &[
     ("sqlglot-rust", "sqlglot-rust"),
     ("sqlite3-parser", "sqlite3-parser"),
     ("turso_parser", "turso_parser"),
-    ("orql", "orql"),
 ];
 
 fn main() {

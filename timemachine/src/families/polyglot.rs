@@ -6,6 +6,7 @@ use sql_ast_benchmark::{Parser, ParserId};
 
 macro_rules! polyglot_version {
     ($name:ident, $cr:ident, $ver:literal, $released:literal) => {
+        #[doc = concat!("polyglot-sql ", $ver, " release, benchmarked in the time machine.")]
         pub struct $name;
 
         impl $name {
@@ -118,3 +119,9 @@ polyglot_version!(PolyglotV0_2, polyglot_v0_2, "0.2.3", "2026-04-05");
 polyglot_version!(PolyglotV0_3, polyglot_v0_3, "0.3.11", "2026-05-15");
 polyglot_version!(PolyglotV0_4, polyglot_v0_4, "0.4.4", "2026-06-03");
 polyglot_version!(PolyglotV0_5, polyglot_v0_5, "0.5.1", "2026-06-09");
+polyglot_version!(PolyglotV0_6, polyglot_v0_6, "0.6.3", "2026-07-17");
+polyglot_version!(PolyglotV0_7, polyglot_v0_7, "0.7.0", "2026-08-03");
+polyglot_version!(PolyglotV0_8, polyglot_v0_8, "0.8.1", "2026-08-06");
+polyglot_version!(PolyglotV0_9, polyglot_v0_9, "0.9.2", "2026-08-18");
+polyglot_version!(PolyglotV0_10, polyglot_v0_10, "0.10.0", "2026-09-14");
+polyglot_version!(PolyglotV0_11, polyglot_v0_11, "0.11.0", "2026-09-16");

@@ -6,6 +6,7 @@ use sql_ast_benchmark::{Parser, ParserId};
 
 macro_rules! sqlglot_version {
     ($name:ident, $cr:ident, $ver:literal, $released:literal) => {
+        #[doc = concat!("sqlglot-rust ", $ver, " release, benchmarked in the time machine.")]
         pub struct $name;
 
         impl $name {
@@ -124,4 +125,4 @@ macro_rules! sqlglot_version {
 }
 
 sqlglot_version!(SqlglotV0_9, sqlglot_v0_9, "0.9.37", "2026-05-28");
-sqlglot_version!(SqlglotV0_10, sqlglot_v0_10, "0.10.1", "2026-06-05");
+sqlglot_version!(SqlglotV0_10, sqlglot_v0_10, "0.10.29", "2026-08-08");

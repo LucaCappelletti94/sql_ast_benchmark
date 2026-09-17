@@ -5,9 +5,31 @@ use fallible_iterator::FallibleIterator as _;
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::{Parser, ParserId};
 
+// 0.17 moved the AST into a `bumpalo` arena owned by the caller, so the constructor
+// shape varies by release: `plain` takes the input, `bump` the arena and input.
+macro_rules! sqlite3_mk {
+    ($cr:ident, plain, $arena:ident, $input:ident) => {{
+        let _ = $arena;
+        $cr::lexer::sql::Parser::new($input)
+    }};
+    ($cr:ident, bump, $arena:ident, $input:ident) => {{
+        $cr::lexer::sql::Parser::new($arena, $input)
+    }};
+}
+
 macro_rules! sqlite3_version {
     ($name:ident, $cr:ident, $ver:literal, $released:literal) => {
+        sqlite3_version!($name, $cr, $ver, $released, (), plain);
+    };
+    ($name:ident, $cr:ident, $ver:literal, $released:literal, $arena:ty, $ctor:ident) => {
+        #[doc = concat!("sqlite3-parser ", $ver, " release, benchmarked in the time machine.")]
         pub struct $name;
+
+        impl $name {
+            fn parser<'i>(arena: &'i $arena, input: &'i [u8]) -> $cr::lexer::sql::Parser<'i> {
+                sqlite3_mk!($cr, $ctor, arena, input)
+            }
+        }
 
         impl Parser for $name {
             // Surface a caught panic (the adapters fold one into `Err("panicked")`)
@@ -44,7 +66,8 @@ macro_rules! sqlite3_version {
                 }
                 Some(
                     std::panic::catch_unwind(|| {
-                        let mut parser = $cr::lexer::sql::Parser::new(sql.as_bytes());
+                        let arena = <$arena>::default();
+                        let mut parser = Self::parser(&arena, sql.as_bytes());
                         loop {
                             match parser.next() {
                                 Ok(Some(_)) => {}
@@ -61,7 +84,8 @@ macro_rules! sqlite3_version {
                 if dialect != Dialect::Sqlite {
                     return false;
                 }
-                let mut parser = $cr::lexer::sql::Parser::new(sql.as_bytes());
+                let arena = <$arena>::default();
+                let mut parser = Self::parser(&arena, sql.as_bytes());
                 loop {
                     match parser.next() {
                         Ok(Some(_)) => {}
@@ -75,7 +99,8 @@ macro_rules! sqlite3_version {
                 if dialect != Dialect::Sqlite {
                     return None;
                 }
-                let mut parser = $cr::lexer::sql::Parser::new(sql.as_bytes());
+                let arena = <$arena>::default();
+                let mut parser = Self::parser(&arena, sql.as_bytes());
                 let mut n = 0;
                 loop {
                     match parser.next() {
@@ -97,7 +122,8 @@ macro_rules! sqlite3_version {
                 }
                 let before = mem::live();
                 mem::reset_peak();
-                let mut parser = $cr::lexer::sql::Parser::new(sql.as_bytes());
+                let arena = <$arena>::default();
+                let mut parser = Self::parser(&arena, sql.as_bytes());
                 let mut out = Vec::new();
                 while let Ok(Some(cmd)) = parser.next() {
                     out.push(cmd);
@@ -117,7 +143,8 @@ macro_rules! sqlite3_version {
                     return None;
                 }
                 std::panic::catch_unwind(|| {
-                    let mut parser = $cr::lexer::sql::Parser::new(sql.as_bytes());
+                    let arena = <$arena>::default();
+                    let mut parser = Self::parser(&arena, sql.as_bytes());
                     let mut out: Vec<String> = Vec::new();
                     loop {
                         match parser.next() {
@@ -150,3 +177,11 @@ sqlite3_version!(Sqlite3V0_13, sqlite3_v0_13, "0.13.0", "2024-07-20");
 sqlite3_version!(Sqlite3V0_14, sqlite3_v0_14, "0.14.0", "2025-01-19");
 sqlite3_version!(Sqlite3V0_15, sqlite3_v0_15, "0.15.0", "2025-05-26");
 sqlite3_version!(Sqlite3V0_16, sqlite3_v0_16, "0.16.0", "2026-04-14");
+sqlite3_version!(
+    Sqlite3V0_17,
+    sqlite3_v0_17,
+    "0.17.0",
+    "2026-06-30",
+    sqlite3_v0_17::Bump,
+    bump
+);

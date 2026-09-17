@@ -5,6 +5,7 @@ edition = "2021"
 description = "Interactive viewer for the sql_ast_benchmark results"
 license = "MIT"
 publish = false
+rust-version.workspace = true
 
 # rsx! triggers some pedantic/nursery lints; keep the web crate on the default set.
 [lints.clippy]

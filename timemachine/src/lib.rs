@@ -9,7 +9,6 @@
 
 pub mod families {
     pub mod databend;
-    pub mod orql;
     pub mod polyglot;
     pub mod qusql;
     pub mod sqlglot;

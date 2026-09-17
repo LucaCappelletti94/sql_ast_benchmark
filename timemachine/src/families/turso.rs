@@ -1,12 +1,13 @@
 //! turso_parser (the SQLite parser from Turso). SQLite only, a streaming
-//! `next_cmd` loop. Reprints via each command's `Display`. Only one stable
-//! release is published, so the history is a single point.
+//! `next_cmd` loop. Reprints via each command's `Display`. One point per stable
+//! minor.
 
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::{Parser, ParserId};
 
 macro_rules! turso_version {
     ($name:ident, $cr:ident, $ver:literal, $released:literal) => {
+        #[doc = concat!("turso_parser ", $ver, " release, benchmarked in the time machine.")]
         pub struct $name;
 
         impl Parser for $name {
@@ -143,3 +144,4 @@ macro_rules! turso_version {
 }
 
 turso_version!(TursoV0_6, turso_v0_6, "0.6.1", "2026-05-22");
+turso_version!(TursoV0_7, turso_v0_7, "0.7.2", "2026-07-30");

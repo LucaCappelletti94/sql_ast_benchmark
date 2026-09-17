@@ -5,6 +5,7 @@ edition = "2021"
 description = "Writes the static per-parser README badges into web/static/badges"
 license = "MIT"
 publish = false
+rust-version.workspace = true
 
 [lints.clippy]
 all = "warn"

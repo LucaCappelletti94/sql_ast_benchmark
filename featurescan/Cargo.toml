@@ -5,6 +5,7 @@ edition = "2021"
 description = "Static source-feature scan of the benchmarked SQL parsers (panic discipline, unsafe, lint policy)"
 license = "MIT"
 publish = false
+rust-version.workspace = true
 default-run = "featurescan"
 
 # Offline analysis crate. It locates each benchmarked parser's source on disk via

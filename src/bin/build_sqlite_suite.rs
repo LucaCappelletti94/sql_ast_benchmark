@@ -589,7 +589,10 @@ mod tests {
     #[test]
     fn skips_quoted_script_forms() {
         // `execsql "..."` (double-quoted, TCL-substituted) is not a `{...}` body.
-        assert_eq!(extract_sql_bodies("execsql \"SELECT $x\"\n"), [] as [std::string::String; 0]);
+        assert_eq!(
+            extract_sql_bodies("execsql \"SELECT $x\"\n"),
+            [] as [std::string::String; 0]
+        );
     }
 
     #[test]
