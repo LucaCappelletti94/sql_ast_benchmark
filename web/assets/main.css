@@ -77,8 +77,10 @@ header.site {
   font-size: 1.05rem;
 }
 .brand-logo { display: block; width: 26px; height: 26px; border-radius: 6px; }
+.head-actions { display: inline-flex; align-items: center; gap: 0.85rem; }
 .ghlink { color: var(--muted); display: inline-flex; }
 .ghlink:hover { color: var(--fg); }
+.sponsor:hover { color: #ea4aaa; }
 
 main { display: block; }
 

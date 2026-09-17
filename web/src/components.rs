@@ -8,7 +8,7 @@ use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaArrowLeftLong, FaArrowsRotate, FaBan, FaBomb, FaBox, FaBug, FaBuilding, FaBullseye,
     FaCalendarDays, FaChartColumn, FaChartLine, FaCircleXmark, FaCode, FaCodeCommit, FaCodeFork,
-    FaCopy, FaCube, FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaGaugeHigh,
+    FaCopy, FaCube, FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaGaugeHigh, FaHeart,
     FaHeartPulse, FaLayerGroup, FaMicrochip, FaMobileScreen, FaRankingStar, FaScaleBalanced,
     FaServer, FaShieldHalved, FaSitemap, FaStar, FaStopwatch, FaTableCells, FaTag,
     FaTriangleExclamation, FaUsers, FaVial,
@@ -18,6 +18,7 @@ use std::cmp::Ordering;
 use viz::{parser_hex, parser_rgb, DialectData, ParserMetrics, ParserPerf};
 
 const REPO: &str = "https://github.com/LucaCappelletti94/sql_ast_benchmark";
+const SPONSORS: &str = "https://github.com/sponsors/LucaCappelletti94";
 
 /// The chart currently shown enlarged in the lightbox, if any: `(filename, svg)`
 /// where `filename` is the download base name and `svg` is the chart markup. A
@@ -153,11 +154,19 @@ pub fn Shell() -> Element {
                 img { class: "brand-logo", src: crate::FAVICON, alt: "", width: "26", height: "26" }
                 span { "Rust SQL Parser Benchmark" }
             }
-            a {
-                class: "ghlink",
-                href: REPO,
-                "aria-label": "Source on GitHub",
-                Icon { width: 22, height: 22, fill: "currentColor".to_string(), title: "GitHub".to_string(), icon: FaGithub }
+            div { class: "head-actions",
+                a {
+                    class: "ghlink",
+                    href: REPO,
+                    "aria-label": "Source on GitHub",
+                    Icon { width: 22, height: 22, fill: "currentColor".to_string(), title: "GitHub".to_string(), icon: FaGithub }
+                }
+                a {
+                    class: "ghlink sponsor",
+                    href: SPONSORS,
+                    "aria-label": "Sponsor this project",
+                    Icon { width: 22, height: 22, fill: "currentColor".to_string(), title: "Sponsor".to_string(), icon: FaHeart }
+                }
             }
         }
         main { id: "content", Outlet::<Route> {} }
