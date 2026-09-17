@@ -143,7 +143,7 @@ mod tests {
     use sql_ast_benchmark::datasets::Dialect;
     use sql_ast_benchmark::ParseOutcome;
 
-    // Old releases differ on bare-statement terminators (qusql 0.2.1 demands
+    // Old releases differ on terminators for plain statements (qusql 0.2.1 demands
     // `;`) and Oracle needs FROM DUAL, so one accepted form must exist.
     #[test]
     fn every_version_accepts_a_basic_select() {

@@ -297,6 +297,15 @@ fn read_batch_mem() -> Vec<BatchMemRow> {
     std::fs::read_to_string(path).map_or_else(|_| Vec::new(), |c| parse_batch_mem(&c))
 }
 
+/// Keeps only rows whose parser name is listed in `known`. Rows for parsers no
+/// longer compiled in (a removed parser, or a summary left by an older run)
+/// must not leak into the exported snapshot.
+fn retain_known<T>(rows: Vec<T>, known: &[&str], parser: fn(&T) -> &str) -> Vec<T> {
+    rows.into_iter()
+        .filter(|r| known.contains(&parser(r)))
+        .collect()
+}
+
 /// Merge batch time and batch memory rows for one dialect into per-parser
 /// `ParserBatch`. Every batch-capable parser has a time row carrying its accuracy
 /// (the time bench runs them all), so it appears here. Memory is added where the
@@ -580,18 +589,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Rows for parsers no longer compiled in (a removed parser) are dropped,
     // so a stale summary.csv from an older run cannot leak into the snapshot.
     let known: Vec<&str> = parsers.iter().map(|p| p.name()).collect();
-    let summary: Vec<PerfRow> = read_summary()
-        .into_iter()
-        .filter(|r| known.contains(&r.parser.as_str()))
-        .collect();
+    let summary = retain_known(read_summary(), &known, |r| r.parser.as_str());
     if summary.is_empty() {
         eprintln!(
             "warning: no {}/summary.csv; perf charts will be empty. Run `cargo bench` first.",
             bench_dist::DIST_DIR
         );
     }
-    let batch_perf = read_batch_perf();
-    let batch_mem = read_batch_mem();
+    let batch_perf = retain_known(read_batch_perf(), &known, |r| r.parser.as_str());
+    let batch_mem = retain_known(read_batch_mem(), &known, |r| r.parser.as_str());
     if batch_perf.is_empty() && batch_mem.is_empty() {
         eprintln!(
             "note: no batch summaries in {} / {}; batch columns will be empty. Run `cargo bench --bench batch_parsing` and `cargo run --release -p membench -- batch`.",
@@ -662,7 +668,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::{
         batch_for, build_coverage_matrix, format_failure_tsv, git_short, metrics, now_utc,
-        parse_batch_mem, parse_batch_perf, parse_summary, pct, perf_row_to_perf, PerfRow,
+        parse_batch_mem, parse_batch_perf, parse_summary, pct, perf_row_to_perf, retain_known,
+        PerfRow,
     };
     use crate::datasets::Dialect;
     use crate::report::{DialectReport, FileCoverage};
@@ -680,12 +687,21 @@ mod tests {
     }
 
     #[test]
+    fn retain_known_drops_stale_parsers() {
+        let rows = vec![perf_row("sqlparser-rs"), perf_row("orql")];
+        let kept = retain_known(rows, &["sqlparser-rs"], |r| r.parser.as_str());
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].parser, "sqlparser-rs");
+    }
+
+    #[test]
     fn metrics_reference_dialect_sets_recall_and_fp() {
         let sp = BenchParser::Sqlparser;
         let parsers: [&dyn Parser; 1] = [&sp];
         let mut report = DialectReport::empty(Dialect::Postgresql, &parsers);
         report.has_reference = true; // exercise the reference metrics path directly
         report.valid_total = 10;
+
         report.invalid_total = 4;
         report.stats[0].accepted_valid = 8;
         report.stats[0].accepted_invalid = 1;

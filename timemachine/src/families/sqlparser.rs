@@ -31,6 +31,7 @@ macro_rules! sqlparser_version {
     // dialect not listed falls back to the generic dialect, the same approach the
     // newest versions use for dialects they do not model.
     ($name:ident, $cr:ident, $ver:literal, $released:literal, [$($variant:ident => $dia:ident),* $(,)?]) => {
+        #[doc = concat!("sqlparser-rs ", $ver, " release, benchmarked in the time machine.")]
         pub struct $name;
 
         impl $name {

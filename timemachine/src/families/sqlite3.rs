@@ -5,7 +5,7 @@ use fallible_iterator::FallibleIterator as _;
 use sql_ast_benchmark::datasets::Dialect;
 use sql_ast_benchmark::{Parser, ParserId};
 
-// 0.17 moved the AST into a caller-owned `bumpalo` arena, so the constructor
+// 0.17 moved the AST into a `bumpalo` arena owned by the caller, so the constructor
 // shape varies by release: `plain` takes the input, `bump` the arena and input.
 macro_rules! sqlite3_mk {
     ($cr:ident, plain, $arena:ident, $input:ident) => {{
@@ -22,6 +22,7 @@ macro_rules! sqlite3_version {
         sqlite3_version!($name, $cr, $ver, $released, (), plain);
     };
     ($name:ident, $cr:ident, $ver:literal, $released:literal, $arena:ty, $ctor:ident) => {
+        #[doc = concat!("sqlite3-parser ", $ver, " release, benchmarked in the time machine.")]
         pub struct $name;
 
         impl $name {
