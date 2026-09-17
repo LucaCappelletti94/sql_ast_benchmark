@@ -739,7 +739,7 @@ mod tests {
     #[test]
     fn now_utc_is_nonempty_iso_or_unix() {
         let s = now_utc();
-        assert!(!s.is_empty());
+        assert_ne!(s, "");
         // Either an ISO Z timestamp or the unix: fallback.
         assert!(s.ends_with('Z') || s.starts_with("unix:"));
     }
@@ -749,7 +749,7 @@ mod tests {
         // In the repo it returns Some(hash). The point is it does not panic and
         // yields a non-empty string when present.
         if let Some(h) = git_short() {
-            assert!(!h.is_empty());
+            assert_ne!(h, "");
         }
     }
 

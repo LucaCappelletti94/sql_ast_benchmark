@@ -532,7 +532,7 @@ mod tests {
                 "INSERT INTO t VALUES (1)".to_string(),
             ]
         );
-        assert!(special.is_empty());
+        assert_eq!(special, [] as [std::string::String; 0]);
     }
 
     #[test]
@@ -544,6 +544,6 @@ mod tests {
             normal,
             vec!["CREATE PROCEDURE p IS BEGIN INSERT INTO t VALUES (1); END;".to_string()]
         );
-        assert!(special.is_empty());
+        assert_eq!(special, [] as [std::string::String; 0]);
     }
 }

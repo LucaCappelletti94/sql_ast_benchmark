@@ -136,3 +136,6 @@ qusql_version!(QusqlV0_5, qusql_v0_5, "0.5.0", "2026-04-19");
 qusql_version!(QusqlV0_6, qusql_v0_6, "0.6.0", "2026-04-22");
 qusql_version!(QusqlV0_7, qusql_v0_7, "0.7.0", "2026-04-28");
 qusql_version!(QusqlV0_8, qusql_v0_8, "0.8.0", "2026-05-03");
+qusql_version!(QusqlV0_9, qusql_v0_9, "0.9.0", "2026-07-06");
+qusql_version!(QusqlV0_10, qusql_v0_10, "0.10.0", "2026-07-07");
+qusql_version!(QusqlV0_11, qusql_v0_11, "0.11.0", "2026-07-19");

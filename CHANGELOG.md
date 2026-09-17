@@ -1,5 +1,11 @@
 # Changelog
 
+## September 2026: parser refresh
+
+- Updated the benchmarked parsers to their latest versions: sqlparser-rs 0.62 to 0.63 (git 9296011a), polyglot-sql 0.5.1 to 0.11.0 (git 47342ba6), pg_query.rs 6.1.1 to 6.2.0 (git 0e382742), qusql-parse 0.8 to 0.11, sqlglot-rust 0.10.1 to 0.10.29, sqlite3-parser 0.16 to 0.17, turso_parser 0.6.1 to 0.7.2. databend-common-ast and orql were already at their newest releases.
+- The time machine gains twelve new release points (sqlparser-rs 0.63, polyglot-sql 0.6.3 through 0.11.0, qusql-parse 0.9 through 0.11, sqlite3-parser 0.17, turso_parser 0.7.2) and the sqlglot-rust 0.10 milestone moves to 0.10.29, so the trends end at the current code.
+- sqlite3-parser 0.17 parses into a caller-owned bumpalo arena, so the benchmark and the time-machine adapter now pass a fresh arena per parse.
+
 ## June 2026: parser refresh and a failed-to-parse badge
 
 - Updated the benchmarked parsers to their latest versions: polyglot-sql 0.4.4 to 0.5.1, sqlglot-rust 0.10.0 to 0.10.1, and the git-tracked sqlparser-rs and pg_query.rs to their current commits (sqlparser-rs now at b3760221). turso_parser stays on 0.6.1 since the only newer version is a prerelease.

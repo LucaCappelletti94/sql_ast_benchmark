@@ -64,11 +64,11 @@ mod tests {
 
     #[test]
     fn parse_times_empty_input() {
-        assert!(parse_times("").is_empty());
+        assert_eq!(parse_times(""), [] as [f64; 0]);
     }
 
     #[test]
     fn load_times_missing_file_is_empty() {
-        assert!(load_times("nope_dialect", "nope_parser").is_empty());
+        assert_eq!(load_times("nope_dialect", "nope_parser"), [] as [f64; 0]);
     }
 }

@@ -193,6 +193,7 @@ sqlparser_version!(SqlparserV0_59, sqlparser_v0_59, "0.59.0", "2025-09-24");
 sqlparser_version!(SqlparserV0_60, sqlparser_v0_60, "0.60.0", "2025-12-07");
 sqlparser_version!(SqlparserV0_61, sqlparser_v0_61, "0.61.0", "2026-02-10");
 sqlparser_version!(SqlparserV0_62, sqlparser_v0_62, "0.62.0", "2026-05-07");
+sqlparser_version!(SqlparserV0_63, sqlparser_v0_63, "0.63.0", "2026-09-13");
 
 #[cfg(test)]
 mod tests {

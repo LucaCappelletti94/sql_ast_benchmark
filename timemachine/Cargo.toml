@@ -5,6 +5,7 @@ edition = "2021"
 description = "Per-version (time-machine) benchmark runners for sql_ast_benchmark"
 license = "MIT"
 publish = false
+rust-version.workspace = true
 
 # Hosts several semver-incompatible versions of each pure-Rust parser at once via
 # `package`-rename aliases, so one binary can benchmark a library across releases.
@@ -79,10 +80,11 @@ sqlparser_v0_59 = { package = "sqlparser", version = "=0.59.0" }
 sqlparser_v0_60 = { package = "sqlparser", version = "=0.60.0" }
 sqlparser_v0_61 = { package = "sqlparser", version = "=0.61.0" }
 sqlparser_v0_62 = { package = "sqlparser", version = "=0.62.0" }
+sqlparser_v0_63 = { package = "sqlparser", version = "=0.63.0" }
 
 # sqlglot-rust minors (0.9 and 0.10 are the two semver-incompatible groups).
 sqlglot_v0_9 = { package = "sqlglot-rust", version = "=0.9.37" }
-sqlglot_v0_10 = { package = "sqlglot-rust", version = "=0.10.1" }
+sqlglot_v0_10 = { package = "sqlglot-rust", version = "=0.10.29" }
 
 # polyglot-sql minors (latest patch of each).
 polyglot_v0_1 = { package = "polyglot-sql", version = "=0.1.15" }
@@ -90,6 +92,12 @@ polyglot_v0_2 = { package = "polyglot-sql", version = "=0.2.3" }
 polyglot_v0_3 = { package = "polyglot-sql", version = "=0.3.11" }
 polyglot_v0_4 = { package = "polyglot-sql", version = "=0.4.4" }
 polyglot_v0_5 = { package = "polyglot-sql", version = "=0.5.1" }
+polyglot_v0_6 = { package = "polyglot-sql", version = "=0.6.3" }
+polyglot_v0_7 = { package = "polyglot-sql", version = "=0.7.0" }
+polyglot_v0_8 = { package = "polyglot-sql", version = "=0.8.1" }
+polyglot_v0_9 = { package = "polyglot-sql", version = "=0.9.2" }
+polyglot_v0_10 = { package = "polyglot-sql", version = "=0.10.0" }
+polyglot_v0_11 = { package = "polyglot-sql", version = "=0.11.0" }
 
 # databend-common-ast minors (single-statement parser).
 databend_v0_0 = { package = "databend-common-ast", version = "=0.0.3" }
@@ -105,6 +113,7 @@ sqlite3_v0_13 = { package = "sqlite3-parser", version = "=0.13.0" }
 sqlite3_v0_14 = { package = "sqlite3-parser", version = "=0.14.0" }
 sqlite3_v0_15 = { package = "sqlite3-parser", version = "=0.15.0" }
 sqlite3_v0_16 = { package = "sqlite3-parser", version = "=0.16.0" }
+sqlite3_v0_17 = { package = "sqlite3-parser", version = "=0.17.0" }
 fallible-iterator = "0.3.0"
 
 # qusql-parse minors. 0.1.0 is excluded: its parser effectively hangs on parts
@@ -116,9 +125,13 @@ qusql_v0_5 = { package = "qusql-parse", version = "=0.5.0" }
 qusql_v0_6 = { package = "qusql-parse", version = "=0.6.0" }
 qusql_v0_7 = { package = "qusql-parse", version = "=0.7.0" }
 qusql_v0_8 = { package = "qusql-parse", version = "=0.8.0" }
+qusql_v0_9 = { package = "qusql-parse", version = "=0.9.0" }
+qusql_v0_10 = { package = "qusql-parse", version = "=0.10.0" }
+qusql_v0_11 = { package = "qusql-parse", version = "=0.11.0" }
 
-# turso_parser and orql each have a single published release (one trend point).
+# turso_parser has two stable releases (0.6, 0.7); orql only one.
 turso_v0_6 = { package = "turso_parser", version = "=0.6.1" }
+turso_v0_7 = { package = "turso_parser", version = "=0.7.2" }
 orql_v0_1 = { package = "orql", version = "=0.1.0" }
 
 [[bin]]

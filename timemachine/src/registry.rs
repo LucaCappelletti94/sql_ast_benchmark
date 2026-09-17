@@ -83,6 +83,7 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(sqlparser::SqlparserV0_60),
         Box::new(sqlparser::SqlparserV0_61),
         Box::new(sqlparser::SqlparserV0_62),
+        Box::new(sqlparser::SqlparserV0_63),
         Box::new(sqlglot::SqlglotV0_9),
         Box::new(sqlglot::SqlglotV0_10),
         Box::new(polyglot::PolyglotV0_1),
@@ -90,6 +91,12 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(polyglot::PolyglotV0_3),
         Box::new(polyglot::PolyglotV0_4),
         Box::new(polyglot::PolyglotV0_5),
+        Box::new(polyglot::PolyglotV0_6),
+        Box::new(polyglot::PolyglotV0_7),
+        Box::new(polyglot::PolyglotV0_8),
+        Box::new(polyglot::PolyglotV0_9),
+        Box::new(polyglot::PolyglotV0_10),
+        Box::new(polyglot::PolyglotV0_11),
         Box::new(databend::DatabendV0_0),
         Box::new(databend::DatabendV0_1),
         Box::new(databend::DatabendV0_2),
@@ -101,6 +108,7 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(sqlite3::Sqlite3V0_14),
         Box::new(sqlite3::Sqlite3V0_15),
         Box::new(sqlite3::Sqlite3V0_16),
+        Box::new(sqlite3::Sqlite3V0_17),
         Box::new(qusql::QusqlV0_2),
         Box::new(qusql::QusqlV0_3),
         Box::new(qusql::QusqlV0_4),
@@ -108,7 +116,11 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(qusql::QusqlV0_6),
         Box::new(qusql::QusqlV0_7),
         Box::new(qusql::QusqlV0_8),
+        Box::new(qusql::QusqlV0_9),
+        Box::new(qusql::QusqlV0_10),
+        Box::new(qusql::QusqlV0_11),
         Box::new(turso::TursoV0_6),
+        Box::new(turso::TursoV0_7),
         Box::new(orql::OrqlV0_1),
     ]
 }
@@ -124,4 +136,35 @@ pub fn families() -> Vec<&'static str> {
         }
     }
     seen
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sql_ast_benchmark::datasets::Dialect;
+    use sql_ast_benchmark::ParseOutcome;
+
+    // Old releases differ on bare-statement terminators (qusql 0.2.1 demands
+    // `;`) and Oracle needs FROM DUAL, so one accepted form must exist.
+    #[test]
+    fn every_version_accepts_a_basic_select() {
+        const CANDIDATES: [&str; 3] = ["SELECT 1", "SELECT 1;", "SELECT 1 FROM DUAL"];
+        for p in all() {
+            let id = p.id();
+            for d in Dialect::ALL {
+                let outs: Vec<ParseOutcome> =
+                    CANDIDATES.iter().map(|s| p.parse_outcome(s, d)).collect();
+                if outs.iter().all(|o| matches!(o, ParseOutcome::Unsupported))
+                    || outs.iter().any(|o| matches!(o, ParseOutcome::Accepted))
+                {
+                    continue;
+                }
+                panic!(
+                    "{family} {version} on {d:?}: {outs:?}",
+                    family = id.family,
+                    version = id.version
+                );
+            }
+        }
+    }
 }

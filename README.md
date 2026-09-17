@@ -22,14 +22,14 @@ On their home dialect the reference bindings are exact by construction, so the m
 
 | Parser | Version | Source | Implementation | Dialects |
 | --- | --- | --- | --- | --- |
-| **[sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)** | 0.62.0 | git [`b376022`](https://github.com/sqlparser-rs/sqlparser-rs/commit/b3760221) | Pure Rust, handwritten recursive descent | 14 dedicated dialects |
-| **[sqlglot-rust](https://crates.io/crates/sqlglot-rust)** | 0.10.1 | crates.io | Pure Rust, standalone port of Python sqlglot | 30 (parser currently dialect-agnostic) |
-| **[polyglot-sql](https://github.com/tobilg/polyglot)** | 0.5.1 | git [`e3a8913`](https://github.com/tobilg/polyglot/commit/e3a8913a) | Pure Rust, transpiler | 32 |
-| **[pg_query.rs](https://github.com/pganalyze/pg_query.rs)** | 6.1.1 | git [`7e189a9`](https://github.com/pganalyze/pg_query.rs/commit/7e189a9dd1d4e441a2d44e6655c793f101bba3fa) | Rust FFI to C (libpg_query) | PostgreSQL |
-| **[qusql-parse](https://crates.io/crates/qusql-parse)** | 0.8.0 | crates.io | Pure Rust, zero-copy | PostgreSQL, MariaDB/MySQL, SQLite |
+| **[sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs)** | 0.63.0 | git [`9296011a`](https://github.com/sqlparser-rs/sqlparser-rs/commit/9296011a) | Pure Rust, handwritten recursive descent | 14 dedicated dialects |
+| **[sqlglot-rust](https://crates.io/crates/sqlglot-rust)** | 0.10.29 | crates.io | Pure Rust, standalone port of Python sqlglot | 30 (parser currently dialect-agnostic) |
+| **[polyglot-sql](https://github.com/tobilg/polyglot)** | 0.11.0 | git [`47342ba6`](https://github.com/tobilg/polyglot/commit/47342ba6) | Pure Rust, transpiler | 32 |
+| **[pg_query.rs](https://github.com/pganalyze/pg_query.rs)** | 6.2.0 | git [`0e382742`](https://github.com/pganalyze/pg_query.rs/commit/0e382742b36ee9592438c6791b91ce14f32f6233) | Rust FFI to C (libpg_query) | PostgreSQL |
+| **[qusql-parse](https://crates.io/crates/qusql-parse)** | 0.11.0 | crates.io | Pure Rust, zero-copy | PostgreSQL, MariaDB/MySQL, SQLite |
 | **[databend-common-ast](https://github.com/datafuselabs/databend)** | 0.2.5 | crates.io | Pure Rust, zero-copy, Pratt | PostgreSQL, MySQL, Hive |
-| **[sqlite3-parser](https://crates.io/crates/sqlite3-parser)** (lemon-rs) | 0.16.0 | crates.io | Generated from SQLite's Lemon grammar | SQLite |
-| **[turso_parser](https://crates.io/crates/turso_parser)** | 0.6.1 | crates.io | Pure Rust, handwritten recursive descent over a Lemon token table | SQLite |
+| **[sqlite3-parser](https://crates.io/crates/sqlite3-parser)** (lemon-rs) | 0.17.0 | crates.io | Generated from SQLite's Lemon grammar | SQLite |
+| **[turso_parser](https://crates.io/crates/turso_parser)** | 0.7.2 | crates.io | Pure Rust, handwritten recursive descent over a Lemon token table | SQLite |
 | **[orql](https://codeberg.org/xitep/orql)** | 0.1.0 | git [`6a5391b`](https://codeberg.org/xitep/orql/commit/6a5391b1b11f5771ab15e4ba519bdf00fdacc021) | Pure Rust, early-stage | Oracle (SELECT only) |
 
 Per-parser repository metadata (stars, contributors, fuzzing, test and benchmark suites, license) is shown on each parser page in the [explorer](https://sql-ast-benchmark.luca.phd).
@@ -63,7 +63,7 @@ cargo run --release --bin sqlbench export                       # regenerate web
 
 `cargo bench` runs both the per-statement (`parsing`) and whole-script (`batch_parsing`) timing benches. Add `--bench batch_parsing` to run only the batch one. `export` reads whatever the benches left under `target/`, warning rather than failing for any missing source, so the memory and batch columns stay empty until their producers have run.
 
-The `timemachine` crate benchmarks several historical versions of each pure-Rust parser at once (via `package`-rename aliases in `timemachine/Cargo.toml`) and writes a compressed `web/assets/history.json.zst` that the explorer embeds and decompresses in the browser. Each parser page then shows how that library's time, memory, and correctness changed across releases, with a version picker. Cargo can only host semver-incompatible versions side by side, so the milestones are the latest patch of every `0.x` minor the shared adapter compiles against: `sqlparser-rs` gets 33 points (every minor from 0.30, January 2023, through 0.62), `sqlite3-parser` eight, `qusql-parse` seven (its 0.1.0 release parses pathologically slowly on parts of the corpus and is excluded), `polyglot-sql` four, `databend-common-ast` three, `sqlglot-rust` two, while `turso_parser` and `orql` have a single published release and so show one point. The FFI parsers (`pg_query`) are excluded because two builds of libpg_query collide at link. Without `--full` the runners use a small per-dialect sample, which is a fast pipeline check rather than publishable numbers.
+The `timemachine` crate benchmarks several historical versions of each pure-Rust parser at once (via `package`-rename aliases in `timemachine/Cargo.toml`) and writes a compressed `web/assets/history.json.zst` that the explorer embeds and decompresses in the browser. Each parser page then shows how that library's time, memory, and correctness changed across releases, with a version picker. Cargo can only host semver-incompatible versions side by side, so the milestones are the latest patch of every `0.x` minor the shared adapter compiles against: `sqlparser-rs` gets 58 points (every minor from 0.6.1, July 2020, through 0.63), `sqlite3-parser` nine, `qusql-parse` ten (its 0.1.0 release parses pathologically slowly on parts of the corpus and is excluded), `polyglot-sql` eleven, `databend-common-ast` three, `sqlglot-rust` two, `turso_parser` two, and `orql` one (a single published release). The FFI parsers (`pg_query`) are excluded because two builds of libpg_query collide at link. Without `--full` the runners use a small per-dialect sample, which is a fast pipeline check rather than publishable numbers.
 
 Validity labels for the reference dialects are produced by the `oracle` crate (real engines in Docker via testcontainers) and committed under `oracle/labels`, so `correctness` and `export` need no Docker. Regenerate them with `cargo run --release -p oracle`.
 

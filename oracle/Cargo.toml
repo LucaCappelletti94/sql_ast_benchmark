@@ -5,6 +5,7 @@ edition = "2021"
 description = "Real database-engine reference oracle for sql_ast_benchmark (Docker via testcontainers)"
 license = "MIT"
 publish = false
+rust-version.workspace = true
 
 # Run locally with Docker to (re)generate the committed validity caches under
 # oracle/labels/. Not built by `cargo build` (not a default workspace member).

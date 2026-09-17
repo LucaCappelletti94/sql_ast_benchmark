@@ -167,7 +167,8 @@ fn databend_raw(sql: &str, d: DatabendDialect) -> Result<(), String> {
 }
 
 fn sqlite3_raw(sql: &str) -> Result<(), String> {
-    let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+    let bump = sqlite3_parser::Bump::new();
+    let mut parser = sqlite3_parser::lexer::sql::Parser::new(&bump, sql.as_bytes());
     loop {
         match parser.next() {
             Ok(Some(_)) => {}
@@ -179,7 +180,8 @@ fn sqlite3_raw(sql: &str) -> Result<(), String> {
 
 fn sqlite3_reprint(sql: &str) -> Option<String> {
     std::panic::catch_unwind(|| {
-        let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+        let bump = sqlite3_parser::Bump::new();
+        let mut parser = sqlite3_parser::lexer::sql::Parser::new(&bump, sql.as_bytes());
         let mut out: Vec<String> = Vec::new();
         loop {
             match parser.next() {
@@ -359,15 +361,14 @@ impl BenchParser {
     #[must_use]
     pub const fn current_version(self) -> &'static str {
         match self {
-            Self::Sqlparser => "0.62.0",
-            Self::PgQuery | Self::PgQuerySummary => "6.1.1",
-            Self::Qusql => "0.8.0",
-            Self::Polyglot => "0.5.1",
+            Self::Sqlparser => "0.63.0",
+            Self::PgQuery | Self::PgQuerySummary => "6.2.0",
+            Self::Qusql | Self::Polyglot => "0.11.0",
             Self::Databend => "0.2.5",
             Self::Orql => "0.1.0",
-            Self::Sqlglot => "0.10.1",
-            Self::Sqlite3 => "0.16.0",
-            Self::Turso => "0.6.1",
+            Self::Sqlglot => "0.10.29",
+            Self::Sqlite3 => "0.17.0",
+            Self::Turso => "0.7.2",
         }
     }
 
@@ -486,7 +487,8 @@ impl BenchParser {
                 sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect)).is_ok()
             }
             Self::Sqlite3 => {
-                let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+                let bump = sqlite3_parser::Bump::new();
+                let mut parser = sqlite3_parser::lexer::sql::Parser::new(&bump, sql.as_bytes());
                 loop {
                     match parser.next() {
                         Ok(Some(_)) => {}
@@ -564,7 +566,8 @@ impl BenchParser {
                     .map_or(0, |v| v.len()),
             ),
             Self::Sqlite3 => (dialect == Dialect::Sqlite).then(|| {
-                let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+                let bump = sqlite3_parser::Bump::new();
+                let mut parser = sqlite3_parser::lexer::sql::Parser::new(&bump, sql.as_bytes());
                 let mut n = 0;
                 loop {
                     match parser.next() {
@@ -676,7 +679,8 @@ impl BenchParser {
                 }
                 let before = mem::live();
                 mem::reset_peak();
-                let mut parser = sqlite3_parser::lexer::sql::Parser::new(sql.as_bytes());
+                let bump = sqlite3_parser::Bump::new();
+                let mut parser = sqlite3_parser::lexer::sql::Parser::new(&bump, sql.as_bytes());
                 let mut out = Vec::new();
                 while let Ok(Some(cmd)) = parser.next() {
                     out.push(cmd);

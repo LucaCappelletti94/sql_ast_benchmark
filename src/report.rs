@@ -616,7 +616,10 @@ mod tests {
     #[test]
     fn load_dialect_missing_dir_is_empty() {
         let root = temp_root("missing");
-        assert!(load_dialect_from(&root, Dialect::Mysql).is_empty());
+        assert_eq!(
+            load_dialect_from(&root, Dialect::Mysql),
+            [] as [std::string::String; 0]
+        );
         let _ = fs::remove_dir_all(&root);
     }
 }
