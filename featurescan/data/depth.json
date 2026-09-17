@@ -8,7 +8,7 @@
       "dialect": "postgresql",
       "guarded": true,
       "shape_rejected": false,
-      "limit_depth": 48,
+      "limit_depth": 47,
       "crash_depth": null,
       "ceil": 50000
     },
@@ -36,16 +36,16 @@
       "guarded": false,
       "shape_rejected": false,
       "limit_depth": null,
-      "crash_depth": 8578,
+      "crash_depth": 6976,
       "ceil": 50000
     },
     {
       "parser": "polyglot-sql",
       "dialect": "postgresql",
-      "guarded": false,
+      "guarded": true,
       "shape_rejected": false,
-      "limit_depth": null,
-      "crash_depth": 232,
+      "limit_depth": 512,
+      "crash_depth": null,
       "ceil": 50000
     },
     {
@@ -54,16 +54,7 @@
       "guarded": false,
       "shape_rejected": false,
       "limit_depth": null,
-      "crash_depth": 421,
-      "ceil": 50000
-    },
-    {
-      "parser": "orql",
-      "dialect": "oracle",
-      "guarded": false,
-      "shape_rejected": true,
-      "limit_depth": null,
-      "crash_depth": 5184,
+      "crash_depth": 354,
       "ceil": 50000
     },
     {
@@ -72,7 +63,7 @@
       "guarded": false,
       "shape_rejected": false,
       "limit_depth": null,
-      "crash_depth": 412,
+      "crash_depth": 403,
       "ceil": 50000
     },
     {
@@ -87,10 +78,10 @@
     {
       "parser": "turso_parser",
       "dialect": "sqlite",
-      "guarded": false,
+      "guarded": true,
       "shape_rejected": false,
-      "limit_depth": null,
-      "crash_depth": 2199,
+      "limit_depth": 100,
+      "crash_depth": null,
       "ceil": 50000
     }
   ]
