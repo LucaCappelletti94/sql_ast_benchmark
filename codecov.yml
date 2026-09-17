@@ -1,0 +1,5 @@
+# Refresh diffs are dominated by macro-generated release adapters and
+# regenerated data, which patch coverage cannot measure honestly.
+coverage:
+  status:
+    patch: off
