@@ -17,9 +17,9 @@
 //! - qusql-parse: back to 0.2.1. 0.1.0 is excluded because its parser
 //!   effectively hangs on parts of the MySQL corpus at full-corpus scale.
 //! - polyglot-sql (0.1), databend-common-ast (0.0), sqlglot-rust (0.9),
-//!   turso_parser (0.6), orql (0.1): already at their first published release.
+//!   turso_parser (0.6): already at their first published release.
 
-use crate::families::{databend, orql, polyglot, qusql, sqlglot, sqlite3, sqlparser, turso};
+use crate::families::{databend, polyglot, qusql, sqlglot, sqlite3, sqlparser, turso};
 use sql_ast_benchmark::Parser;
 
 /// Every benchmarked version, grouped by family in release order (oldest first).
@@ -121,7 +121,6 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(qusql::QusqlV0_11),
         Box::new(turso::TursoV0_6),
         Box::new(turso::TursoV0_7),
-        Box::new(orql::OrqlV0_1),
     ]
 }
 

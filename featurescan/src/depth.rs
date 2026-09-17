@@ -45,7 +45,6 @@ enum Trial {
 fn rep_dialect(p: BenchParser) -> Dialect {
     match p {
         BenchParser::Sqlite3 | BenchParser::Turso => Dialect::Sqlite,
-        BenchParser::Orql => Dialect::Oracle,
         _ => Dialect::Postgresql,
     }
 }

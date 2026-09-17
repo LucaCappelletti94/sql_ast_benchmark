@@ -57,7 +57,6 @@ pub fn marker_for(name: &str) -> Marker {
         "sqlglot-rust" => Marker::Pentagon,
         "sqlite3-parser" => Marker::Hexagon,
         "turso_parser" => Marker::Star,
-        "orql" => Marker::Cross,
 
         // Dialects (display names, as carried in the chart series label).
         "PostgreSQL" => Marker::Circle,
@@ -177,7 +176,6 @@ mod tests {
             "sqlglot-rust",
             "sqlite3-parser",
             "turso_parser",
-            "orql",
         ];
         let mut seen: Vec<Marker> = parsers.iter().map(|p| marker_for(p)).collect();
         let n = seen.len();

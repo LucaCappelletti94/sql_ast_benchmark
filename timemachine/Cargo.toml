@@ -129,10 +129,9 @@ qusql_v0_9 = { package = "qusql-parse", version = "=0.9.0" }
 qusql_v0_10 = { package = "qusql-parse", version = "=0.10.0" }
 qusql_v0_11 = { package = "qusql-parse", version = "=0.11.0" }
 
-# turso_parser has two stable releases (0.6, 0.7); orql only one.
+# turso_parser has two stable releases (0.6, 0.7).
 turso_v0_6 = { package = "turso_parser", version = "=0.6.1" }
 turso_v0_7 = { package = "turso_parser", version = "=0.7.2" }
-orql_v0_1 = { package = "orql", version = "=0.1.0" }
 
 [[bin]]
 name = "timemachine"

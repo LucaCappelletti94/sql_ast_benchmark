@@ -1,7 +1,6 @@
 use databend_common_ast::parser::{
     parse_sql as databend_parse, tokenize_sql as databend_tokenize, Dialect as DatabendDialect,
 };
-use orql::parser as orql_parser;
 use polyglot_sql::{parse as polyglot_parse, DialectType, Generator as PolyglotGenerator};
 use qusql_parse::{parse_statements, Issues, Level, ParseOptions, SQLDialect};
 use sqlparser::dialect::PostgreSqlDialect;
@@ -314,7 +313,6 @@ pub enum BenchParser {
     Qusql,
     Polyglot,
     Databend,
-    Orql,
     Sqlglot,
     Sqlite3,
     Turso,
@@ -331,7 +329,6 @@ impl BenchParser {
             Self::Qusql,
             Self::Polyglot,
             Self::Databend,
-            Self::Orql,
             Self::Sqlglot,
             Self::Sqlite3,
             Self::Turso,
@@ -348,7 +345,6 @@ impl BenchParser {
             Self::Qusql => "qusql-parse",
             Self::Polyglot => "polyglot-sql",
             Self::Databend => "databend-common-ast",
-            Self::Orql => "orql",
             Self::Sqlglot => "sqlglot-rust",
             Self::Sqlite3 => "sqlite3-parser",
             Self::Turso => "turso_parser",
@@ -365,7 +361,6 @@ impl BenchParser {
             Self::PgQuery | Self::PgQuerySummary => "6.2.0",
             Self::Qusql | Self::Polyglot => "0.11.0",
             Self::Databend => "0.2.5",
-            Self::Orql => "0.1.0",
             Self::Sqlglot => "0.10.29",
             Self::Sqlite3 => "0.17.0",
             Self::Turso => "0.7.2",
@@ -433,11 +428,6 @@ impl BenchParser {
             Self::Databend => databend_dialect_of(dialect).map_or(ParseOutcome::Unsupported, |d| {
                 catch_outcome(|| databend_raw(sql, d))
             }),
-            Self::Orql if dialect == Dialect::Oracle => catch_outcome(|| {
-                orql_parser::parse(sql)
-                    .map(|_| ())
-                    .map_err(|e| e.to_string())
-            }),
             Self::Sqlglot => catch_outcome(|| {
                 sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect))
                     .map(|_| ())
@@ -446,7 +436,7 @@ impl BenchParser {
             Self::Sqlite3 if dialect == Dialect::Sqlite => catch_outcome(|| sqlite3_raw(sql)),
             Self::Turso if dialect == Dialect::Sqlite => catch_outcome(|| turso_raw(sql)),
             // Single-dialect parsers asked about a dialect they do not model.
-            Self::PgQuery | Self::PgQuerySummary | Self::Orql | Self::Sqlite3 | Self::Turso => {
+            Self::PgQuery | Self::PgQuerySummary | Self::Sqlite3 | Self::Turso => {
                 ParseOutcome::Unsupported
             }
         }
@@ -482,7 +472,6 @@ impl BenchParser {
                     .and_then(|t| databend_parse(&t, d).ok())
                     .is_some()
             }
-            Self::Orql => orql_parser::parse(sql).is_ok(),
             Self::Sqlglot => {
                 sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect)).is_ok()
             }
@@ -558,9 +547,6 @@ impl BenchParser {
             }
             // Single-statement parser: no batch entry point.
             Self::Databend => None,
-            Self::Orql => {
-                (dialect == Dialect::Oracle).then(|| orql_parser::parse(sql).map_or(0, |v| v.len()))
-            }
             Self::Sqlglot => Some(
                 sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect))
                     .map_or(0, |v| v.len()),
@@ -653,15 +639,6 @@ impl BenchParser {
                 let r = snap(before);
                 drop(ast);
                 drop(toks);
-                Some(r)
-            }
-            Self::Orql => {
-                let before = mem::live();
-                mem::reset_peak();
-                let ast = orql_parser::parse(sql);
-                black_box(&ast);
-                let r = snap(before);
-                drop(ast);
                 Some(r)
             }
             Self::Sqlglot => {
@@ -1035,7 +1012,6 @@ mod tests {
         );
         assert_eq!(supported(BenchParser::Sqlite3), vec![Dialect::Sqlite]);
         assert_eq!(supported(BenchParser::Turso), vec![Dialect::Sqlite]);
-        assert_eq!(supported(BenchParser::Orql), vec![Dialect::Oracle]);
     }
 
     #[test]
@@ -1124,10 +1100,6 @@ mod tests {
     fn roundtrip_gating() {
         // No pretty-printer => round-trip is N/A.
         assert_eq!(
-            BenchParser::Orql.roundtrips("SELECT 1 FROM dual", Dialect::Oracle),
-            None
-        );
-        assert_eq!(
             BenchParser::Qusql.roundtrips("SELECT 1", Dialect::Postgresql),
             None
         );
@@ -1181,10 +1153,6 @@ mod tests {
         // Unsupported dialect for a dialect-specific parser.
         assert_eq!(
             BenchParser::Sqlite3.parse_batch("SELECT 1", Dialect::Postgresql),
-            None
-        );
-        assert_eq!(
-            BenchParser::Orql.parse_batch("SELECT 1", Dialect::Postgresql),
             None
         );
     }

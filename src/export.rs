@@ -577,7 +577,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let parsers = BenchParser::all();
     // The grading/coverage/failure functions are generic over `&dyn Parser`.
     let dyn_parsers: Vec<&dyn Parser> = parsers.iter().map(|p| p as &dyn Parser).collect();
-    let summary = read_summary();
+    // Rows for parsers no longer compiled in (a removed parser) are dropped,
+    // so a stale summary.csv from an older run cannot leak into the snapshot.
+    let known: Vec<&str> = parsers.iter().map(|p| p.name()).collect();
+    let summary: Vec<PerfRow> = read_summary()
+        .into_iter()
+        .filter(|r| known.contains(&r.parser.as_str()))
+        .collect();
     if summary.is_empty() {
         eprintln!(
             "warning: no {}/summary.csv; perf charts will be empty. Run `cargo bench` first.",
