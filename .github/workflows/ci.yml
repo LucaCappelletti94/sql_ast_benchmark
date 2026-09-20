@@ -104,7 +104,7 @@ jobs:
         with:
           key: coverage
       - name: Install cargo-tarpaulin
-        uses: taiki-e/install-action@fa23953489c080190314742a9b907f8e97c6767c # v2
+        uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2
         with:
           tool: cargo-tarpaulin
       - name: Extract corpus
@@ -116,7 +116,7 @@ jobs:
         # of its own, so excluding it loses no coverage.
         run: cargo tarpaulin --workspace --exclude timemachine --out Xml
       - name: Upload to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: LucaCappelletti94/sql_ast_benchmark
