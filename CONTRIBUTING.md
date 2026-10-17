@@ -86,8 +86,11 @@ Run the memory refresh first (it rewrites only those versions' entries in the me
 ## Coverage
 
 ```bash
-tar --zstd -xf datasets.tar.zst   # coverage runs the bench in smoke mode, which needs datasets/ present
-cargo tarpaulin                    # LLVM engine, includes the bench
+tar --zstd -xf datasets.tar.zst   # the bench smoke needs datasets/ present
+cargo llvm-cov test --workspace \
+  --exclude timemachine --exclude sql_ast_benchmark_web \
+  --lib --bins --tests --bench parsing --bench batch_parsing \
+  --cobertura --output-path cobertura.xml
 ```
 
-`tarpaulin.toml` runs the benchmark in verify-only mode (`--test`) under the LLVM engine, since the benchmark is the main exercise of the `BenchParser` layer. With the corpus present it covers `benches/parsing.rs` and `benches/batch_parsing.rs` (both in smoke mode) and the dialect-mapping / accept / reprint paths in `src/lib.rs`.
+Requires the `llvm-tools` Rust component. The `--bench` flags run the two custom-harness benches in smoke mode (verify-only, no timed measurement), the main exercise of the multi-dialect `BenchParser` layer, so with the corpus present they cover the dialect-mapping / accept / reprint paths in `src/lib.rs`. The `--exclude sql_ast_benchmark_web` flag also keeps the `web` sources out of the report. `badgegen` links the `web` crate, so its object files would otherwise carry them into the export.

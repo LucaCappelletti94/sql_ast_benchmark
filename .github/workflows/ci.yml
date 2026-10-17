@@ -100,21 +100,29 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           key: coverage
-      - name: Install cargo-tarpaulin
+      - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@fa23953489c080190314742a9b907f8e97c6767c # v2
         with:
-          tool: cargo-tarpaulin
+          tool: cargo-llvm-cov
       - name: Extract corpus
         run: tar --zstd -xf datasets.tar.zst
       - name: Run coverage
-        # Exclude timemachine: it links several sqlglot-rust versions side by side,
-        # each exporting the same unmangled extern "C" FFI symbols, which collide at
-        # link time once tarpaulin disables dead-code stripping. It has no unit tests
-        # of its own, so excluding it loses no coverage.
-        run: cargo tarpaulin --workspace --exclude timemachine --out Xml
+        # timemachine links several sqlglot-rust versions side by side, each
+        # exporting the same unmangled extern "C" FFI symbols, which collide at
+        # link time under coverage instrumentation. The rsx viewer has no
+        # native-testable logic. Both stay out of the build and of the report.
+        run: |
+          # --bench runs the two custom-harness benches in smoke mode, the
+          # main exercise of the multi-dialect BenchParser layer.
+          cargo llvm-cov test --workspace \
+            --exclude timemachine --exclude sql_ast_benchmark_web \
+            --lib --bins --tests --bench parsing --bench batch_parsing \
+            --cobertura --output-path cobertura.xml
       - name: Upload to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
