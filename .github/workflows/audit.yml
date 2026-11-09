@@ -3,11 +3,20 @@ name: Security audit
 on:
   push:
     branches: [main]
+    paths:
+      - Cargo.lock
+      - "**/Cargo.toml"
+      - deny.toml
+      - .cargo/audit.toml
+      - .github/workflows/audit.yml
   pull_request:
     branches: [main]
-  schedule:
-    # Weekly, so newly published advisories are caught without a code change.
-    - cron: "0 6 * * 1"
+    paths:
+      - Cargo.lock
+      - "**/Cargo.toml"
+      - deny.toml
+      - .cargo/audit.toml
+      - .github/workflows/audit.yml
 
 permissions:
   contents: read
