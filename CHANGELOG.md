@@ -1,5 +1,9 @@
 # Changelog
 
+## Dependency security
+
+- The viewer uses `ruzstd 0.9.1`, and the SQL Server oracle uses `tiberius 0.13` with the `rustls 0.23` certificate-validation stack.
+
 ## September 2026: parser refresh
 
 - Updated the benchmarked parsers to their latest versions: sqlparser-rs 0.62 to 0.63 (git 9296011a), polyglot-sql 0.5.1 to 0.11.0 (git 47342ba6), pg_query.rs 6.1.1 to 6.2.0 (git 0e382742), qusql-parse 0.8 to 0.11, sqlglot-rust 0.10.1 to 0.10.29, sqlite3-parser 0.16 to 0.17, turso_parser 0.6.1 to 0.7.2. databend-common-ast and orql were already at their newest releases.

@@ -409,11 +409,13 @@ impl BenchParser {
                     .map(|_| ())
                     .map_err(|e| e.to_string())
             }),
-            Self::PgQuery if dialect == Dialect::Postgresql => {
-                catch_outcome(|| pg_query::parse(sql).map(|_| ()).map_err(|e| e.to_string()))
-            }
+            Self::PgQuery if dialect == Dialect::Postgresql => catch_outcome(|| {
+                pg_query::parse(sql, pg_query::ParserOptions::DEFAULT)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }),
             Self::PgQuerySummary if dialect == Dialect::Postgresql => catch_outcome(|| {
-                pg_query::summary(sql, -1)
+                pg_query::summary(sql, pg_query::ParserOptions::DEFAULT, -1)
                     .map(|_| ())
                     .map_err(|e| e.to_string())
             }),
@@ -453,8 +455,10 @@ impl BenchParser {
             Self::Sqlparser => {
                 SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok()
             }
-            Self::PgQuery => pg_query::parse(sql).is_ok(),
-            Self::PgQuerySummary => pg_query::summary(sql, -1).is_ok(),
+            Self::PgQuery => pg_query::parse(sql, pg_query::ParserOptions::DEFAULT).is_ok(),
+            Self::PgQuerySummary => {
+                pg_query::summary(sql, pg_query::ParserOptions::DEFAULT, -1).is_ok()
+            }
             Self::Qusql => {
                 let d = qusql_dialect(dialect).unwrap_or(SQLDialect::PostgreSQL);
                 let opts = ParseOptions::new()
@@ -525,10 +529,14 @@ impl BenchParser {
                 SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql)
                     .map_or(0, |v| v.len()),
             ),
-            Self::PgQuery => (dialect == Dialect::Postgresql)
-                .then(|| pg_query::parse(sql).map_or(0, |r| r.protobuf.stmts.len())),
-            Self::PgQuerySummary => (dialect == Dialect::Postgresql)
-                .then(|| pg_query::summary(sql, -1).map_or(0, |r| r.statement_types.len())),
+            Self::PgQuery => (dialect == Dialect::Postgresql).then(|| {
+                pg_query::parse(sql, pg_query::ParserOptions::DEFAULT)
+                    .map_or(0, |r| r.protobuf.stmts.len())
+            }),
+            Self::PgQuerySummary => (dialect == Dialect::Postgresql).then(|| {
+                pg_query::summary(sql, pg_query::ParserOptions::DEFAULT, -1)
+                    .map_or(0, |r| r.statement_types.len())
+            }),
             Self::Qusql => qusql_dialect(dialect).map(|d| {
                 let opts = ParseOptions::new()
                     .dialect(d)
@@ -720,7 +728,11 @@ impl BenchParser {
                 .then(|| turso_reprint(sql))
                 .flatten(),
             Self::PgQuery => (dialect == Dialect::Postgresql)
-                .then(|| pg_query::parse(sql).ok().and_then(|p| p.deparse().ok()))
+                .then(|| {
+                    pg_query::parse(sql, pg_query::ParserOptions::DEFAULT)
+                        .ok()
+                        .and_then(|p| p.deparse(pg_query::DeparseOptions::default()).ok())
+                })
                 .flatten(),
             _ => None,
         }
