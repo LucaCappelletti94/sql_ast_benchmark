@@ -1,5 +1,14 @@
 # Changelog
 
+## November 2026: parser refresh, build cost, and allocation pressure
+
+- Benchmarked parser versions: sqlparser-rs 0.64 (git 8a176d98), pg_query.rs 18.1.0 on libpg_query 18 (git 20f3a182), polyglot-sql 0.14.1 (git 866e97bd), qusql-parse 0.12, sqlglot-rust 0.11.1, turso_parser 0.8.3, with databend-common-ast 0.2.5 and sqlite3-parser 0.17 already at their newest releases.
+- The time machine gains seven release points (sqlparser-rs 0.64, polyglot-sql 0.12.1, 0.13.5 and 0.14.1, sqlglot-rust 0.11.1, qusql-parse 0.12, turso_parser 0.8.3) for 102 versions in total, and the sqlglot-rust 0.10 milestone moves to 0.10.33.
+- pg_query 18 takes explicit parser and deparse options. The benchmark passes `ParserOptions::DEFAULT` and `DeparseOptions::default()`, the standard grammar and plain deparse.
+- Build cost: every benchmarked release, current and historical, is compiled as a minimal stdin-parse program from a clean target directory with the workspace lockfile. The site reports CPU seconds of the whole build, wall seconds at a fixed job count, the parser crate's own compile time, the number of crates compiled, and the stripped binary size the parser adds, on the overview, the parser pages, and the time-machine trends.
+- Allocation pressure: the counting allocator also records allocator calls and bytes requested per statement, freed or not, next to peak and retained memory, in the dialect and parser tables, the batch figures, and the time-machine trends.
+- The counting allocator lives once in `src/mem.rs`, shared by both memory benches, and the workspace no longer forbids `unsafe` code.
+
 ## September 2026: parser refresh
 
 - Updated the benchmarked parsers to their latest versions: sqlparser-rs 0.62 to 0.63 (git 9296011a), polyglot-sql 0.5.1 to 0.11.0 (git 47342ba6), pg_query.rs 6.1.1 to 6.2.0 (git 0e382742), qusql-parse 0.8 to 0.11, sqlglot-rust 0.10.1 to 0.10.29, sqlite3-parser 0.16 to 0.17, turso_parser 0.6.1 to 0.7.2. databend-common-ast and orql were already at their newest releases.

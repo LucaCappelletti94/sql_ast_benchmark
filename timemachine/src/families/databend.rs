@@ -81,22 +81,19 @@ macro_rules! databend_version {
                 false
             }
 
-            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+            fn measure_mem(
+                &self,
+                sql: &str,
+                dialect: Dialect,
+            ) -> Option<sql_ast_benchmark::mem::MemSample> {
                 use sql_ast_benchmark::mem;
                 use std::hint::black_box;
                 let d = Self::dialect(dialect)?;
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let toks = $cr::parser::tokenize_sql(sql);
                 let ast = toks.as_ref().ok().map(|t| $cr::parser::parse_sql(t, d));
                 black_box((&toks, &ast));
-                let r = (
-                    mem::peak().saturating_sub(before),
-                    mem::live().saturating_sub(before),
-                );
-                drop(ast);
-                drop(toks);
-                Some(r)
+                Some(w.finish())
             }
 
             fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {

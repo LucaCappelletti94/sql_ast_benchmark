@@ -84,8 +84,10 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(sqlparser::SqlparserV0_61),
         Box::new(sqlparser::SqlparserV0_62),
         Box::new(sqlparser::SqlparserV0_63),
+        Box::new(sqlparser::SqlparserV0_64),
         Box::new(sqlglot::SqlglotV0_9),
         Box::new(sqlglot::SqlglotV0_10),
+        Box::new(sqlglot::SqlglotV0_11),
         Box::new(polyglot::PolyglotV0_1),
         Box::new(polyglot::PolyglotV0_2),
         Box::new(polyglot::PolyglotV0_3),
@@ -97,6 +99,9 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(polyglot::PolyglotV0_9),
         Box::new(polyglot::PolyglotV0_10),
         Box::new(polyglot::PolyglotV0_11),
+        Box::new(polyglot::PolyglotV0_12),
+        Box::new(polyglot::PolyglotV0_13),
+        Box::new(polyglot::PolyglotV0_14),
         Box::new(databend::DatabendV0_0),
         Box::new(databend::DatabendV0_1),
         Box::new(databend::DatabendV0_2),
@@ -119,8 +124,10 @@ pub fn all() -> Vec<Box<dyn Parser>> {
         Box::new(qusql::QusqlV0_9),
         Box::new(qusql::QusqlV0_10),
         Box::new(qusql::QusqlV0_11),
+        Box::new(qusql::QusqlV0_12),
         Box::new(turso::TursoV0_6),
         Box::new(turso::TursoV0_7),
+        Box::new(turso::TursoV0_8),
     ]
 }
 

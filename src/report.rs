@@ -493,7 +493,7 @@ mod tests {
         fn can_batch(&self) -> bool {
             false
         }
-        fn measure_mem(&self, _sql: &str, _d: Dialect) -> Option<(usize, usize)> {
+        fn measure_mem(&self, _sql: &str, _d: Dialect) -> Option<crate::mem::MemSample> {
             None
         }
         fn reprint(&self, _sql: &str, _d: Dialect) -> Option<String> {

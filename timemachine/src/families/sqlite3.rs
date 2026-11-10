@@ -114,14 +114,17 @@ macro_rules! sqlite3_version {
                 true
             }
 
-            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+            fn measure_mem(
+                &self,
+                sql: &str,
+                dialect: Dialect,
+            ) -> Option<sql_ast_benchmark::mem::MemSample> {
                 use sql_ast_benchmark::mem;
                 use std::hint::black_box;
                 if dialect != Dialect::Sqlite {
                     return None;
                 }
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let arena = <$arena>::default();
                 let mut parser = Self::parser(&arena, sql.as_bytes());
                 let mut out = Vec::new();
@@ -129,13 +132,7 @@ macro_rules! sqlite3_version {
                     out.push(cmd);
                 }
                 black_box((&parser, &out));
-                let r = (
-                    mem::peak().saturating_sub(before),
-                    mem::live().saturating_sub(before),
-                );
-                drop(out);
-                drop(parser);
-                Some(r)
+                Some(w.finish())
             }
 
             fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {

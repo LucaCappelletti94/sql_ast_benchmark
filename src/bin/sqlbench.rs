@@ -200,7 +200,7 @@ fn run_regen() {
     // straight to web/assets/history.json.zst. The memory passes install a global
     // allocator, so they are separate processes. The time-machine memory pass
     // runs before its timing pass, which merges the memory sidecar.
-    let steps: [(&str, &[&str]); 7] = [
+    let steps: [(&str, &[&str]); 8] = [
         // Static source-feature scan and recursion-depth probe, writing the
         // committed featurescan/data/*.json the web bakes in. Independent of the
         // benches, so run first.
@@ -226,6 +226,19 @@ fn run_regen() {
                 "featurescan-depth",
             ],
         ), // featurescan/data/depth.json
+        // Build cost of every parser release: one clean release build at a
+        // time, before the benches so no measurement shares the machine with it.
+        (
+            "cargo",
+            &[
+                "run",
+                "--release",
+                "-p",
+                "featurescan",
+                "--bin",
+                "featurescan-build",
+            ],
+        ), // featurescan/data/build.json
         ("cargo", &["bench"]), // target/bench_dist/ + target/batch_dist/
         ("cargo", &["run", "--release", "-p", "membench"]), // target/mem_dist/
         (
@@ -300,7 +313,7 @@ fn usage() -> ! {
     eprintln!("usage: sqlbench <subcommand>");
     eprintln!("  correctness [--per-file]   grade parsers over datasets/");
     eprintln!("  export                     write web/assets/bench.json.zst for the site");
-    eprintln!("  regen                      run feature scan + depth probe + benches + time machine, then export");
+    eprintln!("  regen                      run feature scan + depth probe + build cost + benches + time machine, then export");
     std::process::exit(2);
 }
 

@@ -10,7 +10,7 @@ cargo fmt --all
 cargo clippy --all-targets
 ```
 
-No unsafe code is allowed (`unsafe_code = "forbid"`). Clippy runs with pedantic and nursery lints enabled. The workspace has three crates: the native benchmark (root), `viz` (wasm-clean shared schema + plotters chart renderers), and `web` (the Dioxus viewer). `default-members` keeps bare `cargo test`/`bench`/`clippy` on the native crate only.
+Clippy runs with pedantic and nursery lints enabled. The only `unsafe` is the counting global allocator in `src/mem.rs`, installed by the memory benches. The workspace has three crates: the native benchmark (root), `viz` (wasm-clean shared schema + plotters chart renderers), and `web` (the Dioxus viewer). `default-members` keeps bare `cargo test`/`bench`/`clippy` on the native crate only.
 
 ## Results website
 

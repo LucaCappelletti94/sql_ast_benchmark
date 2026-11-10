@@ -90,27 +90,24 @@ macro_rules! turso_version {
                 true
             }
 
-            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+            fn measure_mem(
+                &self,
+                sql: &str,
+                dialect: Dialect,
+            ) -> Option<sql_ast_benchmark::mem::MemSample> {
                 use sql_ast_benchmark::mem;
                 use std::hint::black_box;
                 if dialect != Dialect::Sqlite {
                     return None;
                 }
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let mut parser = $cr::parser::Parser::new(sql.as_bytes());
                 let mut out = Vec::new();
                 while let Ok(Some(cmd)) = parser.next_cmd() {
                     out.push(cmd);
                 }
                 black_box((&parser, &out));
-                let r = (
-                    mem::peak().saturating_sub(before),
-                    mem::live().saturating_sub(before),
-                );
-                drop(out);
-                drop(parser);
-                Some(r)
+                Some(w.finish())
             }
 
             fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {
@@ -145,3 +142,4 @@ macro_rules! turso_version {
 
 turso_version!(TursoV0_6, turso_v0_6, "0.6.1", "2026-05-22");
 turso_version!(TursoV0_7, turso_v0_7, "0.7.2", "2026-07-30");
+turso_version!(TursoV0_8, turso_v0_8, "0.8.3", "2026-10-12");

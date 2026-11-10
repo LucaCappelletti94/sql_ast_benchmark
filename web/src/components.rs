@@ -8,9 +8,9 @@ use dioxus_free_icons::icons::fa_brands_icons::{FaGit, FaGithub, FaRust};
 use dioxus_free_icons::icons::fa_solid_icons::{
     FaArrowLeftLong, FaArrowsRotate, FaBan, FaBomb, FaBox, FaBug, FaBuilding, FaBullseye,
     FaCalendarDays, FaChartColumn, FaChartLine, FaCircleXmark, FaCode, FaCodeCommit, FaCodeFork,
-    FaCopy, FaCube, FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaGaugeHigh, FaHeart,
-    FaHeartPulse, FaLayerGroup, FaMicrochip, FaMobileScreen, FaRankingStar, FaScaleBalanced,
-    FaServer, FaShieldHalved, FaSitemap, FaStar, FaStopwatch, FaTableCells, FaTag,
+    FaCopy, FaCube, FaCubes, FaDatabase, FaDna, FaDownload, FaFileShield, FaFlaskVial, FaGaugeHigh,
+    FaHeart, FaHeartPulse, FaLayerGroup, FaMicrochip, FaMobileScreen, FaRankingStar,
+    FaScaleBalanced, FaServer, FaShieldHalved, FaSitemap, FaStar, FaStopwatch, FaTableCells, FaTag,
     FaTriangleExclamation, FaUsers, FaVial,
 };
 use dioxus_free_icons::Icon;
@@ -380,6 +380,8 @@ pub fn Overview() -> Element {
 
         {cross_family_section()}
 
+        {build_cost_section()}
+
         div { class: "section-head",
             h2 {
                 Icon { width: 18, height: 18, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaDatabase }
@@ -738,7 +740,66 @@ pub fn DialectView(dir: String) -> Element {
     }
 }
 
-/// Per-parser detail page: how one parser does across the dialects it supports.
+/// Cross-parser build-cost table: one row per parser with a current release in
+/// the build scan (CPU time, wall time, crate-only time, crates compiled,
+/// binary size added). Renders nothing when the scan has no current entries.
+fn build_cost_section() -> Element {
+    let scan = crate::data::build_scan();
+    let columns: Vec<String> = [
+        "CPU time",
+        "wall time",
+        "crate time",
+        "crates",
+        "binary size",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+    let rows: Vec<Row> = scan
+        .entries
+        .iter()
+        .filter(|e| e.current)
+        .map(|e| Row {
+            key: e.parser.clone(),
+            head: Head::Parser(e.parser.clone()),
+            cells: vec![
+                Cell::with(format!("{:.1} s", e.cpu_secs), Some(e.cpu_secs)),
+                Cell::with(format!("{:.1} s", e.wall_secs), Some(e.wall_secs)),
+                e.crate_secs
+                    .map_or_else(Cell::na, |s| Cell::with(format!("{:.1} s", s), Some(s))),
+                Cell::with(commas(e.units), Some(e.units as f64)),
+                Cell::with(
+                    fmt_bytes(e.binary_bytes as f64),
+                    Some(e.binary_bytes as f64),
+                ),
+            ],
+        })
+        .collect();
+    if rows.is_empty() {
+        return rsx! {};
+    }
+    rsx! {
+        div { class: "section-head",
+            h2 {
+                Icon { width: 18, height: 18, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaCubes }
+                "Build cost"
+            }
+        }
+        div { class: "block",
+            p { class: "table-cap",
+                {format!("A clean release build of a minimal stdin-parse program per parser release (read stdin, parse it, print the statement count). CPU time is the build's CPU seconds, user plus system, including every dependency and build script. Wall time is the wall-clock seconds at -j {} on a shared machine, so it moves with machine load. Crate time is the parser crate alone, crates the number compiled, and binary size the stripped size minus the same program without the parser ({}).", scan.jobs, scan.rustc)}
+            }
+            SortTable {
+                caption: "Clean release build cost per parser".to_string(),
+                corner: "parser".to_string(),
+                columns,
+                rows,
+                footer: None,
+            }
+        }
+    }
+}
+
 #[component]
 pub fn ParserView(name: String) -> Element {
     let b = bundle();
@@ -901,6 +962,8 @@ pub fn ParserView(name: String) -> Element {
 
         {parser_memory_section(b, &parser)}
 
+        {parser_build_section(&parser)}
+
         VersionHistory { parser: parser.clone() }
 
         {failures_section(b, &parser)}
@@ -998,6 +1061,7 @@ fn VersionHistory(parser: String) -> Element {
         .collect();
     let mut time_series = Vec::new();
     let mut peak_series = Vec::new();
+    let mut alloc_series = Vec::new();
     let mut recall_series = Vec::new();
     let mut fp_series = Vec::new();
     let mut coverage_series = Vec::new();
@@ -1008,6 +1072,7 @@ fn VersionHistory(parser: String) -> Element {
         let rgb = brand(dir).accent_rgb;
         let mut time_points = Vec::new();
         let mut peak_points = Vec::new();
+        let mut alloc_points = Vec::new();
         let mut recall_points = Vec::new();
         let mut fp_points = Vec::new();
         let mut coverage_points = Vec::new();
@@ -1026,6 +1091,7 @@ fn VersionHistory(parser: String) -> Element {
             }
             if let Some(m) = dr.memory.as_ref() {
                 peak_points.push((x, m.peak.median, m.peak.p25, m.peak.p75));
+                alloc_points.push((x, m.allocs.median, m.allocs.p25, m.allocs.p75));
             }
             if let Some(c) = dr.correctness.as_ref() {
                 let accept = if dr.has_reference {
@@ -1060,6 +1126,7 @@ fn VersionHistory(parser: String) -> Element {
         };
         time_series.push(series(time_points));
         peak_series.push(series(peak_points));
+        alloc_series.push(series(alloc_points));
         if !recall_points.is_empty() {
             recall_series.push(series(recall_points));
         }
@@ -1092,6 +1159,13 @@ fn VersionHistory(parser: String) -> Element {
         760,
         460,
         "bytes / statement",
+    );
+    let alloc_trend = viz::trend_lines(
+        &format!("{parser} allocation pressure"),
+        &alloc_series,
+        760,
+        460,
+        "allocations / statement",
     );
     let recall_trend = viz::pct_trend_lines(
         &format!("{parser} accept / recall"),
@@ -1271,11 +1345,12 @@ fn VersionHistory(parser: String) -> Element {
                 "Across versions"
             }
             p { class: "table-cap",
-                "How {parser} changed across releases, each version placed at its release date. For time and memory each point is the median over a dialect's accepted statements with an interquartile (p25 to p75) bar on a log scale, so the heavily right-skewed tails do not distort it: lower is faster and leaner. Coverage is the raw count of valid statements accepted, and the quality trends show recall (acceptance rate where there is no reference engine), recall excluding contentious constructs, round-trip stability, the share of invalid statements wrongly accepted (lower is better), and the empirical panic rate. Pick a version to see its full charts, its results, and exactly which statements it gained or lost versus the previous release."
+                "How {parser} changed across releases, each version placed at its release date. For time, memory, and allocation each point is the median over a dialect's accepted statements with an interquartile (p25 to p75) bar on a log scale, so the heavily right-skewed tails do not distort it: lower is faster, leaner, and calmer. Coverage is the raw count of valid statements accepted, and the quality trends show recall (acceptance rate where there is no reference engine), recall excluding contentious constructs, round-trip stability, the share of invalid statements wrongly accepted (lower is better), and the empirical panic rate. Pick a version to see its full charts, its results, and exactly which statements it gained or lost versus the previous release."
             }
             div { class: "charts",
                 {chart_figure(&format!("chart-{pslug}-time-trend"), &time_trend, &format!("Parse-time trend for {parser} across releases, one line per dialect."), "Median parse time by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-time-trend"))}
                 {chart_figure(&format!("chart-{pslug}-mem-trend"), &peak_trend, &format!("Peak-memory trend for {parser} across releases, one line per dialect."), "Median peak memory by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-mem-trend"))}
+                {chart_figure(&format!("chart-{pslug}-alloc-trend"), &alloc_trend, &format!("Allocation-pressure trend for {parser} across releases, one line per dialect."), "Median allocations per statement by release date, one line per dialect (log scale, interquartile bars).", &format!("{pslug}-alloc-trend"))}
                 if let Some(t) = &coverage_trend {
                     {chart_figure(&format!("chart-{pslug}-coverage-trend"), t, &format!("Coverage trend for {parser} across releases, one line per dialect."), "Count of valid statements accepted by release date, one line per dialect (linear scale). Higher is broader coverage.", &format!("{pslug}-coverage-trend"))}
                 }
@@ -1407,6 +1482,63 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
         460,
         "bytes / statement",
     );
+    // Allocation pressure, the same dialects in the same order.
+    let alloc_columns = [
+        "allocs p50",
+        "allocs p90",
+        "allocs mean",
+        "batch allocs/stmt",
+        "alloc'd p50",
+        "alloc'd p90",
+        "alloc'd mean",
+        "batch alloc'd/stmt",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+    let alloc_rows: Vec<Row> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.iter().find(|m| m.parser == parser).map(|m| Row {
+                key: d.dir_name.clone(),
+                head: Head::Dialect {
+                    dir: d.dir_name.clone(),
+                    name: d.display_name.clone(),
+                },
+                cells: vec![
+                    Cell::count(Some(m.allocs.median)),
+                    Cell::count(Some(m.allocs.p90)),
+                    Cell::count(Some(m.allocs.mean)),
+                    Cell::count(batch_of(d, parser).and_then(|x| x.allocs_per_stmt)),
+                    Cell::bytes(Some(m.allocated.median)),
+                    Cell::bytes(Some(m.allocated.p90)),
+                    Cell::bytes(Some(m.allocated.mean)),
+                    Cell::bytes(batch_of(d, parser).and_then(|x| x.allocated_per_stmt)),
+                ],
+            })
+        })
+        .collect();
+    let alloca_lines: Vec<viz::Line> = b
+        .dialects
+        .iter()
+        .filter_map(|d| {
+            d.memory.iter().find(|m| m.parser == parser).map(|m| {
+                viz::mem_line(
+                    d.display_name.clone(),
+                    brand(&d.dir_name).accent_rgb,
+                    &m.allocs,
+                )
+            })
+        })
+        .collect();
+    let alloca_ecdf = viz::ecdf_lines(
+        &format!("{parser} allocation pressure"),
+        &alloca_lines,
+        760,
+        460,
+        "allocations / statement",
+    );
     rsx! {
         section { class: "block",
             h2 {
@@ -1426,6 +1558,127 @@ fn parser_memory_section(b: &viz::Bundle, parser: &str) -> Element {
                 columns,
                 rows,
                 footer: None,
+            }
+        }
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaGaugeHigh }
+                "Allocation pressure"
+            }
+            p { class: "table-cap",
+                "Every allocator call and every requested byte during the parse, including memory freed before it ends, so a parser can show a small peak yet heavy churn. \"allocs\" is the count of allocator calls, \"alloc'd\" the bytes requested from the allocator (a reallocation counts its new size). \"allocs mean\" and \"alloc'd mean\" are the per-statement averages, and \"batch allocs/stmt\" and \"batch alloc'd/stmt\" are the same over random 128-statement scripts, averaged over the ones that reparsed correctly, so compare each batch column to the adjacent mean."
+            }
+            div { class: "charts",
+                {chart_figure(&format!("chart-{}-alloca-ecdf", slug(parser)), &alloca_ecdf, &format!("Empirical CDF of {parser} allocation count, one curve per dialect."), "Allocator calls per parse, one curve per dialect. Further left is calmer (log scale).", &format!("{}-allocation-ecdf", slug(parser)))}
+            }
+            SortTable {
+                caption: format!("Per-dialect allocation pressure for {}", parser),
+                corner: "dialect".to_string(),
+                columns: alloc_columns,
+                rows: alloc_rows,
+                footer: None,
+            }
+        }
+    }
+}
+
+/// The "Build cost" section for a parser: the current release's clean-build
+/// cost (CPU time, wall time, crate-only time, crates compiled, binary size
+/// added), plus compile-CPU and binary-size trends over the time-machine
+/// milestones where they exist. Renders nothing when the build scan has no
+/// current entry for the parser.
+fn parser_build_section(parser: &str) -> Element {
+    let scan = crate::data::build_scan();
+    let Some(cur) = crate::data::current_build(parser) else {
+        return rsx! {};
+    };
+    let pslug = slug(parser);
+    // Milestone trend points, release dates joined by version string against
+    // the time-machine history.
+    let mut cpu_points = Vec::new();
+    let mut size_points = Vec::new();
+    if let Some(hist) = crate::data::history(parser) {
+        for e in crate::data::build_history(parser) {
+            let Some(v) = hist.versions.iter().find(|v| v.version == e.version) else {
+                continue;
+            };
+            let Some(x) = viz::year_frac(&v.released) else {
+                continue;
+            };
+            cpu_points.push((x, e.cpu_secs, e.cpu_secs, e.cpu_secs));
+            // u64 -> f64 loses nothing below 512 EiB.
+            let bytes = e.binary_bytes as f64;
+            size_points.push((x, bytes, bytes, bytes));
+        }
+    }
+    let has_trends = !cpu_points.is_empty();
+    let trend = |title: String, points: Vec<(f64, f64, f64, f64)>, y: &str| {
+        viz::trend_lines(
+            &title,
+            &[viz::TrendSeries {
+                label: parser.to_string(),
+                rgb: parser_rgb(parser),
+                points,
+            }],
+            760,
+            460,
+            y,
+        )
+    };
+    let (cpu_trend, size_trend) = if has_trends {
+        (
+            trend(
+                format!("{parser} compile time"),
+                cpu_points,
+                "CPU seconds (clean release build)",
+            ),
+            trend(
+                format!("{parser} binary size"),
+                size_points,
+                "bytes added (stripped binary, baseline subtracted)",
+            ),
+        )
+    } else {
+        (String::new(), String::new())
+    };
+    let mut cap = format!(
+        "The clean release build of a minimal program (read stdin, parse it, print the statement count) of the release this page benchmarks, {} from {}, built with {} at -j {}.",
+        cur.version, cur.source, scan.rustc, scan.jobs
+    );
+    if !scan.note.is_empty() {
+        cap.push(' ');
+        cap.push_str(&scan.note);
+    }
+    if has_trends {
+        cap.push_str(" The trends place each time-machine milestone at its release date.");
+    }
+    let cpu = format!("{:.1} s", cur.cpu_secs);
+    let wall = format!("{:.1} s", cur.wall_secs);
+    let crate_only = cur.crate_secs.map(|s| format!("{:.1} s", s));
+    let units = commas(cur.units);
+    let added = fmt_bytes(cur.binary_bytes as f64);
+
+    rsx! {
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaCubes }
+                "Build cost"
+            }
+            p { class: "table-cap", {cap} }
+            p { class: "hero-stats",
+                span { class: "stat", strong { {cpu} } " CPU time (every dependency and build script)" }
+                span { class: "stat", strong { {wall} } " wall time" }
+                if let Some(cs) = crate_only {
+                    span { class: "stat", strong { {cs} } " crate-only time" }
+                }
+                span { class: "stat", strong { {units} } " crates compiled" }
+                span { class: "stat", strong { {added} } " binary size added" }
+            }
+            if has_trends {
+                div { class: "charts",
+                    {chart_figure(&format!("chart-{pslug}-build-cpu-trend"), &cpu_trend, &format!("Compile-time trend for {parser} across releases."), "CPU seconds of the clean release build by release date (log scale).", &format!("{pslug}-build-cpu-trend"))}
+                    {chart_figure(&format!("chart-{pslug}-build-size-trend"), &size_trend, &format!("Binary-size trend for {parser} across releases."), "Bytes the stripped release binary adds over the same program without the parser, by release date (log scale).", &format!("{pslug}-build-size-trend"))}
+                }
             }
         }
     }
@@ -2444,6 +2697,34 @@ impl Cell {
             sub: None,
         }
     }
+    /// Count cell from an optional value, for allocator calls rather than
+    /// bytes: whole counts comma-grouped, fractional means with one decimal
+    /// ("N/A" if missing).
+    fn count(v: Option<f64>) -> Cell {
+        Cell {
+            text: v.map_or_else(
+                || "N/A".to_string(),
+                |x| {
+                    if (x - x.round()).abs() < 0.05 {
+                        // Display quantization to the nearest whole call.
+                        commas(x.round() as usize)
+                    } else {
+                        format!("{x:.1}")
+                    }
+                },
+            ),
+            num: v,
+            sub: None,
+        }
+    }
+    /// An "N/A" cell with no sort key: the value was never measured.
+    fn na() -> Cell {
+        Cell {
+            text: "N/A".to_string(),
+            num: None,
+            sub: None,
+        }
+    }
     /// Cell with explicit text and a numeric sort key.
     fn with(text: String, num: Option<f64>) -> Cell {
         Cell {
@@ -2564,6 +2845,19 @@ fn col_help(name: &str) -> Option<&'static str> {
         "peak p90" => "90th-percentile peak live memory per statement: nine in ten statements stay under this high-water mark.",
         "retained p50" => "Median retained memory per statement: the bytes the produced AST (plus the scaffolding it keeps alive) holds after parsing. Half of statements retain less.",
         "retained p90" => "90th-percentile retained memory per statement: the AST footprint nine in ten statements stay under.",
+        "allocs p50" => "Median allocator calls while parsing one statement (allocations and reallocations, a count rather than bytes): the churn that half of statements stay under.",
+        "allocs p90" => "90th-percentile allocator calls per statement: nine in ten statements make fewer allocator calls than this.",
+        "allocs mean" => "Mean allocator calls per statement: the per-statement average count of allocator calls, freed memory included.",
+        "batch allocs/stmt" => "Allocator calls per statement inside a multi-statement script, averaged over the batches that parsed correctly. Compare with the adjacent mean to see what bulk parsing amortizes. Blank only when no sampled batch parsed correctly.",
+        "alloc'd p50" => "Median bytes requested from the allocator while parsing one statement, freed or not (a reallocation counts its new size): the total allocation traffic that half of statements stay under.",
+        "alloc'd p90" => "90th-percentile bytes requested from the allocator per statement, freed or not: the allocation traffic nine in ten statements stay under.",
+        "alloc'd mean" => "Mean bytes requested from the allocator per statement, freed or not: the per-statement average allocation traffic.",
+        "batch alloc'd/stmt" => "Bytes requested from the allocator per statement inside a multi-statement script, averaged over the batches that parsed correctly. Compare with the adjacent mean. Blank only when no sampled batch parsed correctly.",
+        "CPU time" => "CPU seconds (user plus system) of a clean release build of a minimal parse program, every dependency and build script included.",
+        "wall time" => "Wall-clock seconds of the same clean release build, run at the scan's -j on a shared machine.",
+        "crate time" => "Seconds the build spent compiling the parser crate itself, without its dependencies. Blank when the timing report could not be read.",
+        "crates" => "Crates the build compiled: the parser and its whole dependency tree.",
+        "binary size" => "Stripped release binary size of the parse program minus the same program without the parser: what the parser adds after dead-code elimination.",
         "batch ok%" => "Batch parse rate: of 200 random 128-statement scripts built from statements this parser accepts individually, the share it reparsed to the exact statement count. Below 100% means it mishandles a statement boundary (for example swallowing the terminator) in some multi-statement scripts. Higher is better.",
         "batch ns/stmt" => "Per-statement parse time inside a multi-statement script, averaged over the batches that parsed correctly. Compare with mean ns to see what bulk parsing amortizes. Blank only when no sampled batch parsed correctly.",
         _ => return None,
@@ -2797,6 +3091,49 @@ fn memory_table(d: &DialectData) -> Element {
     let peak_box = viz::box_lines(&peak_title, &peak_lines, 760, 460, "bytes / statement");
     let ret_ecdf = viz::ecdf_lines(&ret_title, &ret_lines, 760, 460, "bytes / statement");
     let ret_box = viz::box_lines(&ret_title, &ret_lines, 760, 460, "bytes / statement");
+    // Allocation pressure, the same parsers in the same order.
+    let alloc_columns = [
+        "allocs p50",
+        "allocs p90",
+        "allocs mean",
+        "batch allocs/stmt",
+        "alloc'd p50",
+        "alloc'd p90",
+        "alloc'd mean",
+        "batch alloc'd/stmt",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+    let alloc_rows = mems
+        .iter()
+        .map(|m| Row {
+            key: m.parser.clone(),
+            head: Head::Parser(m.parser.clone()),
+            cells: vec![
+                Cell::count(Some(m.allocs.median)),
+                Cell::count(Some(m.allocs.p90)),
+                Cell::count(Some(m.allocs.mean)),
+                Cell::count(batch_of(d, &m.parser).and_then(|x| x.allocs_per_stmt)),
+                Cell::bytes(Some(m.allocated.median)),
+                Cell::bytes(Some(m.allocated.p90)),
+                Cell::bytes(Some(m.allocated.mean)),
+                Cell::bytes(batch_of(d, &m.parser).and_then(|x| x.allocated_per_stmt)),
+            ],
+        })
+        .collect();
+    let alloca_lines: Vec<viz::Line> = mems
+        .iter()
+        .map(|m| viz::mem_line(m.parser.clone(), parser_rgb(&m.parser), &m.allocs))
+        .collect();
+    let alloca_title = format!("{} allocation pressure", d.display_name);
+    let alloca_ecdf = viz::ecdf_lines(
+        &alloca_title,
+        &alloca_lines,
+        760,
+        460,
+        "allocations / statement",
+    );
     rsx! {
         section { class: "block",
             h2 {
@@ -2817,6 +3154,25 @@ fn memory_table(d: &DialectData) -> Element {
                 corner: "parser".to_string(),
                 columns,
                 rows,
+                footer: None,
+            }
+        }
+        section { class: "block",
+            h2 {
+                Icon { width: 17, height: 17, fill: "currentColor".to_string(), class: "h2-ico".to_string(), icon: FaGaugeHigh }
+                "Allocation pressure"
+            }
+            p { class: "table-cap",
+                "Every allocator call and every requested byte during the parse, including memory freed before it ends, so a parser can show a small peak yet heavy churn. \"allocs\" is the count of allocator calls, \"alloc'd\" the bytes requested from the allocator (a reallocation counts its new size). \"allocs mean\" and \"alloc'd mean\" are the per-statement averages, and \"batch allocs/stmt\" and \"batch alloc'd/stmt\" are the same over random 128-statement scripts, averaged over the ones that reparsed correctly, so compare each batch column to the adjacent mean."
+            }
+            div { class: "charts",
+                {chart_figure(&format!("chart-{}-alloca-ecdf", d.dir_name), &alloca_ecdf, &format!("Empirical CDF of allocation count for {}, one curve per parser.", d.display_name), "Allocator calls per parse, one curve per parser. Further left is calmer (log scale).", &format!("{}-allocation-ecdf", d.dir_name))}
+            }
+            SortTable {
+                caption: format!("Per-parser allocation pressure for {}", d.display_name),
+                corner: "parser".to_string(),
+                columns: alloc_columns,
+                rows: alloc_rows,
                 footer: None,
             }
         }

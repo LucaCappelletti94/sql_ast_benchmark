@@ -21,9 +21,6 @@ categories = ["development-tools::profiling"]
 publish = false
 rust-version.workspace = true
 
-[lints.rust]
-unsafe_code = "forbid"
-
 [lints.clippy]
 all = "warn"
 pedantic = "warn"
@@ -36,12 +33,12 @@ cast_sign_loss = { level = "allow", priority = 1 }
 sqlparser = { git = "https://github.com/sqlparser-rs/sqlparser-rs" }
 # libpg_query, the PostgreSQL server's own parser, the reference for PostgreSQL.
 pg_query = { git = "https://github.com/pganalyze/pg_query.rs" }
-qusql-parse = "0.11.0"
+qusql-parse = "0.12.0"
 polyglot-sql = { git = "https://github.com/tobilg/polyglot" }
 databend-common-ast = "0.2.5"
-sqlglot-rust = "0.10.29"
+sqlglot-rust = "0.11.1"
 sqlite3-parser = "0.17.0"
-turso_parser = "0.7.2"
+turso_parser = "0.8.3"
 fallible-iterator = "0.3.0"
 viz = { path = "viz" }
 serde = { version = "1", features = ["derive"] }
