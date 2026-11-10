@@ -24,7 +24,8 @@ static DEPTH_RAW: &str = include_str!("../../featurescan/data/depth.json");
 
 /// Decompress an embedded zstd blob to bytes.
 fn unzstd(raw: &[u8]) -> Vec<u8> {
-    let mut decoder = ruzstd::StreamingDecoder::new(raw).expect("embedded blob is valid zstd");
+    let mut decoder =
+        ruzstd::decoding::StreamingDecoder::new(raw).expect("embedded blob is valid zstd");
     let mut buf = Vec::new();
     std::io::Read::read_to_end(&mut decoder, &mut buf).expect("decompress embedded blob");
     buf

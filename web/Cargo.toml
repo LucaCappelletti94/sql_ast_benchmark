@@ -18,4 +18,4 @@ viz = { path = "../viz" }
 serde_json = "1"
 # Pure-Rust zstd decoder so the embedded time-machine history decompresses in
 # wasm with no native dependency and no runtime fetch.
-ruzstd = "0.7"
+ruzstd = "0.9.1"
