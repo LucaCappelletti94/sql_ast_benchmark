@@ -1125,6 +1125,23 @@ mod tests {
     }
 
     #[test]
+    fn pg_query_roundtrip_preserves_quoted_identifiers_and_literals() {
+        let sql = r#"SELECT "MiXed", 'it''s' FROM "TableName""#;
+        assert_eq!(
+            BenchParser::PgQuery.reprint(sql, Dialect::Postgresql),
+            Some(sql.to_owned())
+        );
+        assert_eq!(
+            BenchParser::PgQuery.roundtrips(sql, Dialect::Postgresql),
+            Some(true)
+        );
+        assert_eq!(
+            BenchParser::PgQuery.reprint("SELECT 1 FROM", Dialect::Postgresql),
+            None
+        );
+    }
+
+    #[test]
     fn can_batch_excludes_only_databend() {
         // databend-common-ast parses one statement per call. Every other parser
         // has a multi-statement entry point.

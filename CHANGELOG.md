@@ -3,6 +3,7 @@
 ## Dependency security
 
 - The viewer uses `ruzstd 0.9.1`, and the SQL Server oracle uses `tiberius 0.13` with the `rustls 0.23` certificate-validation stack.
+- The SQL Server oracle reconnects after command timeouts, restores `PARSEONLY`, and retries the interrupted statement within a ten-failure limit without discarding completed verdicts.
 
 ## September 2026: parser refresh
 

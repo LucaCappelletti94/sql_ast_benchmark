@@ -450,8 +450,7 @@ fn parse_clickhouse_code(body: &str) -> Option<i32> {
 async fn label_tsql(stmts: &[String]) -> Result<Vec<bool>> {
     use testcontainers_modules::mssql_server::MssqlServer;
     use testcontainers_modules::testcontainers::runners::AsyncRunner;
-    use tiberius::{AuthMethod, Client, Config};
-    use tokio_util::compat::TokioAsyncWriteCompatExt;
+    use tiberius::{AuthMethod, Config};
 
     let node = MssqlServer::default()
         .with_accept_eula()
@@ -469,34 +468,72 @@ async fn label_tsql(stmts: &[String]) -> Result<Vec<bool>> {
         MssqlServer::DEFAULT_SA_PASSWORD,
     ));
     config.trust_cert();
-    let tcp = tokio::net::TcpStream::connect(config.get_addr())
-        .await
-        .context("tcp connect sql server")?;
-    tcp.set_nodelay(true)?;
-    let mut client = Client::connect(config, tcp.compat_write())
-        .await
-        .context("connect sql server")?;
-    // Parse-only for the rest of the session: only syntax errors will surface.
-    client
-        .simple_query("SET PARSEONLY ON")
-        .await?
-        .into_results()
-        .await?;
+    let client = connect_tsql(&config).await?;
+    label_tsql_statements(stmts, &config, client).await
+}
 
+type TsqlClient = tiberius::Client<tokio_util::compat::Compat<tokio::net::TcpStream>>;
+
+async fn connect_tsql(config: &tiberius::Config) -> Result<TsqlClient> {
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+    tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        let tcp = tokio::net::TcpStream::connect(config.get_addr())
+            .await
+            .context("tcp connect sql server")?;
+        tcp.set_nodelay(true)?;
+        let mut client = tiberius::Client::connect(config.clone(), tcp.compat_write())
+            .await
+            .context("connect sql server")?;
+        client
+            .simple_query("SET PARSEONLY ON")
+            .await?
+            .into_results()
+            .await?;
+        Ok(client)
+    })
+    .await
+    .context("sql server connection setup timed out")?
+}
+
+async fn label_tsql_statements(
+    stmts: &[String],
+    config: &tiberius::Config,
+    client: TsqlClient,
+) -> Result<Vec<bool>> {
+    let mut client = Some(client);
     let mut valid = Vec::with_capacity(stmts.len());
     let mut unreachable_streak = 0usize;
     let mut i = 0;
     while i < stmts.len() {
-        // Under PARSEONLY the only `Server` error is a syntax error (invalid). A
-        // non-server error is a transport/connection failure: never record it as a
-        // verdict, retry, and abort if the engine stays unreachable.
-        let verdict = match client.simple_query(stmts[i].as_str()).await {
-            Ok(stream) => match stream.into_results().await {
-                Ok(_) => Some(true),
-                Err(tiberius::error::Error::Server(_)) => Some(false),
-                Err(_) => None,
-            },
-            Err(tiberius::error::Error::Server(_)) => Some(false),
+        let result = async {
+            let connection = match &mut client {
+                Some(connection) => connection,
+                slot => slot.insert(connect_tsql(config).await?),
+            };
+            connection
+                .simple_query(stmts[i].as_str())
+                .await?
+                .into_results()
+                .await?;
+            anyhow::Ok(())
+        }
+        .await;
+        let verdict = match result {
+            Ok(()) => Some(true),
+            Err(error) if client.is_some() => {
+                match error.downcast_ref::<tiberius::error::Error>() {
+                    Some(tiberius::error::Error::Server(_)) => Some(false),
+                    Some(tiberius::error::Error::Io {
+                        kind: std::io::ErrorKind::TimedOut,
+                        ..
+                    }) => {
+                        client = None;
+                        None
+                    }
+                    _ => None,
+                }
+            }
             Err(_) => None,
         };
         match verdict {
@@ -724,6 +761,66 @@ mod tests {
         is_copy_to_stdout, is_sqlite_balanced, is_sqlite_invalid, parse_clickhouse_code,
         parse_sqlite_err,
     };
+
+    #[tokio::test]
+    #[ignore = "requires Docker and the SQL Server image"]
+    async fn tsql_timeout_reconnects_with_parseonly_and_bounds_failures() -> anyhow::Result<()> {
+        use std::time::Duration;
+        use testcontainers_modules::mssql_server::MssqlServer;
+        use testcontainers_modules::testcontainers::runners::AsyncRunner;
+        use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+        tokio::time::timeout(Duration::from_secs(180), async {
+            let node = MssqlServer::default().with_accept_eula().start().await?;
+            let mut config = tiberius::Config::new();
+            config.host(node.get_host().await?.to_string());
+            config.port(node.get_host_port_ipv4(1433).await?);
+            config.authentication(tiberius::AuthMethod::sql_server(
+                "sa",
+                MssqlServer::DEFAULT_SA_PASSWORD,
+            ));
+            config.trust_cert();
+            config.command_timeout(Some(Duration::from_secs(1)));
+            for stalled_batch in [
+                "WAITFOR DELAY '00:00:03'",
+                "SELECT 1; WAITFOR DELAY '00:00:03'",
+            ] {
+                let tcp = tokio::net::TcpStream::connect(config.get_addr()).await?;
+                tcp.set_nodelay(true)?;
+                let client = tiberius::Client::connect(config.clone(), tcp.compat_write()).await?;
+                let stmts = [
+                    "SELECT 1",
+                    stalled_batch,
+                    "SELECT * FROM definitely_missing_timeout_recovery_table",
+                    "SELECT 1 FROM",
+                ]
+                .map(str::to_owned);
+                let verdicts = super::label_tsql_statements(&stmts, &config, client).await?;
+                assert_eq!(verdicts, [true, true, true, false], "{stalled_batch}");
+            }
+
+            let tcp = tokio::net::TcpStream::connect(config.get_addr()).await?;
+            tcp.set_nodelay(true)?;
+            let client = tiberius::Client::connect(config.clone(), tcp.compat_write()).await?;
+            let unavailable = tokio::net::TcpSocket::new_v4()?;
+            unavailable.bind("127.0.0.1:0".parse()?)?;
+            config.host("127.0.0.1");
+            config.port(unavailable.local_addr()?.port());
+            let stmts = ["SELECT 1", "WAITFOR DELAY '00:00:03'"].map(str::to_owned);
+            let error = tokio::time::timeout(
+                Duration::from_secs(30),
+                super::label_tsql_statements(&stmts, &config, client),
+            )
+            .await?
+            .expect_err("unavailable reconnects must not produce labels");
+            assert!(
+                error.to_string().contains("unreachable at statement 1"),
+                "{error:#}"
+            );
+            anyhow::Ok(())
+        })
+        .await?
+    }
 
     #[test]
     fn sqlite_balance_guard_excludes_swallowing_statements() {
