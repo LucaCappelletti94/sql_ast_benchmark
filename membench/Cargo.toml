@@ -7,9 +7,6 @@ license = "MIT"
 publish = false
 rust-version.workspace = true
 
-# This crate installs a counting global allocator, which requires `unsafe`, so
-# unlike the main crate it does not forbid unsafe code.
-
 [dependencies]
 sql_ast_benchmark = { path = ".." }
 

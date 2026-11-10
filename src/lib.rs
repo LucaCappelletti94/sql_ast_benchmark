@@ -357,13 +357,14 @@ impl BenchParser {
     #[must_use]
     pub const fn current_version(self) -> &'static str {
         match self {
-            Self::Sqlparser => "0.63.0",
-            Self::PgQuery | Self::PgQuerySummary => "6.2.0",
-            Self::Qusql | Self::Polyglot => "0.11.0",
+            Self::Sqlparser => "0.64.0",
+            Self::PgQuery | Self::PgQuerySummary => "18.1.0",
+            Self::Qusql => "0.12.0",
+            Self::Polyglot => "0.14.1",
             Self::Databend => "0.2.5",
-            Self::Sqlglot => "0.10.29",
+            Self::Sqlglot => "0.11.1",
             Self::Sqlite3 => "0.17.0",
-            Self::Turso => "0.7.2",
+            Self::Turso => "0.8.3",
         }
     }
 
@@ -409,11 +410,13 @@ impl BenchParser {
                     .map(|_| ())
                     .map_err(|e| e.to_string())
             }),
-            Self::PgQuery if dialect == Dialect::Postgresql => {
-                catch_outcome(|| pg_query::parse(sql).map(|_| ()).map_err(|e| e.to_string()))
-            }
+            Self::PgQuery if dialect == Dialect::Postgresql => catch_outcome(|| {
+                pg_query::parse(sql, pg_query::ParserOptions::DEFAULT)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }),
             Self::PgQuerySummary if dialect == Dialect::Postgresql => catch_outcome(|| {
-                pg_query::summary(sql, -1)
+                pg_query::summary(sql, pg_query::ParserOptions::DEFAULT, -1)
                     .map(|_| ())
                     .map_err(|e| e.to_string())
             }),
@@ -453,8 +456,10 @@ impl BenchParser {
             Self::Sqlparser => {
                 SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql).is_ok()
             }
-            Self::PgQuery => pg_query::parse(sql).is_ok(),
-            Self::PgQuerySummary => pg_query::summary(sql, -1).is_ok(),
+            Self::PgQuery => pg_query::parse(sql, pg_query::ParserOptions::DEFAULT).is_ok(),
+            Self::PgQuerySummary => {
+                pg_query::summary(sql, pg_query::ParserOptions::DEFAULT, -1).is_ok()
+            }
             Self::Qusql => {
                 let d = qusql_dialect(dialect).unwrap_or(SQLDialect::PostgreSQL);
                 let opts = ParseOptions::new()
@@ -525,10 +530,14 @@ impl BenchParser {
                 SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql)
                     .map_or(0, |v| v.len()),
             ),
-            Self::PgQuery => (dialect == Dialect::Postgresql)
-                .then(|| pg_query::parse(sql).map_or(0, |r| r.protobuf.stmts.len())),
-            Self::PgQuerySummary => (dialect == Dialect::Postgresql)
-                .then(|| pg_query::summary(sql, -1).map_or(0, |r| r.statement_types.len())),
+            Self::PgQuery => (dialect == Dialect::Postgresql).then(|| {
+                pg_query::parse(sql, pg_query::ParserOptions::DEFAULT)
+                    .map_or(0, |r| r.protobuf.stmts.len())
+            }),
+            Self::PgQuerySummary => (dialect == Dialect::Postgresql).then(|| {
+                pg_query::summary(sql, pg_query::ParserOptions::DEFAULT, -1)
+                    .map_or(0, |r| r.statement_types.len())
+            }),
             Self::Qusql => qusql_dialect(dialect).map(|d| {
                 let opts = ParseOptions::new()
                     .dialect(d)
@@ -575,87 +584,60 @@ impl BenchParser {
         }
     }
 
-    /// Parse `sql` while the `membench` allocator is active and return
-    /// `(peak, retained)` bytes: the high-water mark of live allocations during
-    /// the parse, and the bytes still live afterwards (the produced AST plus any
-    /// scaffolding it keeps alive). `None` for the `libpg_query` bindings, whose
-    /// real work happens in C and is invisible to the Rust allocator, and for
+    /// Parse `sql` while the counting allocator is active and return what the
+    /// parse cost it (see [`mem::MemSample`]): peak and retained bytes, and the
+    /// allocation pressure. `None` for the `libpg_query` bindings, whose real
+    /// work happens in C and is invisible to the Rust allocator, and for
     /// dialects a parser does not model. Intended for accepted statements, called
     /// single-threaded from the `membench` binary.
     #[must_use]
-    #[allow(clippy::too_many_lines)]
-    pub fn measure_mem(self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    pub fn measure_mem(self, sql: &str, dialect: Dialect) -> Option<mem::MemSample> {
         use std::hint::black_box;
-        // (peak, retained) relative to the live total just before the parse.
-        let snap = |before: usize| {
-            (
-                mem::peak().saturating_sub(before),
-                mem::live().saturating_sub(before),
-            )
-        };
         match self {
             // libpg_query allocates in C, invisible to the Rust allocator.
             Self::PgQuery | Self::PgQuerySummary => None,
             Self::Sqlparser => {
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let ast = SqlparserParser::parse_sql(&*sqlparser_dialect(dialect), sql);
                 black_box(&ast);
-                let r = snap(before);
-                drop(ast);
-                Some(r)
+                Some(w.finish())
             }
             Self::Qusql => {
                 let d = qusql_dialect(dialect)?;
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let opts = ParseOptions::new()
                     .dialect(d)
                     .arguments(qusql_parse::SQLArguments::Dollar);
                 let mut issues = Issues::new(sql);
                 let ast = parse_statements(sql, &mut issues, &opts);
                 black_box((&ast, &issues));
-                let r = snap(before);
-                drop(ast);
-                drop(issues);
-                Some(r)
+                Some(w.finish())
             }
             Self::Polyglot => {
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let ast = polyglot_parse(sql, polyglot_dialect(dialect));
                 black_box(&ast);
-                let r = snap(before);
-                drop(ast);
-                Some(r)
+                Some(w.finish())
             }
             Self::Databend => {
                 let d = databend_dialect_of(dialect)?;
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let toks = databend_tokenize(sql);
                 let ast = toks.as_ref().ok().map(|t| databend_parse(t, d));
                 black_box((&toks, &ast));
-                let r = snap(before);
-                drop(ast);
-                drop(toks);
-                Some(r)
+                Some(w.finish())
             }
             Self::Sqlglot => {
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let ast = sqlglot_rust::parser::parse_statements(sql, sqlglot_dialect(dialect));
                 black_box(&ast);
-                let r = snap(before);
-                drop(ast);
-                Some(r)
+                Some(w.finish())
             }
             Self::Sqlite3 => {
                 if dialect != Dialect::Sqlite {
                     return None;
                 }
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let bump = sqlite3_parser::Bump::new();
                 let mut parser = sqlite3_parser::lexer::sql::Parser::new(&bump, sql.as_bytes());
                 let mut out = Vec::new();
@@ -663,41 +645,34 @@ impl BenchParser {
                     out.push(cmd);
                 }
                 black_box((&parser, &out));
-                let r = snap(before);
-                drop(out);
-                drop(parser);
-                Some(r)
+                Some(w.finish())
             }
             Self::Turso => {
                 if dialect != Dialect::Sqlite {
                     return None;
                 }
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let mut parser = turso_parser::parser::Parser::new(sql.as_bytes());
                 let mut out = Vec::new();
                 while let Ok(Some(cmd)) = parser.next_cmd() {
                     out.push(cmd);
                 }
                 black_box((&parser, &out));
-                let r = snap(before);
-                drop(out);
-                drop(parser);
-                Some(r)
+                Some(w.finish())
             }
         }
     }
 
     /// Like [`Self::measure_mem`], but for a whole multi-statement script: it
-    /// holds every statement's AST live at once, so the `(peak, retained)` it
-    /// reports reflects batch parsing (a grown `Vec` of statements, all ASTs
-    /// retained together). `None` when the parser has no batch entry point
+    /// holds every statement's AST live at once, so the sample it reports
+    /// reflects batch parsing (a grown `Vec` of statements, all ASTs retained
+    /// together). `None` when the parser has no batch entry point
     /// ([`Self::can_batch`], so databend), when its memory is invisible to the
     /// Rust allocator (the `libpg_query` bindings), or when it does not model
     /// `dialect`. Called single-threaded from the `membench` binary. Under any
-    /// other binary the counters are zero and it returns `Some((0, 0))`.
+    /// other binary the counters are zero and it returns an all-zero sample.
     #[must_use]
-    pub fn measure_mem_batch(self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    pub fn measure_mem_batch(self, sql: &str, dialect: Dialect) -> Option<mem::MemSample> {
         if !self.can_batch() {
             return None;
         }
@@ -720,7 +695,11 @@ impl BenchParser {
                 .then(|| turso_reprint(sql))
                 .flatten(),
             Self::PgQuery => (dialect == Dialect::Postgresql)
-                .then(|| pg_query::parse(sql).ok().and_then(|p| p.deparse().ok()))
+                .then(|| {
+                    pg_query::parse(sql, pg_query::ParserOptions::DEFAULT)
+                        .ok()
+                        .and_then(|p| p.deparse(pg_query::DeparseOptions::default()).ok())
+                })
                 .flatten(),
             _ => None,
         }
@@ -792,9 +771,9 @@ pub trait Parser: Sync {
     fn parse_batch(&self, sql: &str, dialect: Dialect) -> Option<usize>;
     /// Whether this parser has a multi-statement entry point.
     fn can_batch(&self) -> bool;
-    /// `(peak, retained)` bytes under the membench allocator. See
+    /// Allocator cost of one parse under the counting allocator. See
     /// [`BenchParser::measure_mem`].
-    fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)>;
+    fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<mem::MemSample>;
     /// Parse and pretty-print, if the parser has a printer for `dialect`.
     fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String>;
     /// Whether this parser can pretty-print in `dialect`.
@@ -818,8 +797,8 @@ pub trait Parser: Sync {
         }
     }
 
-    /// Whole-script `(peak, retained)`, gated on a batch entry point.
-    fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    /// Whole-script allocator cost, gated on a batch entry point.
+    fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<mem::MemSample> {
         if self.can_batch() {
             self.measure_mem(sql, dialect)
         } else {
@@ -870,7 +849,7 @@ impl Parser for BenchParser {
     fn can_batch(&self) -> bool {
         (*self).can_batch()
     }
-    fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<mem::MemSample> {
         (*self).measure_mem(sql, dialect)
     }
     fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {
@@ -885,7 +864,7 @@ impl Parser for BenchParser {
     fn parse_outcome(&self, sql: &str, dialect: Dialect) -> ParseOutcome {
         (*self).parse_outcome(sql, dialect)
     }
-    fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    fn measure_mem_batch(&self, sql: &str, dialect: Dialect) -> Option<mem::MemSample> {
         (*self).measure_mem_batch(sql, dialect)
     }
     fn roundtrips(&self, sql: &str, dialect: Dialect) -> Option<bool> {

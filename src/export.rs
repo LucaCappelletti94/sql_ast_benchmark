@@ -210,12 +210,14 @@ fn mem_for(dir: &str, parsers: &[BenchParser]) -> Vec<ParserMem> {
         if peak.is_empty() {
             continue;
         }
-        let retained = bench_dist::load_mem(dir, name, "retained");
+        let load = |kind| dist_from(&bench_dist::load_mem(dir, name, kind));
         out.push(ParserMem {
             parser: name.to_string(),
             n: peak.len(),
             peak: dist_from(&peak),
-            retained: dist_from(&retained),
+            retained: load("retained"),
+            allocs: load("allocs"),
+            allocated: load("allocated"),
         });
     }
     out
@@ -233,13 +235,15 @@ struct BatchPerfRow {
 }
 
 /// One row of the batch memory summary (`batch_mem_dist/summary.csv`):
-/// `dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt`.
+/// `dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt,allocs_per_stmt,allocated_per_stmt`.
 /// The per-statement figures may be blank (no batch parsed correctly).
 struct BatchMemRow {
     dialect: String,
     parser: String,
     peak_per_stmt: Option<f64>,
     retained_per_stmt: Option<f64>,
+    allocs_per_stmt: Option<f64>,
+    allocated_per_stmt: Option<f64>,
 }
 
 /// Parse a possibly-blank CSV float field into `Option<f64>`.
@@ -274,7 +278,7 @@ fn parse_batch_mem(content: &str) -> Vec<BatchMemRow> {
         .skip(1)
         .filter_map(|line| {
             let f: Vec<&str> = line.split(',').collect();
-            if f.len() < 8 {
+            if f.len() < 10 {
                 return None;
             }
             Some(BatchMemRow {
@@ -282,6 +286,8 @@ fn parse_batch_mem(content: &str) -> Vec<BatchMemRow> {
                 parser: f[1].to_string(),
                 peak_per_stmt: opt_f64(f[6]),
                 retained_per_stmt: opt_f64(f[7]),
+                allocs_per_stmt: opt_f64(f[8]),
+                allocated_per_stmt: opt_f64(f[9]),
             })
         })
         .collect()
@@ -320,6 +326,8 @@ fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<Parse
         ns_per_stmt: None,
         peak_per_stmt: None,
         retained_per_stmt: None,
+        allocs_per_stmt: None,
+        allocated_per_stmt: None,
     };
     for r in perf.iter().filter(|r| r.dialect == dir) {
         let e = map
@@ -335,6 +343,8 @@ fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<Parse
             .or_insert_with(|| blank(&r.parser, 0));
         e.peak_per_stmt = r.peak_per_stmt;
         e.retained_per_stmt = r.retained_per_stmt;
+        e.allocs_per_stmt = r.allocs_per_stmt;
+        e.allocated_per_stmt = r.allocated_per_stmt;
     }
     // Keep a parser if it carries any batch signal.
     map.into_values()
@@ -343,6 +353,8 @@ fn batch_for(dir: &str, perf: &[BatchPerfRow], mem: &[BatchMemRow]) -> Vec<Parse
                 || b.ns_per_stmt.is_some()
                 || b.peak_per_stmt.is_some()
                 || b.retained_per_stmt.is_some()
+                || b.allocs_per_stmt.is_some()
+                || b.allocated_per_stmt.is_some()
         })
         .collect()
 }
@@ -852,14 +864,16 @@ mod tests {
     }
 
     #[test]
-    fn batch_mem_parses_peak_and_retained_columns() {
+    fn batch_mem_parses_memory_and_pressure_columns() {
         let csv =
-            "dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt\n\
-                   sqlite,turso_parser,5000,200,200,100.000,2000.0,800.0\n";
+            "dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt,allocs_per_stmt,allocated_per_stmt\n\
+                   sqlite,turso_parser,5000,200,200,100.000,2000.0,800.0,12.5,4096.0\n";
         let rows = parse_batch_mem(csv);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].peak_per_stmt, Some(2000.0));
         assert_eq!(rows[0].retained_per_stmt, Some(800.0));
+        assert_eq!(rows[0].allocs_per_stmt, Some(12.5));
+        assert_eq!(rows[0].allocated_per_stmt, Some(4096.0));
     }
 
     #[test]
@@ -870,8 +884,8 @@ mod tests {
              postgresql,pg_query.rs,10,200,200,100.0,8.0\n",
         );
         let mem = parse_batch_mem(
-            "h,h,h,h,h,h,h,h\n\
-             postgresql,sqlparser-rs,10,200,180,90.0,500.0,200.0\n",
+            "h,h,h,h,h,h,h,h,h,h\n\
+             postgresql,sqlparser-rs,10,200,180,90.0,500.0,200.0,7.0,900.0\n",
         );
         let merged = batch_for("postgresql", &perf, &mem);
         assert_eq!(merged.len(), 2);
@@ -880,6 +894,8 @@ mod tests {
         assert_eq!(sp.ns_per_stmt, Some(10.0));
         assert_eq!(sp.peak_per_stmt, Some(500.0));
         assert_eq!(sp.retained_per_stmt, Some(200.0));
+        assert_eq!(sp.allocs_per_stmt, Some(7.0));
+        assert_eq!(sp.allocated_per_stmt, Some(900.0));
         // pg_query has batch time and accuracy but no Rust-visible batch memory.
         let pg = merged.iter().find(|x| x.parser == "pg_query.rs").unwrap();
         assert_eq!(pg.accuracy_pct, Some(100.0));

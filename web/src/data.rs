@@ -7,7 +7,10 @@
 //! (the bundle is ~25x smaller compressed).
 
 use std::sync::OnceLock;
-use viz::{Bundle, DepthReport, DepthScan, FamilyHistory, FeatureScan, ParserFeatures};
+use viz::{
+    BuildCost, BuildScan, Bundle, DepthReport, DepthScan, FamilyHistory, FeatureScan,
+    ParserFeatures,
+};
 
 /// The results bundle, zstd-compressed and embedded.
 static BUNDLE_RAW: &[u8] = include_bytes!("../assets/bench.json.zst");
@@ -21,6 +24,9 @@ static FEATURESCAN_RAW: &str = include_str!("../../featurescan/data/featurescan.
 
 /// Recursion-depth probe results, committed uncompressed.
 static DEPTH_RAW: &str = include_str!("../../featurescan/data/depth.json");
+
+/// Build cost of every benchmarked parser release, committed uncompressed.
+static BUILD_RAW: &str = include_str!("../../featurescan/data/build.json");
 
 /// Decompress an embedded zstd blob to bytes.
 fn unzstd(raw: &[u8]) -> Vec<u8> {
@@ -82,6 +88,38 @@ pub fn parser_depth(parser: &str) -> Option<&'static DepthReport> {
     depth_scan().parsers.iter().find(|p| p.parser == parser)
 }
 
+/// The build-cost scan (method note, toolchain, `-j`, every entry, parsed once).
+fn build_scan_raw() -> &'static BuildScan {
+    static CACHE: OnceLock<BuildScan> = OnceLock::new();
+    CACHE.get_or_init(|| serde_json::from_str(BUILD_RAW).expect("build.json is valid"))
+}
+
+/// The parsed build-cost scan.
+#[must_use]
+pub fn build_scan() -> &'static BuildScan {
+    build_scan_raw()
+}
+
+/// The release the main snapshot benchmarks, for one parser by display name
+/// (the `current == true` entry).
+#[must_use]
+pub fn current_build(parser: &str) -> Option<&'static BuildCost> {
+    build_scan_raw()
+        .entries
+        .iter()
+        .find(|e| e.parser == parser && e.current)
+}
+
+/// Time-machine milestones for one parser, by display name, in committed order.
+#[must_use]
+pub fn build_history(parser: &str) -> Vec<&'static BuildCost> {
+    build_scan_raw()
+        .entries
+        .iter()
+        .filter(|e| e.parser == parser && !e.current)
+        .collect()
+}
+
 /// Aggregate empirical panic totals for one parser across every dialect it runs:
 /// `(panicked, attempted)`. The per-parser panic rate is `panicked / attempted`.
 /// Returns `None` if nothing was attempted (e.g. an older snapshot without the
@@ -128,8 +166,9 @@ mod tests {
         assert!(!b.parsers.is_empty());
     }
 
-    /// The committed feature-scan and depth snapshots must parse into the shared
-    /// schema, failing the build if `featurescan` output and `viz` drift.
+    /// The committed feature-scan, depth-scan, and build-cost snapshots must
+    /// parse into the shared schema, failing the build if `featurescan` output
+    /// and `viz` drift.
     #[test]
     fn committed_featurescan_and_depth_parse() {
         assert!(!super::featurescan().parsers.is_empty());
@@ -137,5 +176,8 @@ mod tests {
         // sqlparser-rs is covered by both scans.
         assert!(super::parser_features("sqlparser-rs").is_some());
         assert!(super::parser_depth("sqlparser-rs").is_some());
+        // The build-cost snapshot parses with its method note and parallelism.
+        let scan = super::build_scan();
+        assert!(scan.jobs > 0);
     }
 }

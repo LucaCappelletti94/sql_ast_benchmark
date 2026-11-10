@@ -118,6 +118,49 @@ pub struct DepthReport {
     pub ceil: usize,
 }
 
+/// Build cost of every benchmarked parser release. Produced by
+/// `featurescan-build`, which compiles a minimal program per release (read
+/// stdin, parse it, print the statement count) from a clean target directory.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BuildScan {
+    pub note: String,
+    /// `rustc -V` of the toolchain that built every entry.
+    pub rustc: String,
+    /// The `-j` every build ran with, which the wall times depend on.
+    pub jobs: usize,
+    /// Stripped size of the same program without any parser, subtracted from
+    /// every [`BuildCost::binary_bytes`].
+    pub baseline_bytes: u64,
+    pub entries: Vec<BuildCost>,
+}
+
+/// Build cost of one parser release.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BuildCost {
+    /// Display name, matching the parser-page and time-machine family name.
+    pub parser: String,
+    pub package: String,
+    pub version: String,
+    /// `crates.io`, or the git URL and short commit for a git dependency.
+    pub source: String,
+    /// The release the main snapshot benchmarks, as opposed to a time-machine
+    /// milestone. One parser can have both for the same version number.
+    pub current: bool,
+    /// CPU seconds (user plus system) of the clean release build, every
+    /// dependency and build script included.
+    pub cpu_secs: f64,
+    /// Wall-clock seconds of the same build at [`BuildScan::jobs`].
+    pub wall_secs: f64,
+    /// Seconds cargo spent compiling the parser crate itself, without its
+    /// dependencies. `None` when the timing report could not be read.
+    pub crate_secs: Option<f64>,
+    /// Crates compiled by the build, the parser and its dependency tree.
+    pub units: usize,
+    /// Stripped release binary size minus [`BuildScan::baseline_bytes`]: what
+    /// the parser adds to a program after dead-code elimination.
+    pub binary_bytes: u64,
+}
+
 /// Top-level results bundle (one committed `bench.json.zst`).
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Bundle {
@@ -210,6 +253,13 @@ pub struct ParserBatch {
     /// Retained bytes per statement over the correctly parsed batches.
     #[serde(default)]
     pub retained_per_stmt: Option<f64>,
+    /// Allocator calls per statement over the correctly parsed batches.
+    #[serde(default)]
+    pub allocs_per_stmt: Option<f64>,
+    /// Bytes requested from the allocator per statement over the correctly
+    /// parsed batches.
+    #[serde(default)]
+    pub allocated_per_stmt: Option<f64>,
 }
 
 /// Per-statement memory distribution for one parser in one dialect. Bytes,
@@ -223,6 +273,14 @@ pub struct ParserMem {
     pub peak: MemDist,
     /// Bytes still live after the parse: the AST plus the scaffolding it retains.
     pub retained: MemDist,
+    /// Allocator calls during the parse (allocations and reallocations), a
+    /// count rather than bytes, in the same percentile shape.
+    pub allocs: MemDist,
+    /// Total bytes requested from the allocator during the parse, freed or not
+    /// (a reallocation counts its new size). Together with [`Self::allocs`] this
+    /// is the allocation pressure, which [`Self::peak`] hides when memory is
+    /// freed and reused.
+    pub allocated: MemDist,
 }
 
 /// A byte distribution: the same percentile set as [`ParserPerf`], in bytes,

@@ -84,19 +84,17 @@ macro_rules! sqlglot_version {
                 true
             }
 
-            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+            fn measure_mem(
+                &self,
+                sql: &str,
+                dialect: Dialect,
+            ) -> Option<sql_ast_benchmark::mem::MemSample> {
                 use sql_ast_benchmark::mem;
                 use std::hint::black_box;
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let ast = $cr::parser::parse_statements(sql, Self::dialect(dialect));
                 black_box(&ast);
-                let r = (
-                    mem::peak().saturating_sub(before),
-                    mem::live().saturating_sub(before),
-                );
-                drop(ast);
-                Some(r)
+                Some(w.finish())
             }
 
             fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {
@@ -125,4 +123,5 @@ macro_rules! sqlglot_version {
 }
 
 sqlglot_version!(SqlglotV0_9, sqlglot_v0_9, "0.9.37", "2026-05-28");
-sqlglot_version!(SqlglotV0_10, sqlglot_v0_10, "0.10.29", "2026-08-08");
+sqlglot_version!(SqlglotV0_10, sqlglot_v0_10, "0.10.33", "2026-10-17");
+sqlglot_version!(SqlglotV0_11, sqlglot_v0_11, "0.11.1", "2026-10-28");

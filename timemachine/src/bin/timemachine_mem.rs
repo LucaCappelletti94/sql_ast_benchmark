@@ -1,47 +1,16 @@
 //! Time-machine memory runner.
 //!
-//! Installs a counting global allocator (like `membench`) and measures peak and
-//! retained bytes per accepted statement for every registered version, writing a
-//! per-family memory sidecar under `target/timemachine/` that the timing runner
-//! merges into the final history. Single-threaded by design (the counters are
-//! process-wide).
+//! Installs the counting global allocator (like `membench`) and measures peak,
+//! retained, and allocation pressure per accepted statement for every registered
+//! version, writing a per-family memory sidecar under `target/timemachine/` that
+//! the timing runner merges into the final history. Single-threaded by design
+//! (the counters are process-wide).
 
-use std::alloc::{GlobalAlloc, Layout, System};
-
+use sql_ast_benchmark::mem::CountingAlloc;
 use sql_ast_benchmark::report::WORKER_STACK;
 
-/// System allocator that records each allocation into `sql_ast_benchmark::mem`.
-struct Counting;
-
-// SAFETY: a thin pass-through to the system allocator that only adds atomic
-// bookkeeping (no allocation of its own) around each call.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = System.alloc(layout);
-        if !ptr.is_null() {
-            sql_ast_benchmark::mem::record_alloc(layout.size());
-        }
-        ptr
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        System.dealloc(ptr, layout);
-        sql_ast_benchmark::mem::record_dealloc(layout.size());
-    }
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        let new_ptr = System.realloc(ptr, layout, new_size);
-        if !new_ptr.is_null() {
-            if new_size >= layout.size() {
-                sql_ast_benchmark::mem::record_alloc(new_size - layout.size());
-            } else {
-                sql_ast_benchmark::mem::record_dealloc(layout.size() - new_size);
-            }
-        }
-        new_ptr
-    }
-}
-
 #[global_allocator]
-static GLOBAL: Counting = Counting;
+static GLOBAL: CountingAlloc = CountingAlloc;
 
 fn main() {
     std::panic::set_hook(Box::new(|_| {}));

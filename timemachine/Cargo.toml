@@ -9,8 +9,7 @@ rust-version.workspace = true
 
 # Hosts several semver-incompatible versions of each pure-Rust parser at once via
 # `package`-rename aliases, so one binary can benchmark a library across releases.
-# The memory runner installs a counting global allocator, so unsafe is allowed
-# here (unlike the main crate).
+# The memory runner installs the main crate's counting global allocator.
 
 [dependencies]
 sql_ast_benchmark = { path = ".." }
@@ -81,10 +80,12 @@ sqlparser_v0_60 = { package = "sqlparser", version = "=0.60.0" }
 sqlparser_v0_61 = { package = "sqlparser", version = "=0.61.0" }
 sqlparser_v0_62 = { package = "sqlparser", version = "=0.62.0" }
 sqlparser_v0_63 = { package = "sqlparser", version = "=0.63.0" }
+sqlparser_v0_64 = { package = "sqlparser", version = "=0.64.0" }
 
-# sqlglot-rust minors (0.9 and 0.10 are the two semver-incompatible groups).
+# sqlglot-rust minors (0.9, 0.10 and 0.11 are the semver-incompatible groups).
 sqlglot_v0_9 = { package = "sqlglot-rust", version = "=0.9.37" }
-sqlglot_v0_10 = { package = "sqlglot-rust", version = "=0.10.29" }
+sqlglot_v0_10 = { package = "sqlglot-rust", version = "=0.10.33" }
+sqlglot_v0_11 = { package = "sqlglot-rust", version = "=0.11.1" }
 
 # polyglot-sql minors (latest patch of each).
 polyglot_v0_1 = { package = "polyglot-sql", version = "=0.1.15" }
@@ -98,6 +99,9 @@ polyglot_v0_8 = { package = "polyglot-sql", version = "=0.8.1" }
 polyglot_v0_9 = { package = "polyglot-sql", version = "=0.9.2" }
 polyglot_v0_10 = { package = "polyglot-sql", version = "=0.10.0" }
 polyglot_v0_11 = { package = "polyglot-sql", version = "=0.11.0" }
+polyglot_v0_12 = { package = "polyglot-sql", version = "=0.12.1" }
+polyglot_v0_13 = { package = "polyglot-sql", version = "=0.13.5" }
+polyglot_v0_14 = { package = "polyglot-sql", version = "=0.14.1" }
 
 # databend-common-ast minors (single-statement parser).
 databend_v0_0 = { package = "databend-common-ast", version = "=0.0.3" }
@@ -128,10 +132,12 @@ qusql_v0_8 = { package = "qusql-parse", version = "=0.8.0" }
 qusql_v0_9 = { package = "qusql-parse", version = "=0.9.0" }
 qusql_v0_10 = { package = "qusql-parse", version = "=0.10.0" }
 qusql_v0_11 = { package = "qusql-parse", version = "=0.11.0" }
+qusql_v0_12 = { package = "qusql-parse", version = "=0.12.0" }
 
-# turso_parser has two stable releases (0.6, 0.7).
+# turso_parser stable minors (0.6, 0.7, 0.8).
 turso_v0_6 = { package = "turso_parser", version = "=0.6.1" }
 turso_v0_7 = { package = "turso_parser", version = "=0.7.2" }
+turso_v0_8 = { package = "turso_parser", version = "=0.8.3" }
 
 [[bin]]
 name = "timemachine"

@@ -81,19 +81,17 @@ macro_rules! polyglot_version {
                 true
             }
 
-            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+            fn measure_mem(
+                &self,
+                sql: &str,
+                dialect: Dialect,
+            ) -> Option<sql_ast_benchmark::mem::MemSample> {
                 use sql_ast_benchmark::mem;
                 use std::hint::black_box;
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let ast = $cr::parse(sql, Self::dialect(dialect));
                 black_box(&ast);
-                let r = (
-                    mem::peak().saturating_sub(before),
-                    mem::live().saturating_sub(before),
-                );
-                drop(ast);
-                Some(r)
+                Some(w.finish())
             }
 
             fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {
@@ -125,3 +123,6 @@ polyglot_version!(PolyglotV0_8, polyglot_v0_8, "0.8.1", "2026-08-06");
 polyglot_version!(PolyglotV0_9, polyglot_v0_9, "0.9.2", "2026-08-18");
 polyglot_version!(PolyglotV0_10, polyglot_v0_10, "0.10.0", "2026-09-14");
 polyglot_version!(PolyglotV0_11, polyglot_v0_11, "0.11.0", "2026-09-16");
+polyglot_version!(PolyglotV0_12, polyglot_v0_12, "0.12.1", "2026-09-21");
+polyglot_version!(PolyglotV0_13, polyglot_v0_13, "0.13.5", "2026-10-31");
+polyglot_version!(PolyglotV0_14, polyglot_v0_14, "0.14.1", "2026-11-08");

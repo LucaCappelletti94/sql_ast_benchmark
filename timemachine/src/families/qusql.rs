@@ -99,23 +99,20 @@ macro_rules! qusql_version {
                 true
             }
 
-            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+            fn measure_mem(
+                &self,
+                sql: &str,
+                dialect: Dialect,
+            ) -> Option<sql_ast_benchmark::mem::MemSample> {
                 use sql_ast_benchmark::mem;
                 use std::hint::black_box;
                 let d = Self::dialect(dialect)?;
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let opts = Self::options(d);
                 let mut issues = $cr::Issues::new(sql);
                 let ast = $cr::parse_statements(sql, &mut issues, &opts);
                 black_box((&ast, &issues));
-                let r = (
-                    mem::peak().saturating_sub(before),
-                    mem::live().saturating_sub(before),
-                );
-                drop(ast);
-                drop(issues);
-                Some(r)
+                Some(w.finish())
             }
 
             fn reprint(&self, _sql: &str, _dialect: Dialect) -> Option<String> {
@@ -140,3 +137,4 @@ qusql_version!(QusqlV0_8, qusql_v0_8, "0.8.0", "2026-05-03");
 qusql_version!(QusqlV0_9, qusql_v0_9, "0.9.0", "2026-07-06");
 qusql_version!(QusqlV0_10, qusql_v0_10, "0.10.0", "2026-07-07");
 qusql_version!(QusqlV0_11, qusql_v0_11, "0.11.0", "2026-07-19");
+qusql_version!(QusqlV0_12, qusql_v0_12, "0.12.0", "2026-10-16");

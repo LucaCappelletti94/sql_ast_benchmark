@@ -2,7 +2,7 @@
 name = "featurescan"
 version = "0.1.0"
 edition = "2021"
-description = "Static source-feature scan of the benchmarked SQL parsers (panic discipline, unsafe, lint policy)"
+description = "Static source-feature scan and build-cost measurement of the benchmarked SQL parsers (panic discipline, unsafe, lint policy, compile cost)"
 license = "MIT"
 publish = false
 rust-version.workspace = true
@@ -13,7 +13,10 @@ default-run = "featurescan"
 # `src/` with `syn`, and records panic-inducing constructs, unsafe usage, and the
 # crate's own lint policy. The committed result (featurescan/data/featurescan.json)
 # is baked into the web metadata, so the wasm build stays free of network access.
-# Not a default workspace member, so `cargo build` never pulls these deps.
+# The build-cost bin (`featurescan-build`) compiles a minimal probe per parser
+# release in a scratch crate under `target/buildscan/` and writes
+# `featurescan/data/build.json`. Not a default workspace member, so `cargo build`
+# never pulls these deps.
 
 [dependencies]
 cargo_metadata = "0.19"
@@ -40,3 +43,7 @@ path = "src/main.rs"
 [[bin]]
 name = "featurescan-depth"
 path = "src/depth.rs"
+
+[[bin]]
+name = "featurescan-build"
+path = "src/build.rs"

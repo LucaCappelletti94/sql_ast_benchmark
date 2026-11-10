@@ -294,6 +294,8 @@ fn timing_dialect_run(p: &dyn Parser, d: Dialect, stmts: &[String]) -> (DialectR
             ns_per_stmt,
             peak_per_stmt: None,
             retained_per_stmt: None,
+            allocs_per_stmt: None,
+            allocated_per_stmt: None,
         })
     };
 
@@ -315,7 +317,8 @@ fn timing_dialect_run(p: &dyn Parser, d: Dialect, stmts: &[String]) -> (DialectR
     )
 }
 
-/// Build the memory part of one version's run for one dialect (peak + retained).
+/// Build the memory part of one version's run for one dialect (peak, retained,
+/// and allocation pressure).
 fn mem_dialect_run(p: &dyn Parser, d: Dialect, stmts: &[String]) -> Option<ParserMem> {
     let accepted: Vec<&str> = stmts
         .iter()
@@ -327,21 +330,29 @@ fn mem_dialect_run(p: &dyn Parser, d: Dialect, stmts: &[String]) -> Option<Parse
     }
     // Warm up one-time allocations so they do not land on the first statement.
     let _ = p.measure_mem(accepted[0], d);
-    let mut peak = Vec::with_capacity(accepted.len());
-    let mut retained = Vec::with_capacity(accepted.len());
+    let mut series: [Vec<f64>; 4] = std::array::from_fn(|_| Vec::with_capacity(accepted.len()));
     for s in &accepted {
-        if let Some((pk, rt)) = p.measure_mem(s, d) {
-            peak.push(pk as f64);
-            retained.push(rt as f64);
+        if let Some(m) = p.measure_mem(s, d) {
+            for (xs, v) in series
+                .iter_mut()
+                .zip([m.peak, m.retained, m.allocs, m.allocated])
+            {
+                // Precision loss above 2^53 bytes or calls is irrelevant here.
+                xs.push(v as f64);
+            }
         }
     }
-    peak.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    retained.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    for xs in &mut series {
+        xs.sort_by(f64::total_cmp);
+    }
+    let [peak, retained, allocs, allocated] = series;
     Some(ParserMem {
         parser: p.id().family.to_string(),
         n: peak.len(),
         peak: stats::dist_from(&peak),
         retained: stats::dist_from(&retained),
+        allocs: stats::dist_from(&allocs),
+        allocated: stats::dist_from(&allocated),
     })
 }
 

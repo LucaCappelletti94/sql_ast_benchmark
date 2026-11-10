@@ -1,10 +1,11 @@
 //! Per-statement memory benchmark.
 //!
-//! Installs a counting global allocator that feeds the safe counters in
-//! `sql_ast_benchmark::mem`, then, for every (parser, dialect) pair, measures
-//! the peak live bytes and the retained (AST) bytes for each accepted statement.
-//! Results are written one value per line to `target/mem_dist/`, consumed by
-//! `sqlbench export` to build the memory section of `web/assets/bench.json.zst`.
+//! Installs the counting global allocator from `sql_ast_benchmark::mem`, then,
+//! for every (parser, dialect) pair, measures for each accepted statement the
+//! peak live bytes, the retained (AST) bytes, and the allocation pressure
+//! (allocator calls and bytes requested). Results are written one value per
+//! line to `target/mem_dist/`, consumed by `sqlbench export` to build the
+//! memory section of `web/assets/bench.json.zst`.
 //!
 //! Measurement is single-threaded by design: the allocator counters are
 //! process-wide, so concurrent allocations from other threads would corrupt a
@@ -13,14 +14,13 @@
 //!
 //! A `batch` subcommand measures whole-script memory instead: per (parser,
 //! dialect) it concatenates the accepted set into one script, parses it holding
-//! every AST live, and records peak/retained bytes normalized per statement to
-//! `target/batch_mem_dist/summary.csv`. Databend has no batch entry point and
-//! is skipped there.
+//! every AST live, and records the same four figures normalized per statement
+//! to `target/batch_mem_dist/summary.csv`. Databend has no batch entry point
+//! and is skipped there.
 //!
 //! Run locally: `cargo run --release -p membench`            (per-statement)
 //!              `cargo run --release -p membench -- batch`    (whole-script)
 
-use std::alloc::{GlobalAlloc, Layout, System};
 use std::fmt::Write as _;
 use std::fs;
 use std::io::Write as _;
@@ -28,43 +28,12 @@ use std::path::Path;
 
 use sql_ast_benchmark::batch::{batch_eligible, evaluate_batches, reports_statement_count};
 use sql_ast_benchmark::datasets::{ensure_corpus, Dialect};
+use sql_ast_benchmark::mem::CountingAlloc;
 use sql_ast_benchmark::stats::slug;
 use sql_ast_benchmark::BenchParser;
 
-/// System allocator that records every allocation into `sql_ast_benchmark::mem`.
-struct Counting;
-
-// SAFETY: a thin pass-through to the system allocator that only adds atomic
-// bookkeeping (no allocation of its own) around each call.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = System.alloc(layout);
-        if !ptr.is_null() {
-            sql_ast_benchmark::mem::record_alloc(layout.size());
-        }
-        ptr
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        System.dealloc(ptr, layout);
-        sql_ast_benchmark::mem::record_dealloc(layout.size());
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        let new_ptr = System.realloc(ptr, layout, new_size);
-        if !new_ptr.is_null() {
-            if new_size >= layout.size() {
-                sql_ast_benchmark::mem::record_alloc(new_size - layout.size());
-            } else {
-                sql_ast_benchmark::mem::record_dealloc(layout.size() - new_size);
-            }
-        }
-        new_ptr
-    }
-}
-
 #[global_allocator]
-static GLOBAL: Counting = Counting;
+static GLOBAL: CountingAlloc = CountingAlloc;
 
 const OUT_DIR: &str = "target/mem_dist";
 const BATCH_OUT_DIR: &str = "target/batch_mem_dist";
@@ -154,14 +123,21 @@ fn run() {
 
             let mut peaks = Vec::with_capacity(accepted.len());
             let mut retained = Vec::with_capacity(accepted.len());
+            let mut allocs = Vec::with_capacity(accepted.len());
+            let mut allocated = Vec::with_capacity(accepted.len());
             for s in &accepted {
-                if let Some((pk, rt)) = parser.measure_mem(s, dialect) {
-                    peaks.push(pk);
-                    retained.push(rt);
+                if let Some(m) = parser.measure_mem(s, dialect) {
+                    peaks.push(m.peak);
+                    retained.push(m.retained);
+                    allocs.push(m.allocs);
+                    allocated.push(m.allocated);
                 }
             }
-            write_raw(dialect.dir_name(), parser.name(), "peak", &peaks);
-            write_raw(dialect.dir_name(), parser.name(), "retained", &retained);
+            let (dir, name) = (dialect.dir_name(), parser.name());
+            write_raw(dir, name, "peak", &peaks);
+            write_raw(dir, name, "retained", &retained);
+            write_raw(dir, name, "allocs", &allocs);
+            write_raw(dir, name, "allocated", &allocated);
             eprintln!(
                 "mem {} {}: n={}",
                 dialect.dir_name(),
@@ -182,17 +158,18 @@ fn safe_count(parser: BenchParser, sql: &str, dialect: Dialect) -> usize {
 }
 
 /// Batch memory: per (parser, dialect) it samples the same random batches as the
-/// time bench (deterministic seed), measures peak/retained over the batches that
-/// reparse correctly, and records them normalized per statement to
-/// `target/batch_mem_dist/summary.csv`. Only parsers whose memory is visible to
-/// the Rust allocator take part (the libpg_query bindings report `None`).
+/// time bench (deterministic seed), measures peak, retained, and allocation
+/// pressure over the batches that reparse correctly, and records them normalized
+/// per statement to `target/batch_mem_dist/summary.csv`. Only parsers whose
+/// memory is visible to the Rust allocator take part (the libpg_query bindings
+/// report `None`).
 fn run_batch() {
     fs::create_dir_all(BATCH_OUT_DIR).expect("create batch_mem_dist dir");
     let mut summary =
         fs::File::create(format!("{BATCH_OUT_DIR}/summary.csv")).expect("create summary.csv");
     writeln!(
         summary,
-        "dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt"
+        "dialect,parser,n_eligible,k,n_correct,accuracy_pct,peak_per_stmt,retained_per_stmt,allocs_per_stmt,allocated_per_stmt"
     )
     .expect("write header");
 
@@ -226,22 +203,24 @@ fn run_batch() {
             let label = format!("{}/{}", dialect.dir_name(), parser.name());
             let eval = evaluate_batches(&eligible, &label, |s| safe_count(parser, s, dialect));
 
-            let (peak_per_stmt, retained_per_stmt) = if eval.n_correct == 0 {
-                (String::new(), String::new())
+            let [peak_per_stmt, retained_per_stmt, allocs_per_stmt, allocated_per_stmt]: [String;
+                4] = if eval.n_correct == 0 {
+                Default::default()
             } else {
-                let mut peak_sum = 0u128;
-                let mut ret_sum = 0u128;
+                let mut sums = [0usize; 4];
                 for s in &eval.correct_scripts {
-                    if let Some((peak, retained)) = parser.measure_mem_batch(s, dialect) {
-                        peak_sum += peak as u128;
-                        ret_sum += retained as u128;
+                    if let Some(m) = parser.measure_mem_batch(s, dialect) {
+                        let sample = [m.peak, m.retained, m.allocs, m.allocated];
+                        for (sum, v) in sums.iter_mut().zip(sample) {
+                            *sum = sum
+                                .checked_add(v)
+                                .expect("batch memory sum overflows usize");
+                        }
                     }
                 }
+                // Precision loss above 2^53 is irrelevant for a per-statement mean.
                 let denom = (eval.n_correct * eval.effective_m) as f64;
-                (
-                    format!("{:.1}", peak_sum as f64 / denom),
-                    format!("{:.1}", ret_sum as f64 / denom),
-                )
+                sums.map(|sum| format!("{:.1}", sum as f64 / denom))
             };
 
             let acc = eval
@@ -249,7 +228,7 @@ fn run_batch() {
                 .map_or_else(String::new, |a| format!("{a:.3}"));
             writeln!(
                 summary,
-                "{},{},{},{},{},{acc},{peak_per_stmt},{retained_per_stmt}",
+                "{},{},{},{},{},{acc},{peak_per_stmt},{retained_per_stmt},{allocs_per_stmt},{allocated_per_stmt}",
                 dialect.dir_name(),
                 parser.name(),
                 eval.n_eligible,
@@ -259,7 +238,7 @@ fn run_batch() {
             .expect("write row");
             summary.flush().expect("flush summary");
             eprintln!(
-                "batch-mem {} {}: elig={} ok={}/{} peak/stmt={peak_per_stmt} ret/stmt={retained_per_stmt}",
+                "batch-mem {} {}: elig={} ok={}/{} peak/stmt={peak_per_stmt} ret/stmt={retained_per_stmt} allocs/stmt={allocs_per_stmt}",
                 dialect.dir_name(),
                 parser.name(),
                 eval.n_eligible,

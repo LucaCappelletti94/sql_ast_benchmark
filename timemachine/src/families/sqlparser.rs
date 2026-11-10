@@ -94,19 +94,13 @@ macro_rules! sqlparser_version {
                 true
             }
 
-            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+            fn measure_mem(&self, sql: &str, dialect: Dialect) -> Option<sql_ast_benchmark::mem::MemSample> {
                 use sql_ast_benchmark::mem;
                 use std::hint::black_box;
-                let before = mem::live();
-                mem::reset_peak();
+                let w = mem::Window::start();
                 let ast = $cr::parser::Parser::parse_sql(&*Self::dialect(dialect), sql);
                 black_box(&ast);
-                let r = (
-                    mem::peak().saturating_sub(before),
-                    mem::live().saturating_sub(before),
-                );
-                drop(ast);
-                Some(r)
+                Some(w.finish())
             }
 
             fn reprint(&self, sql: &str, dialect: Dialect) -> Option<String> {
@@ -195,6 +189,7 @@ sqlparser_version!(SqlparserV0_60, sqlparser_v0_60, "0.60.0", "2025-12-07");
 sqlparser_version!(SqlparserV0_61, sqlparser_v0_61, "0.61.0", "2026-02-10");
 sqlparser_version!(SqlparserV0_62, sqlparser_v0_62, "0.62.0", "2026-05-07");
 sqlparser_version!(SqlparserV0_63, sqlparser_v0_63, "0.63.0", "2026-09-13");
+sqlparser_version!(SqlparserV0_64, sqlparser_v0_64, "0.64.0", "2026-11-09");
 
 #[cfg(test)]
 mod tests {

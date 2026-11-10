@@ -20,7 +20,8 @@ pub use chart::{
 pub use color::{parser_hex, parser_rgb};
 pub use marker::{marker_for, Marker};
 pub use schema::{
-    Bundle, CoverageFile, CoverageMatrix, DepthReport, DepthScan, DialectData, DialectDelta,
-    DialectRun, FamilyHistory, FeatureCounts, FeatureScan, LintPolicy, MemDist, ParserBatch,
-    ParserFailures, ParserFeatures, ParserMem, ParserMetrics, ParserPerf, RuleMeta, VersionRun,
+    BuildCost, BuildScan, Bundle, CoverageFile, CoverageMatrix, DepthReport, DepthScan,
+    DialectData, DialectDelta, DialectRun, FamilyHistory, FeatureCounts, FeatureScan, LintPolicy,
+    MemDist, ParserBatch, ParserFailures, ParserFeatures, ParserMem, ParserMetrics, ParserPerf,
+    RuleMeta, VersionRun,
 };
